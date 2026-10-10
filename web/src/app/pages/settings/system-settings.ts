@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -13,13 +14,15 @@ import { StepUpService } from '../../core/auth/step-up.service';
 import { ApiError } from '../../core/http/api-error';
 import { formatAgo, formatDateTime } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
+import { jobLabel } from '../../core/schedule/job-labels';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 
 /** A field's value as the input holds it: text for numbers and lists, a flag for switches. */
 type Raw = string | boolean;
 
-/** How a setting is edited, read from its value, default and choices. */
-export type SettingKind = 'bool' | 'number' | 'choice' | 'list' | 'json' | 'text';
+/** How a setting is edited, read from its key, value, default and choices. */
+export type SettingKind =
+  'bool' | 'number' | 'percent' | 'choice' | 'multi' | 'list' | 'json' | 'text';
 
 /** The shortest reason the audit log accepts. */
 export const MIN_REASON = 5;
@@ -35,12 +38,48 @@ export const GROUPS: readonly { id: SystemSettingView['group']; label: string; h
 /** The option a choice setting shows when its value is not one of the choices. */
 export const KEEP_CURRENT = '__current__';
 
-const isNum = (v: unknown) => typeof v === 'number';
+const RULES = 'production.risk.rules.';
+
+/** Settings stored as fractions and typed as percents (25 means 0.25). */
+export const PERCENT_KEYS: ReadonlySet<string> = new Set([
+  'production.risk.max_weight_per_ticker',
+  'production.risk.cash_buffer_fraction',
+  `${RULES}circuit_breaker.max_month_loss`,
+  `${RULES}circuit_breaker.max_week_loss`,
+  `${RULES}circuit_breaker.max_drawdown_halt`,
+  `${RULES}sector_cap.max_weight_per_sector`,
+]);
+
+/** Words for the values of choice settings. A value with no words shows as it is. */
+export const CHOICE_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  [`${RULES}circuit_breaker.cooldown`]: {
+    rest_of_month: 'Until the month ends',
+    none: 'Until the loss is recovered',
+  },
+  'production.model_books': { all: 'Every strategy', shadow: 'Only strategies On trial' },
+  'notify.min_level': { info: 'Info', warning: 'Warning', error: 'Error' },
+};
+
+/** Settings that pick any of a few values, shown as checkboxes. */
+export const MULTI_CHOICES: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  'notify.backends': [
+    ['log', 'The server log'],
+    ['store', 'The Health page'],
+    ['outbox', 'Admin devices'],
+    ['webhook', 'The alert webhook'],
+  ],
+};
+
+const isNum = (v: unknown): v is number => typeof v === 'number';
 const isStrList = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+/** Clears float noise: 0.07 * 100 is 7, not 7.000000000000001. */
+const tidy = (n: number) => Number(n.toPrecision(12));
 
 /** How to edit a setting. The API sends plain values, so the kind is read from them. */
 export function kindOf(item: SystemSettingView): SettingKind {
   if (item.choices?.length) return 'choice';
+  if (MULTI_CHOICES[item.key]) return 'multi';
+  if (PERCENT_KEYS.has(item.key)) return 'percent';
   const { value, default: base } = item;
   if (typeof value === 'boolean' || typeof base === 'boolean') return 'bool';
   if ((isNum(value) || value === null) && (isNum(base) || base === null)) {
@@ -61,30 +100,53 @@ export function optional(item: SystemSettingView): boolean {
   return item.value === null || item.default === null || /\bEmpty\b/.test(item.help);
 }
 
+/**
+ * A setting's label for people. Schedule entries come as "<job id>: <what>"
+ * and get the job's own words: "Trading run: on".
+ */
+export function settingLabel(item: Pick<SystemSettingView, 'key' | 'label'>): string {
+  const job = /^scheduler\.jobs\.([^.]+)\./.exec(item.key)?.[1];
+  const prefix = `${job}: `;
+  if (!job || !item.label.startsWith(prefix)) return item.label;
+  return `${jobLabel({ name: job, action: job })}: ${item.label.slice(prefix.length)}`;
+}
+
+/** Words for one value of a choice setting. */
+export function choiceText(item: Pick<SystemSettingView, 'key'>, value: string): string {
+  return CHOICE_LABELS[item.key]?.[value] ?? value;
+}
+
 /** What the input shows for a stored value. */
 export function toRaw(item: SystemSettingView, value: unknown): Raw {
   const kind = kindOf(item);
   if (kind === 'bool') return value === true;
   if (value == null) return '';
+  if (kind === 'percent' && isNum(value)) return String(tidy(value * 100));
   if (kind === 'choice') {
     return typeof value === 'string' && (item.choices ?? []).includes(value) ? value : KEEP_CURRENT;
   }
-  if (kind === 'list' && Array.isArray(value)) return value.join(', ');
+  if ((kind === 'list' || kind === 'multi') && Array.isArray(value)) return value.join(', ');
   if (kind === 'json') return JSON.stringify(value);
   return String(value);
 }
 
 /** The value to send for what the input holds, or an error in words. */
 export function parseRaw(item: SystemSettingView, raw: Raw): { value?: unknown; error?: string } {
-  switch (kindOf(item)) {
+  const kind = kindOf(item);
+  switch (kind) {
     case 'bool':
       return { value: raw === true };
-    case 'number': {
+    case 'number':
+    case 'percent': {
+      const ask = kind === 'percent' ? 'Enter a percent from 0 to 100.' : 'Enter a number.';
       const text = String(raw).trim();
-      if (text === '') return optional(item) ? { value: null } : { error: 'Enter a number.' };
+      if (text === '') return optional(item) ? { value: null } : { error: ask };
       const n = Number(text);
-      if (!Number.isFinite(n)) return { error: 'Enter a number.' };
-      return { value: n };
+      if (!Number.isFinite(n)) return { error: ask };
+      if (kind === 'number') return { value: n };
+      // Checked here, so a typo never costs an authenticator code.
+      if (n < 0 || n > 100) return { error: ask };
+      return { value: tidy(n / 100) };
     }
     case 'choice':
       if (raw === KEEP_CURRENT) return { value: item.value };
@@ -92,6 +154,7 @@ export function parseRaw(item: SystemSettingView, raw: Raw): { value?: unknown; 
         ? { value: String(raw) }
         : { error: 'Pick one of the options.' };
     case 'list':
+    case 'multi':
       return {
         value: String(raw)
           .split(/[\s,]+/)
@@ -113,12 +176,22 @@ export function parseRaw(item: SystemSettingView, raw: Raw): { value?: unknown; 
 }
 
 /** A value in words, for the default and the current value of a choice. */
-export function valueText(value: unknown): string {
-  if (value == null || value === '') return 'None';
+export function valueText(value: unknown, item?: SystemSettingView): string {
+  const kind = item ? kindOf(item) : null;
+  if (value == null || value === '' || (Array.isArray(value) && !value.length)) {
+    return item && (kind === 'number' || kind === 'percent') && optional(item)
+      ? 'no limit'
+      : 'none';
+  }
   if (value === true) return 'On';
   if (value === false) return 'Off';
-  if (Array.isArray(value))
-    return value.length ? value.map((v) => (Array.isArray(v) ? `[${v}]` : v)).join(', ') : 'None';
+  if (kind === 'percent' && isNum(value)) return `${tidy(value * 100)}%`;
+  if (item && kind === 'choice' && typeof value === 'string') return choiceText(item, value);
+  if (item && kind === 'multi' && Array.isArray(value)) {
+    const words = new Map(MULTI_CHOICES[item.key]);
+    return value.map((v) => words.get(String(v)) ?? String(v)).join(', ');
+  }
+  if (Array.isArray(value)) return value.map((v) => (Array.isArray(v) ? `[${v}]` : v)).join(', ');
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
@@ -143,7 +216,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 @Component({
   selector: 'app-system-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ErrorState, LoadingState],
+  imports: [ErrorState, LoadingState, NgTemplateOutlet],
   template: `
     <section class="panel" aria-labelledby="ops-settings-title">
       <div class="panel-head">
@@ -165,143 +238,191 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       } @else {
         <form class="panel-body" novalidate (submit)="$event.preventDefault(); save()">
           <p class="intro">
-            Change these here. The server checks each value and keeps it in the audit log with your
-            reason. Your authenticator code is asked for before a save. Keys, tokens and passwords
-            stay on the server and never show here.
+            The server checks each value and keeps it in the audit log with your reason. Your
+            authenticator code is asked for before a save. Keys, tokens and passwords stay on the
+            server.
           </p>
           @if (items().length === 0) {
             <p class="muted">The server offers no settings to change here.</p>
           }
           @for (g of groups(); track g.id) {
-            <fieldset class="group">
-              <legend>{{ g.label }}</legend>
-              <p class="group-help">{{ g.help }}</p>
-              @for (f of g.items; track f.key) {
-                @let id = 'set-' + f.key;
-                @let err = shownError(f.key);
-                @let kind = kindOf(f);
-                <div class="field">
-                  @if (kind === 'bool') {
+            <details class="group" [open]="g.id === 'risk' || needsLook().has(g.id)">
+              <summary>
+                <span class="group-title">{{ g.label }}</span>
+                @if (changedIn(g.id); as n) {
+                  <span class="group-count">{{ n === 1 ? '1 change' : n + ' changes' }}</span>
+                }
+              </summary>
+              <div class="group-body">
+                <p class="group-help">{{ g.help }}</p>
+                @for (f of g.main; track f.key) {
+                  <ng-container *ngTemplateOutlet="field; context: { $implicit: f }"></ng-container>
+                }
+                @if (g.advanced.length) {
+                  <details class="advanced" [open]="needsLook().has(g.id + ':advanced')">
+                    <summary>Advanced</summary>
+                    <div class="group-body">
+                      @for (f of g.advanced; track f.key) {
+                        <ng-container
+                          *ngTemplateOutlet="field; context: { $implicit: f }"
+                        ></ng-container>
+                      }
+                    </div>
+                  </details>
+                }
+              </div>
+            </details>
+          }
+
+          <ng-template #field let-f>
+            @let id = 'set-' + f.key;
+            @let err = shownError(f.key);
+            @let kind = kindOf(f);
+            @let described = id + '-hint' + (err ? ' ' + id + '-error' : '');
+            <div class="field">
+              @if (kind === 'bool') {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [id]="id"
+                    [checked]="raw(f) === true"
+                    [attr.aria-describedby]="id + '-hint'"
+                    (change)="edit(f, $any($event.target).checked)"
+                  />
+                  {{ label(f) }}
+                </label>
+              } @else if (kind === 'multi') {
+                <fieldset class="multi" [attr.aria-describedby]="described">
+                  <legend>{{ label(f) }}</legend>
+                  @for (c of multiChoices(f); track c[0]) {
                     <label class="check">
                       <input
                         type="checkbox"
-                        [id]="id"
-                        [checked]="raw(f) === true"
-                        [attr.aria-describedby]="id + '-hint'"
-                        (change)="edit(f, $any($event.target).checked)"
+                        [id]="id + '-' + c[0]"
+                        [checked]="picked(f, c[0])"
+                        (change)="toggle(f, c[0], $any($event.target).checked)"
                       />
-                      {{ f.label }}
+                      {{ c[1] }}
                     </label>
-                  } @else {
-                    <label [for]="id">{{ f.label }}</label>
-                    <div class="control">
-                      @if (kind === 'choice') {
-                        <select
-                          class="input"
-                          [id]="id"
-                          [value]="raw(f)"
-                          [attr.aria-invalid]="err ? 'true' : null"
-                          [attr.aria-describedby]="id + '-hint' + (err ? ' ' + id + '-error' : '')"
-                          (change)="edit(f, $any($event.target).value)"
-                        >
-                          @if (toRaw(f, f.value) === keep) {
-                            <option [value]="keep" [selected]="raw(f) === keep">
-                              {{ valueText(f.value) }}
-                            </option>
-                          }
-                          @for (c of f.choices ?? []; track c) {
-                            <option [value]="c" [selected]="c === raw(f)">{{ c }}</option>
-                          }
-                        </select>
-                      } @else if (kind === 'list' || kind === 'json') {
-                        <textarea
-                          class="input"
-                          rows="2"
-                          [id]="id"
-                          [value]="raw(f)"
-                          spellcheck="false"
-                          [attr.aria-invalid]="err ? 'true' : null"
-                          [attr.aria-describedby]="id + '-hint' + (err ? ' ' + id + '-error' : '')"
-                          (input)="edit(f, $any($event.target).value)"
-                        ></textarea>
-                      } @else {
-                        <input
-                          class="input"
-                          [id]="id"
-                          type="text"
-                          [attr.inputmode]="kind === 'number' ? 'decimal' : null"
-                          [value]="raw(f)"
-                          [attr.aria-invalid]="err ? 'true' : null"
-                          [attr.aria-describedby]="id + '-hint' + (err ? ' ' + id + '-error' : '')"
-                          (input)="edit(f, $any($event.target).value)"
-                        />
+                  }
+                </fieldset>
+              } @else {
+                <label [for]="id">{{ label(f) }}</label>
+                <div class="control">
+                  @if (kind === 'choice') {
+                    <select
+                      class="input"
+                      [id]="id"
+                      [value]="raw(f)"
+                      [attr.aria-invalid]="err ? 'true' : null"
+                      [attr.aria-describedby]="described"
+                      (change)="edit(f, $any($event.target).value)"
+                    >
+                      @if (toRaw(f, f.value) === keep) {
+                        <option [value]="keep" [selected]="raw(f) === keep">
+                          {{ valueText(f.value, f) }}
+                        </option>
                       }
-                    </div>
-                  }
-                  <span class="hint" [id]="id + '-hint'">{{ hint(f) }}</span>
-                  @if (f.overridden && f.updated_at) {
-                    <span class="changed">
-                      Changed {{ ago(f.updated_at) }}{{ f.updated_by ? ' by ' + f.updated_by : ''
-                      }}{{ f.reason ? ': ' + f.reason : '' }}.
-                      <button
-                        type="button"
-                        class="btn btn-ghost"
-                        [disabled]="saving()"
-                        (click)="reset(f)"
-                      >
-                        Use the default
-                      </button>
-                    </span>
-                  }
-                  @if (f.problem) {
-                    <span class="error">The saved value is not used: {{ f.problem }}</span>
-                  }
-                  @if (err) {
-                    <span class="error" [id]="id + '-error'">{{ err }}</span>
+                      @for (c of f.choices ?? []; track c) {
+                        <option [value]="c" [selected]="c === raw(f)">
+                          {{ choiceText(f, c) }}
+                        </option>
+                      }
+                    </select>
+                  } @else if (kind === 'list' || kind === 'json') {
+                    <textarea
+                      class="input"
+                      rows="2"
+                      [id]="id"
+                      [value]="raw(f)"
+                      spellcheck="false"
+                      [attr.aria-invalid]="err ? 'true' : null"
+                      [attr.aria-describedby]="described"
+                      (input)="edit(f, $any($event.target).value)"
+                    ></textarea>
+                  } @else {
+                    <input
+                      class="input"
+                      [class.short]="kind === 'number' || kind === 'percent'"
+                      [id]="id"
+                      type="text"
+                      [attr.inputmode]="kind === 'number' || kind === 'percent' ? 'decimal' : null"
+                      [value]="raw(f)"
+                      [attr.aria-invalid]="err ? 'true' : null"
+                      [attr.aria-describedby]="described"
+                      (input)="edit(f, $any($event.target).value)"
+                    />
+                    @if (kind === 'percent') {
+                      <span class="unit" aria-hidden="true">%</span>
+                    }
                   }
                 </div>
               }
-            </fieldset>
-          }
-          @if (items().length) {
-            <div class="field reason">
-              <label for="ops-settings-reason">Reason for the change</label>
-              <input
-                id="ops-settings-reason"
-                class="input"
-                [value]="reason()"
-                maxlength="500"
-                [attr.aria-invalid]="reasonError() ? 'true' : null"
-                aria-describedby="ops-settings-reason-hint"
-                (input)="reason.set($any($event.target).value)"
-              />
-              <span id="ops-settings-reason-hint" class="hint">
-                Kept in the audit log with what changed.
-              </span>
-              @if (reasonError(); as r) {
-                <span class="error">{{ r }}</span>
+              <span class="hint" [id]="id + '-hint'">{{ hint(f) }}</span>
+              @if (f.overridden && f.updated_at) {
+                <span class="changed">
+                  Changed {{ ago(f.updated_at) }}{{ f.updated_by ? ' by ' + f.updated_by : ''
+                  }}{{ f.reason ? ': ' + f.reason : '' }}.
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    [disabled]="saving()"
+                    (click)="reset(f)"
+                  >
+                    Use the default
+                  </button>
+                </span>
+              }
+              @if (f.problem) {
+                <span class="error">The saved value is not used: {{ f.problem }}</span>
+              }
+              @if (err) {
+                <span class="error" [id]="id + '-error'">{{ err }}</span>
               }
             </div>
-            @if (formError(); as s) {
-              <p class="form-error" role="alert">{{ s }}</p>
-            }
-            <div class="actions">
-              <button
-                type="submit"
-                class="btn btn-primary"
-                [disabled]="saving() || changedCount() === 0"
-                [attr.aria-busy]="saving()"
-              >
-                {{ saving() ? 'Saving…' : saveLabel() }}
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost"
-                [disabled]="saving() || changedCount() === 0"
-                (click)="undo()"
-              >
-                Undo changes
-              </button>
+          </ng-template>
+
+          @if (items().length) {
+            <div class="save-bar" [class.active]="changedCount() > 0">
+              <div class="field reason">
+                <label for="ops-settings-reason">Reason for the change</label>
+                <input
+                  id="ops-settings-reason"
+                  class="input"
+                  [value]="reason()"
+                  maxlength="500"
+                  [attr.aria-invalid]="reasonError() ? 'true' : null"
+                  aria-describedby="ops-settings-reason-hint"
+                  (input)="reason.set($any($event.target).value)"
+                />
+                <span id="ops-settings-reason-hint" class="hint">
+                  Kept in the audit log with what changed.
+                </span>
+                @if (reasonError(); as r) {
+                  <span class="error">{{ r }}</span>
+                }
+              </div>
+              @if (formError(); as s) {
+                <p class="form-error" role="alert">{{ s }}</p>
+              }
+              <div class="actions">
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  [disabled]="saving() || changedCount() === 0"
+                  [attr.aria-busy]="saving()"
+                >
+                  {{ saving() ? 'Saving…' : saveLabel() }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  [disabled]="saving() || changedCount() === 0"
+                  (click)="undo()"
+                >
+                  Undo changes
+                </button>
+              </div>
             </div>
           }
         </form>
@@ -332,17 +453,62 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       align-items: center;
       gap: var(--space-2);
     }
-    .group {
+    // One fold per group, so the page starts short.
+    .group,
+    .advanced {
+      min-width: 0;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      > summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: var(--touch-min);
+        padding: 0 var(--space-3);
+        cursor: pointer;
+        font-weight: var(--weight-semibold);
+        list-style: none;
+        &::-webkit-details-marker {
+          display: none;
+        }
+        &::before {
+          content: '▸';
+          color: var(--color-ink-3);
+          transition: transform var(--dur-fast) var(--ease);
+        }
+      }
+      &[open] > summary {
+        border-bottom: 1px solid var(--color-border);
+        &::before {
+          transform: rotate(90deg);
+        }
+      }
+    }
+    .advanced > summary {
+      font-weight: var(--weight-medium);
+    }
+    .group-count {
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-regular);
+    }
+    .group-body {
       display: grid;
       gap: var(--space-3);
+      padding: var(--space-3);
+      min-width: 0;
+    }
+    .multi {
+      display: grid;
+      gap: var(--space-1);
       margin: 0;
       padding: 0;
       border: 0;
       min-width: 0;
       legend {
         padding: 0;
-        margin-bottom: var(--space-2);
-        font-weight: var(--weight-semibold);
+        margin-bottom: var(--space-1);
       }
     }
     .control {
@@ -352,9 +518,30 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       .input {
         max-width: 22rem;
       }
+      .input.short {
+        max-width: 8rem;
+      }
       textarea.input {
         max-width: none;
         padding-block: var(--space-2);
+      }
+    }
+    .unit {
+      color: var(--color-ink-2);
+    }
+    // Save stays in reach at the foot of the screen while there are changes.
+    .save-bar {
+      display: grid;
+      gap: var(--space-3);
+      &.active {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        margin: 0 calc(-1 * var(--space-4));
+        padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--color-border);
+        background: var(--color-surface);
+        box-shadow: var(--shadow-2);
       }
     }
     .reason .input {
@@ -388,6 +575,8 @@ export class SystemSettings {
   protected readonly toRaw = toRaw;
   protected readonly valueText = valueText;
   protected readonly kindOf = kindOf;
+  protected readonly choiceText = choiceText;
+  protected readonly label = settingLabel;
 
   protected readonly state = resource({ loader: () => this.api.settings() });
   /** Items the server sent back after a save, by key: newer than the list. */
@@ -397,10 +586,16 @@ export class SystemSettings {
     const saved = this.saved();
     return list.map((i) => saved[i.key] ?? i);
   });
+  /** Each group's fields, with the pairs-of-numbers ones under Advanced. */
   protected readonly groups = computed(() =>
-    GROUPS.map((g) => ({ ...g, items: this.items().filter((i) => i.group === g.id) })).filter(
-      (g) => g.items.length,
-    ),
+    GROUPS.map((g) => {
+      const items = this.items().filter((i) => i.group === g.id);
+      return {
+        ...g,
+        main: items.filter((i) => kindOf(i) !== 'json'),
+        advanced: items.filter((i) => kindOf(i) === 'json'),
+      };
+    }).filter((g) => g.main.length + g.advanced.length),
   );
   /** The most recent change of any setting. */
   protected readonly lastSaved = computed(() =>
@@ -449,13 +644,52 @@ export class SystemSettings {
       : null;
   });
 
+  /** Folds to open: those holding a field with an error ("risk", "risk:advanced"). */
+  protected readonly needsLook = computed(() => {
+    const keys = new Set([
+      ...Object.keys(this.changes().errors),
+      ...Object.keys(this.serverErrors()),
+    ]);
+    const open = new Set<string>();
+    for (const f of this.items()) {
+      if (!keys.has(f.key)) continue;
+      open.add(f.group);
+      if (kindOf(f) === 'json') open.add(`${f.group}:advanced`);
+    }
+    return open;
+  });
+
+  /** How many fields of a group are changed, for its fold's summary. */
+  protected changedIn(group: string): number {
+    const { values, errors } = this.changes();
+    return this.items().filter((f) => f.group === group && (f.key in values || f.key in errors))
+      .length;
+  }
+
+  protected multiChoices(f: SystemSettingView): readonly (readonly [string, string])[] {
+    return MULTI_CHOICES[f.key] ?? [];
+  }
+
+  protected picked(f: SystemSettingView, value: string): boolean {
+    return String(this.raw(f))
+      .split(/[\s,]+/)
+      .includes(value);
+  }
+
+  protected toggle(f: SystemSettingView, value: string, on: boolean): void {
+    const now = (MULTI_CHOICES[f.key] ?? [])
+      .map(([v]) => v)
+      .filter((v) => (v === value ? on : this.picked(f, v)));
+    this.edit(f, now.join(', '));
+  }
+
   protected shownError(key: string): string | null {
     return this.changes().errors[key] ?? this.serverErrors()[key] ?? null;
   }
 
   protected hint(f: SystemSettingView): string {
     const parts = [f.help];
-    parts.push(`Default: ${valueText(f.default)}.`);
+    parts.push(`Default: ${valueText(f.default, f)}.`);
     parts.push(
       f.applies === 'restart'
         ? 'Takes effect when the scheduler restarts.'
@@ -557,7 +791,7 @@ export class SystemSettings {
     try {
       this.keepSaved(await this.api.resetSetting(f.key, { reason: this.reason().trim() }));
       this.submitted.set(false);
-      this.toasts.success(`${f.label} uses the default again.`);
+      this.toasts.success(`${settingLabel(f)} uses the default again.`);
     } catch (err) {
       this.formError.set(err instanceof Error ? err.message : String(err));
     } finally {

@@ -14,6 +14,7 @@ import {
   keyError,
   kindOf,
   parseRaw,
+  settingLabel,
   toRaw,
   valueText,
 } from './system-settings';
@@ -35,14 +36,14 @@ function item(over: Partial<SystemSettingView>): SystemSettingView {
 
 const MAX_WEIGHT = item({
   key: 'production.risk.max_weight_per_ticker',
-  label: 'Most in one ticker',
-  help: 'Largest share of a portfolio one ticker may hold (0.25 = 25%).',
+  label: 'Largest holding',
+  help: 'Most of a portfolio one ticker may take.',
   value: 0.25,
   default: 0.25,
 });
 const MAX_POSITIONS = item({
   key: 'production.risk.max_open_positions',
-  label: 'Most open positions',
+  label: 'Open positions',
   help: 'Most tickers held at once. Empty means no limit.',
   value: null,
   default: null,
@@ -79,6 +80,28 @@ const SCHEDULE = item({
   value: [[0.1, 0.5]],
   default: [[0.1, 0.5]],
 });
+const COOLDOWN = item({
+  key: 'production.risk.rules.circuit_breaker.cooldown',
+  label: 'Breaker cooldown',
+  value: 'rest_of_month',
+  default: 'rest_of_month',
+  choices: ['rest_of_month', 'none'],
+});
+const BACKENDS = item({
+  key: 'notify.backends',
+  group: 'notifications',
+  label: 'Where system alerts go',
+  value: ['log', 'store'],
+  default: ['log', 'store'],
+});
+const OFFSET = item({
+  key: 'scheduler.jobs.tick.trigger.offset_minutes',
+  group: 'schedule',
+  label: 'tick: minutes after the close',
+  applies: 'restart',
+  value: 45,
+  default: 45,
+});
 const JOB = item({
   key: 'scheduler.jobs.tick.enabled',
   group: 'schedule',
@@ -88,11 +111,23 @@ const JOB = item({
   default: true,
 });
 
-const ITEMS = [MAX_WEIGHT, MAX_POSITIONS, ENABLED, UNIVERSE, MODEL_BOOKS, SCHEDULE, JOB];
+const ITEMS = [
+  MAX_WEIGHT,
+  MAX_POSITIONS,
+  ENABLED,
+  COOLDOWN,
+  UNIVERSE,
+  MODEL_BOOKS,
+  SCHEDULE,
+  BACKENDS,
+  JOB,
+  OFFSET,
+];
 
 describe('system settings values', () => {
   it('reads how to edit a setting from its value, default and choices', () => {
-    expect(kindOf(MAX_WEIGHT)).toBe('number');
+    expect(kindOf(MAX_WEIGHT)).toBe('percent');
+    expect(kindOf(BACKENDS)).toBe('multi');
     expect(kindOf(MAX_POSITIONS)).toBe('number');
     expect(kindOf(item({ value: null, default: null, help: 'A name.' }))).toBe('text');
     expect(kindOf(ENABLED)).toBe('bool');
@@ -106,8 +141,27 @@ describe('system settings values', () => {
     const cap = item({ value: 10, default: null, help: 'Empty means no limit.' });
     expect(parseRaw(cap, '')).toEqual({ value: null });
     expect(parseRaw(cap, 'x')).toEqual({ error: 'Enter a number.' });
-    expect(parseRaw(MAX_WEIGHT, '')).toEqual({ error: 'Enter a number.' });
-    expect(parseRaw(MAX_WEIGHT, '0.3')).toEqual({ value: 0.3 });
+    expect(parseRaw(MAX_POSITIONS, '7')).toEqual({ value: 7 });
+  });
+
+  it('takes fractions as percents and checks the range before any code is asked', () => {
+    expect(toRaw(MAX_WEIGHT, 0.25)).toBe('25');
+    expect(toRaw(MAX_WEIGHT, 0.07)).toBe('7');
+    expect(parseRaw(MAX_WEIGHT, '25')).toEqual({ value: 0.25 });
+    expect(parseRaw(MAX_WEIGHT, '7')).toEqual({ value: 0.07 });
+    expect(parseRaw(MAX_WEIGHT, '')).toEqual({ error: 'Enter a percent from 0 to 100.' });
+    expect(parseRaw(MAX_WEIGHT, '250')).toEqual({ error: 'Enter a percent from 0 to 100.' });
+    expect(valueText(0.25, MAX_WEIGHT)).toBe('25%');
+  });
+
+  it('names jobs and values in words, never by their ids', () => {
+    expect(settingLabel(JOB)).toBe('Trading run: on');
+    expect(settingLabel(OFFSET)).toBe('Trading run: minutes after the close');
+    expect(settingLabel(MAX_WEIGHT)).toBe('Largest holding');
+    expect(valueText('rest_of_month', COOLDOWN)).toBe('Until the month ends');
+    expect(valueText('shadow', MODEL_BOOKS)).toBe('Only strategies On trial');
+    expect(valueText(['log', 'outbox'], BACKENDS)).toBe('The server log, Admin devices');
+    expect(valueText(null, MAX_POSITIONS)).toBe('no limit');
   });
 
   it('keeps a universe that is not one of the choices', () => {
@@ -126,7 +180,7 @@ describe('system settings values', () => {
   });
 
   it('writes values in words', () => {
-    expect(valueText(null)).toBe('None');
+    expect(valueText(null)).toBe('none');
     expect(valueText(false)).toBe('Off');
     expect(valueText(['AAA.US', 'BBB.US'])).toBe('AAA.US, BBB.US');
     expect(valueText(0.25)).toBe('0.25');
@@ -183,11 +237,24 @@ describe('SystemSettings', () => {
 
   it('groups the settings with plain labels, defaults and who changed them', async () => {
     await render();
-    const legends = [...el.querySelectorAll('legend')].map((l) => l.textContent?.trim());
-    expect(legends).toEqual(['Risk limits', 'Trading run', 'Schedule']);
+    const folds = [...el.querySelectorAll<HTMLDetailsElement>('details.group')];
+    expect(folds.map((d) => d.querySelector('.group-title')?.textContent?.trim())).toEqual([
+      'Risk limits',
+      'Trading run',
+      'System alerts',
+      'Schedule',
+    ]);
+    // Risk limits open, the rest folded, so the page starts short.
+    expect(folds.map((d) => d.open)).toEqual([true, false, false, false]);
     const text = el.textContent ?? '';
-    expect(text).toContain('Most in one ticker');
-    expect(text).toContain('Default: 0.25.');
+    expect(text).toContain('Largest holding');
+    expect(text).toContain('Default: 25%.');
+    expect(text).toContain('Default: no limit.');
+    expect(text).toContain('Trading run: on');
+    expect(text).toContain('Trading run: minutes after the close');
+    expect(text).not.toContain('tick:');
+    expect(text).not.toContain('rest_of_month');
+    expect(text).not.toContain('None');
     expect(text).toContain('Used from the next trading run.');
     expect(text).toContain('Takes effect when the scheduler restarts.');
     expect(text).toContain('by Ada Admin: Keep every record');
@@ -202,12 +269,61 @@ describe('SystemSettings', () => {
     const universe = el.querySelector<HTMLSelectElement>(`select[id="set-${UNIVERSE.key}"]`)!;
     const options = [...universe.options].map((o) => o.textContent?.trim());
     expect(options).toEqual(['AAA.US, BBB.US', 'starter', 'sp500']);
-    expect(el.querySelector(`select[id="set-${MODEL_BOOKS.key}"]`)).not.toBeNull();
+    const books = el.querySelector<HTMLSelectElement>(`select[id="set-${MODEL_BOOKS.key}"]`)!;
+    expect([...books.options].map((o) => o.textContent?.trim())).toEqual([
+      'Every strategy',
+      'Only strategies On trial',
+    ]);
+  });
+
+  it('puts the pairs of numbers under Advanced', async () => {
+    await render();
+    const advanced = el.querySelector<HTMLDetailsElement>('details.advanced')!;
+    expect(advanced.querySelector('summary')?.textContent?.trim()).toBe('Advanced');
+    expect(advanced.open).toBe(false);
+    expect(advanced.querySelector(`[id="set-${SCHEDULE.key}"]`)).not.toBeNull();
+  });
+
+  it('picks where alerts go with checkboxes', async () => {
+    await render();
+    const outbox = el.querySelector<HTMLInputElement>(`[id="set-${BACKENDS.key}-outbox"]`)!;
+    expect(outbox.checked).toBe(false);
+    outbox.click();
+    fixture.detectChanges();
+    type(el.querySelector<HTMLInputElement>('#ops-settings-reason')!, 'Push to admins');
+    saveButton().click();
+    await settle();
+    const put = await nextRequest(http, `/api/settings/system/${BACKENDS.key}`, 'PUT');
+    expect(put.request.body).toEqual({
+      value: ['log', 'store', 'outbox'],
+      reason: 'Push to admins',
+    });
+    put.flush({ ...BACKENDS, value: ['log', 'store', 'outbox'], overridden: true });
+    await settle();
+  });
+
+  it('refuses a percent over 100 before asking for the code', async () => {
+    await render();
+    type(input(MAX_WEIGHT.key), '250');
+    type(el.querySelector<HTMLInputElement>('#ops-settings-reason')!, 'Try a big cap');
+    saveButton().click();
+    await settle();
+    expect(ensure).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('Enter a percent from 0 to 100.');
+  });
+
+  it('keeps Save in a sticky bar while there are changes', async () => {
+    await render();
+    const bar = el.querySelector('.save-bar')!;
+    expect(bar.classList.contains('active')).toBe(false);
+    type(input(MAX_WEIGHT.key), '20');
+    expect(bar.classList.contains('active')).toBe(true);
+    expect(el.querySelector('details.group .group-count')?.textContent?.trim()).toBe('1 change');
   });
 
   it('needs a reason before sending', async () => {
     await render();
-    type(input(MAX_WEIGHT.key), '0.2');
+    type(input(MAX_WEIGHT.key), '20');
     saveButton().click();
     await settle();
     expect(el.textContent).toContain('Say why in a few words');
@@ -217,7 +333,7 @@ describe('SystemSettings', () => {
   it('asks for the second factor, then sends one PUT per changed setting', async () => {
     await render();
     const success = vi.spyOn(TestBed.inject(ToastService), 'success');
-    type(input(MAX_WEIGHT.key), '0.2');
+    type(input(MAX_WEIGHT.key), '20');
     const universe = el.querySelector<HTMLSelectElement>(`select[id="set-${UNIVERSE.key}"]`)!;
     universe.value = 'sp500';
     universe.dispatchEvent(new Event('change'));
@@ -235,7 +351,7 @@ describe('SystemSettings', () => {
     second.flush({ ...UNIVERSE, value: 'sp500', overridden: true });
     await settle();
     expect(success).toHaveBeenCalledWith('Saved 2 settings.');
-    expect(input(MAX_WEIGHT.key).value).toBe('0.2');
+    expect(input(MAX_WEIGHT.key).value).toBe('20');
     expect(saveButton().disabled).toBe(true);
   });
 
@@ -243,7 +359,7 @@ describe('SystemSettings', () => {
     await render();
     let pass!: (ok: boolean) => void;
     ensure.mockReturnValue(new Promise<boolean>((resolve) => (pass = resolve)));
-    type(input(MAX_WEIGHT.key), '0.2');
+    type(input(MAX_WEIGHT.key), '20');
     type(el.querySelector<HTMLInputElement>('#ops-settings-reason')!, 'Retail defaults');
     saveButton().click();
     saveButton().click();
@@ -258,7 +374,7 @@ describe('SystemSettings', () => {
   it('sends nothing when the second factor is cancelled', async () => {
     await render();
     ensure.mockResolvedValue(false);
-    type(input(MAX_WEIGHT.key), '0.2');
+    type(input(MAX_WEIGHT.key), '20');
     type(el.querySelector<HTMLInputElement>('#ops-settings-reason')!, 'Retail defaults');
     saveButton().click();
     await settle();
@@ -267,7 +383,7 @@ describe('SystemSettings', () => {
 
   it('marks the field the server refused', async () => {
     await render();
-    type(input(MAX_WEIGHT.key), '2');
+    type(input(MAX_WEIGHT.key), '100');
     type(el.querySelector<HTMLInputElement>('#ops-settings-reason')!, 'Try a big cap');
     saveButton().click();
     await settle();
