@@ -101,14 +101,18 @@
   gap: var(--space-3);
 
   > div {
+    min-width: 0;
     padding: var(--space-3);
     border-radius: var(--radius-sm);
     background: var(--color-surface-2);
   }
 
+  // Two tiles a row on phones: a time such as "10m ago, 2026-10-11 23:32"
+  // wraps instead of pushing the page sideways.
   dd {
     font-size: var(--text-md);
     font-weight: var(--weight-medium);
+    white-space: normal;
   }
 
   @include bp.phone {
