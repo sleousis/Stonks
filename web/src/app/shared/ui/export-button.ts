@@ -32,7 +32,7 @@ export function saveFile(doc: Document, file: CsvFile): void {
     <button
       type="button"
       class="btn"
-      [class.btn-ghost]="ghost()"
+      [class.btn-tertiary]="ghost()"
       [disabled]="busy()"
       [attr.aria-busy]="busy()"
       (click)="download()"

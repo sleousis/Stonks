@@ -112,7 +112,7 @@
 
   // The selected row: a quiet well with the accent bar at its edge.
   &.active {
-    background: var(--color-hover);
+    background: var(--color-pressed);
 
     &::before {
       content: '';

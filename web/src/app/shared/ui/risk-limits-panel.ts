@@ -153,7 +153,7 @@ export function shown(policy: RiskPolicy, f: LimitField): string {
             }
           </div>
           @if (ignoredText(v); as text) {
-            <p class="note" role="status">{{ text }}</p>
+            <p class="note callout" data-tone="warn" role="status">{{ text }}</p>
           }
           @if (error(); as e) {
             <p class="error" role="alert">{{ e }}</p>
@@ -186,13 +186,6 @@ export function shown(policy: RiskPolicy, f: LimitField): string {
       @include bp.from-tablet {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-    }
-    .note {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
-      font-size: var(--text-sm);
     }
     .error {
       color: var(--color-loss);
