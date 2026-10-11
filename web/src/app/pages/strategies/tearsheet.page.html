@@ -108,7 +108,7 @@
             <ul class="rows">
               @for (c of gc.failing; track c.name) {
                 <li class="row">
-                  @if (failedCheck(c.name)) {
+                  @if (c.failed) {
                     <app-status-pill status="failed" label="Failed" />
                   } @else {
                     <app-status-pill status="not_yet" />

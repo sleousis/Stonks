@@ -14,23 +14,6 @@ export function sourceWords(source: GoLiveReport['source']): string {
 }
 
 /**
- * Checks whose limit measures a bad result (a drop too deep, drift too
- * wide): those failed. Every other open check only needs time or a step
- * (more trial days, a full test run), so it reads as a neutral "Not yet".
- */
-const FAILED_CHECKS: ReadonlySet<string> = new Set([
-  'max_drawdown',
-  'within_mc_band',
-  'quit_rule',
-  'max_drift',
-]);
-
-/** True when an open check measured a bad result (red), not just "not yet". */
-export function isFailedCheck(name: string): boolean {
-  return FAILED_CHECKS.has(name);
-}
-
-/**
  * The go-live check of one strategy as a trader reads it (R13): how many
  * checks pass, then each failing check in one plain sentence with how to fix
  * it. The checklist a reviewer reads before approving folds away below (it
@@ -55,7 +38,7 @@ export function isFailedCheck(name: string): boolean {
           <li>
             <div class="check-head">
               <span class="check-label">{{ c.label }}</span>
-              @if (failed(c.name)) {
+              @if (c.failed) {
                 <app-status-pill status="fail" label="Failed" />
               } @else {
                 <app-status-pill status="not_yet" />
@@ -226,6 +209,4 @@ export class GoliveCheckList {
   protected readonly checks = computed(() => traderChecks(this.report()));
   protected readonly checklist = computed(() => checklistItems(this.report().checklist));
   protected readonly source = computed(() => sourceWords(this.report().source));
-
-  protected readonly failed = isFailedCheck;
 }
