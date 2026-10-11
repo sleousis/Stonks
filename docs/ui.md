@@ -1912,8 +1912,8 @@ flowchart LR
   |---|---|---|
   | (top) | Today, Strategies, Build a strategy (`/studio`), Lab, Orders, Insights, Charts | everyone signed in (Build a strategy and Lab need `lab.run`) |
   | More | Approvals (`/tickets`), Going live (`/going-live`), Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Assistant | everyone. Approvals needs `portfolio.trade`, the Assistant shows only while it is on |
-  | Advanced | Strategy review (`/go-live`), Options, Trade costs (`/trades`), Halts (traders: their own halts) | Options only while it is on, Halts `killswitch.user` |
-  | System | Dashboard (`/dashboard`), Health, Intraday engine (`/live`), Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins. Intraday engine and Model versions only while their feature is on |
+  | Advanced | Strategy review (`/go-live`), Options, Trade costs (`/trades`), Halts (traders: their own halts) | Options once option chains are stored, Halts `killswitch.user` |
+  | System | Dashboard (`/dashboard`), Health, Intraday engine (`/live`), Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins. Intraday engine once the engine streams or has run, Model versions while a new version waits |
   | Account menu (pinned below the nav) | Profile, Settings, Broker connections, Get set up, Help, Sign out | everyone signed in |
 
   Notifications has no menu item: the bell next to the Stonks name (and in
@@ -1928,9 +1928,10 @@ flowchart LR
   strip (`<app-strip-halt-actions>`), with the same ticket, typed words and
   code as the Halts page. A halt only an admin may end says so. The palette
   opens a ticker on its chart. Features that are off leave the nav
-  (`FeatureFlagsService`: the assistant, options, the intraday engine and
-  model versions): Settings, System tells
-  admins how to turn it on. With open reads and nobody signed in (dev)
+  (`FeatureFlagsService`, `core/features/`: the assistant while it is off,
+  Options with no stored chains, the intraday engine before it ever ran,
+  Model versions with no new version waiting). Settings, System tells
+  admins how to turn the assistant on. With open reads and nobody signed in (dev)
   everything shows.
 - **Signing out** (and a different user signing in on the same tab) loads
   `/login` afresh through `HARD_NAVIGATE` (`core/auth/hard-navigate.ts`),
