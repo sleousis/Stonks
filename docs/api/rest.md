@@ -3572,6 +3572,7 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 |-------|------|----------|-------------|
 | `derived` | boolean | yes |  |
 | `id` | "account" \| "portfolio" \| "data" \| "follow" \| "alerts" | yes |  |
+| `optional` | boolean | yes |  |
 | `state` | "done" \| "skipped" \| "todo" | yes |  |
 
 ### OnboardingUpdate

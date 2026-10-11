@@ -264,7 +264,7 @@ describe('HaltsPage', () => {
       expect(form.querySelector('#resume-override')).not.toBeNull();
     });
 
-    it('resumes a paper stop in one tap: no phrase, no checks, no code (PO-07)', async () => {
+    it('resumes a paper stop in one tap: no phrase, no checks, the code first', async () => {
       button('Resume trading')!.click();
       await settle();
       (await nextRequest(http, '/api/halts/1/resume-checks')).flush({
@@ -288,7 +288,9 @@ describe('HaltsPage', () => {
       fixture.detectChanges();
 
       const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
-      expect(stepUp).not.toHaveBeenCalled();
+      // The server always wants a fresh code to resume: ask before sending,
+      // so one request does it instead of a refusal and a retry.
+      expect(stepUp).toHaveBeenCalledWith('Resume trading');
       expect(post.request.body).toEqual({
         confirmation: 'RESUME TRADING',
         reason: 'Resumed by me.',

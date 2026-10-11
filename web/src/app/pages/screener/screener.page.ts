@@ -49,7 +49,6 @@ import {
   NEEDS_PLAN,
   formatMetric,
   fromSpec,
-  plainMetrics,
   toSpec,
 } from './screen-form';
 
@@ -133,7 +132,7 @@ export class ScreenerPage {
   protected readonly canUniverse = computed(() => this.session.can('lab.run'));
 
   protected readonly metricList = computed<MetricView[]>(() =>
-    this.metrics.hasValue() ? plainMetrics(this.metrics.value()) : [],
+    this.metrics.hasValue() ? this.metrics.value() : [],
   );
   /** No fundamentals stored: their metrics are greyed out, not offered. */
   protected readonly fundamentalsMissing = computed(

@@ -10,11 +10,11 @@ import { SetupCard } from './setup-card';
 
 const VIEW = {
   steps: [
-    { id: 'account', state: 'done', derived: true },
-    { id: 'portfolio', state: 'skipped', derived: false },
-    { id: 'data', state: 'todo', derived: false },
-    { id: 'follow', state: 'todo', derived: false },
-    { id: 'alerts', state: 'todo', derived: false },
+    { id: 'account', state: 'done', derived: true, optional: false },
+    { id: 'portfolio', state: 'skipped', derived: false, optional: true },
+    { id: 'data', state: 'todo', derived: false, optional: true },
+    { id: 'follow', state: 'todo', derived: false, optional: false },
+    { id: 'alerts', state: 'todo', derived: false, optional: false },
   ],
   complete: false,
   dismissed: false,

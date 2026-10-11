@@ -24,7 +24,6 @@ import {
   type AssetClass,
   type FilterRow,
   type ScreenForm,
-  plainMetrics,
   universeSlug,
 } from '../screener/screen-form';
 import {
@@ -116,7 +115,7 @@ export class UniverseEditor {
     loader: () => this.screener.metrics(),
   });
   protected readonly metricList = computed<MetricView[]>(() =>
-    this.metrics.hasValue() ? plainMetrics(this.metrics.value()) : [],
+    this.metrics.hasValue() ? this.metrics.value() : [],
   );
   /** No fundamentals stored: their filters are greyed out. */
   protected readonly fundamentalsMissing = computed(

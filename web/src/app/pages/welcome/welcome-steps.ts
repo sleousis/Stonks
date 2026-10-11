@@ -66,9 +66,6 @@ export const STEP_ORDER: readonly OnboardingStepId[] = [
   'data',
 ];
 
-/** Steps you may leave: following on Paper opens a portfolio when you have none. */
-export const OPTIONAL_STEPS: ReadonlySet<OnboardingStepId> = new Set(['portfolio', 'data']);
-
 /** The steps in the guide's order. */
 export function orderedSteps(steps: readonly OnboardingStepView[]): OnboardingStepView[] {
   const rank = (id: OnboardingStepId) => {
@@ -78,9 +75,9 @@ export function orderedSteps(steps: readonly OnboardingStepView[]): OnboardingSt
   return [...steps].sort((a, b) => rank(a.id) - rank(b.id));
 }
 
-/** Every step that matters is done or skipped: the optional ones may wait. */
+/** Every step that matters is done or skipped: the ones the server marks optional may wait. */
 export function setupComplete(steps: readonly OnboardingStepView[]): boolean {
-  return steps.every((s) => s.state !== 'todo' || OPTIONAL_STEPS.has(s.id));
+  return steps.every((s) => s.state !== 'todo' || s.optional);
 }
 
 /** Whether Today shows the guide: not closed and something that matters is left. */
@@ -95,7 +92,7 @@ export function currentStep(view: OnboardingView): OnboardingStepId | null {
 
 /** "2 of 3 done": the steps that matter, so the optional ones never hold it back (FR-01). */
 export function progressText(steps: readonly OnboardingStepView[]): string {
-  const counted = steps.filter((s) => !OPTIONAL_STEPS.has(s.id));
+  const counted = steps.filter((s) => !s.optional);
   const done = counted.filter((s) => s.state === 'done').length;
   const skipped = counted.filter((s) => s.state === 'skipped').length;
   const base = `${done} of ${counted.length} done`;

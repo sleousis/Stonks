@@ -79,6 +79,8 @@ def test_onboarding_steps_are_stored_per_person(client, people):
     assert [s["id"] for s in first["steps"]] == ["account", "portfolio", "data", "follow", "alerts"]
     assert first["show"] is True and first["complete"] is False
     assert all(s["state"] == "todo" for s in first["steps"])
+    # The server says which steps may wait, so every client shows the same guide.
+    assert {s["id"] for s in first["steps"] if s["optional"]} == {"portfolio", "data"}
 
     skipped = client.put("/api/onboarding/steps/alerts", json={"state": "skipped"}, headers=alice)
     assert skipped.status_code == 200, skipped.text
@@ -91,7 +93,7 @@ def test_onboarding_steps_are_stored_per_person(client, people):
     client.post("/api/watchlists", json={"name": "Mine", "tickers": ["UP.US"]}, headers=alice)
     view = client.put("/api/onboarding/steps/data", json={"state": "todo"}, headers=alice).json()
     data = next(s for s in view["steps"] if s["id"] == "data")
-    assert data == {"id": "data", "state": "done", "derived": True}
+    assert data == {"id": "data", "state": "done", "derived": True, "optional": True}
 
     back = client.put("/api/onboarding/steps/alerts", json={"state": "todo"}, headers=alice)
     assert {s["id"]: s["state"] for s in back.json()["steps"]}["alerts"] == "todo"
@@ -117,7 +119,7 @@ def test_onboarding_counts_a_linked_telegram_chat_as_alerts_on(client, people, s
         )
     view = client.get("/api/onboarding", headers=alice["headers"]).json()
     alerts = next(s for s in view["steps"] if s["id"] == "alerts")
-    assert alerts == {"id": "alerts", "state": "done", "derived": True}
+    assert alerts == {"id": "alerts", "state": "done", "derived": True, "optional": False}
 
 
 def test_onboarding_completes_when_every_step_is_done_or_skipped(client, people):

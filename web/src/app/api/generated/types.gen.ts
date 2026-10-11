@@ -8190,6 +8190,10 @@ export type OnboardingStepView = {
      */
     id: 'account' | 'portfolio' | 'data' | 'follow' | 'alerts';
     /**
+     * Optional
+     */
+    optional: boolean;
+    /**
      * State
      */
     state: 'done' | 'skipped' | 'todo';

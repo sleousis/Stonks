@@ -10,7 +10,7 @@ import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
 import { ToastService } from '../../core/notify/toast.service';
 import { WelcomePage } from './welcome.page';
-import { currentStep, parseTickerText, progressText } from './welcome-steps';
+import { currentStep, parseTickerText, progressText, setupComplete } from './welcome-steps';
 
 const IDS = ['account', 'portfolio', 'data', 'follow', 'alerts'] as const;
 
@@ -19,12 +19,22 @@ function guide(states: Partial<Record<(typeof IDS)[number], 'done' | 'skipped'>>
     id,
     state: states[id] ?? ('todo' as const),
     derived: id === 'account' && states[id] === 'done',
+    optional: id === 'portfolio' || id === 'data',
   }));
   const complete = steps.every((s) => s.state !== 'todo');
   return { steps, complete, dismissed: false, show: !complete } satisfies OnboardingView;
 }
 
 describe('welcome steps', () => {
+  it('takes which steps may wait from the server', () => {
+    const v = guide({ account: 'done', follow: 'done' });
+    // The server marks alerts optional too: the guide is then complete.
+    const steps = v.steps.map((s) => (s.id === 'alerts' ? { ...s, optional: true } : s));
+    expect(progressText(steps)).toBe('2 of 2 done');
+    expect(setupComplete(steps)).toBe(true);
+    expect(setupComplete(v.steps)).toBe(false);
+  });
+
   it('opens the first step still to do and counts progress', () => {
     const v = guide({ account: 'done', portfolio: 'skipped' });
     // Follow and alerts come before the optional steps (FR-01).

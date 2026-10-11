@@ -15275,6 +15275,10 @@
             "title": "Id",
             "type": "string"
           },
+          "optional": {
+            "title": "Optional",
+            "type": "boolean"
+          },
           "state": {
             "enum": [
               "done",
@@ -15288,7 +15292,8 @@
         "required": [
           "id",
           "state",
-          "derived"
+          "derived",
+          "optional"
         ],
         "title": "OnboardingStepView",
         "type": "object"
