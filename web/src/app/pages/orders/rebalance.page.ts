@@ -121,7 +121,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
               placeholder="AAPL.US=30%&#10;MSFT.US=0.2"
               [(ngModel)]="targetsText"
             ></textarea>
-            <small class="muted">One per line. The rest stays in cash.</small>
+            <small class="hint">One per line. The rest stays in cash.</small>
           </div>
         } @else {
           <div class="field wide">
@@ -133,7 +133,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
               autocomplete="off"
               [(ngModel)]="strategyId"
             />
-            <small class="muted">The latest weights of its test book are the targets.</small>
+            <small class="hint">The latest weights of its test book are the targets.</small>
           </div>
         }
         <div class="field">
@@ -178,7 +178,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
         </div>
       </form>
       @if (problem(); as p) {
-        <p class="failure" role="alert">{{ p }}</p>
+        <p class="failure callout" data-tone="loss" role="alert">{{ p }}</p>
       }
       @if (plan(); as pl) {
         <div class="summary" aria-live="polite">
@@ -318,7 +318,10 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
       min-width: 0;
     }
     .body {
-      padding: var(--space-3) var(--space-4);
+      padding: var(--space-4);
+    }
+    form.body {
+      max-width: none;
     }
     .wide {
       grid-column: 1 / -1;
@@ -337,21 +340,45 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
       flex: 1 1 240px;
       min-height: var(--touch-min);
     }
+    /* The plan's figures: one inset band, label over value. */
     .summary {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-4);
+      gap: var(--space-3) var(--space-5);
       padding: var(--space-3) var(--space-4);
+      border-block: 1px solid var(--color-border);
+      background: var(--color-surface-2);
     }
-    .note,
-    .failure {
+    .summary p {
+      display: grid;
+      gap: var(--space-1);
+    }
+    .summary .muted {
+      font-size: var(--text-xs);
+    }
+    .summary b {
+      font-weight: var(--weight-semibold);
+    }
+    .note {
+      max-width: 70ch;
       padding: 0 var(--space-4) var(--space-2);
       font-size: var(--text-sm);
       color: var(--color-ink-2);
       overflow-wrap: anywhere;
     }
+    .summary + .note,
+    .summary + app-data-table {
+      margin-top: var(--space-3);
+    }
     .failure {
-      color: var(--color-loss);
+      margin: 0 var(--space-4) var(--space-4);
+      overflow-wrap: anywhere;
+    }
+    h3.body {
+      padding-bottom: 0;
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
     }
     .note-row {
       padding: 0 var(--space-4) var(--space-3);
@@ -361,8 +388,21 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
       padding-left: var(--space-6);
     }
     @include bp.phone {
+      .body {
+        padding: var(--space-3);
+      }
       .summary {
-        gap: var(--space-2);
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+        padding: var(--space-3);
+      }
+      .note,
+      .note-row {
+        padding-inline: var(--space-3);
+      }
+      .failure {
+        margin-inline: var(--space-3);
       }
     }
   `,

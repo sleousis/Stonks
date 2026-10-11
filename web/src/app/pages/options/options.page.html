@@ -4,7 +4,7 @@
 />
 <app-data-plan-note kind="options" />
 
-<p class="research-note" role="note">
+<p class="research-note callout" data-tone="info" role="note">
   <strong>Research only, nothing on this page trades options.</strong>
   No orders, paper portfolios or real-money portfolios use anything here. Trading options with real
   money is off by default: each real-money portfolio shows whether it is on in its Real-money
@@ -21,6 +21,7 @@
   <app-loading-state label="Loading the stored chains" [rows]="4" />
 } @else if (underlyings.value().length === 0) {
   <app-empty-state
+    compact
     title="No option chains stored yet"
     [message]="
       isAdmin()
@@ -96,6 +97,7 @@
           <app-loading-state label="Loading the chain" [rows]="8" />
         } @else if (chain.value().rows.length === 0) {
           <app-empty-state
+            compact
             title="No quotes for this expiry"
             message="Pick another expiry or date."
           />
@@ -112,7 +114,7 @@
             [rowKey]="strikeKey"
             [pageSize]="0"
           />
-          <p class="hint">
+          <p class="hint prose">
             IV is the implied volatility we work out from the price. Theta is money per share per
             day and vega money per share per point of volatility, from {{ modelsText(c.models) }}.
           </p>

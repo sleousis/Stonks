@@ -92,7 +92,7 @@ interface Open {
             <app-order-refusal [refusal]="r" [(allowReduce)]="allowReduce" />
           }
           @if (failure(); as f) {
-            <p class="failure" role="alert">{{ f }}</p>
+            <p class="failure callout" data-tone="loss" role="alert">{{ f }}</p>
           }
           <div class="sheet-actions">
             <button type="button" class="btn" [disabled]="busy()" (click)="close(null)">
@@ -120,9 +120,6 @@ interface Open {
       gap: var(--space-2);
     }
     .failure {
-      padding: var(--space-3);
-      border-left: 3px solid var(--color-loss);
-      background: var(--color-loss-soft);
       overflow-wrap: anywhere;
     }
   `,

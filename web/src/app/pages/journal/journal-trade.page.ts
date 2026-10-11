@@ -84,20 +84,22 @@ const STOP_SOURCES: Record<string, string> = {
           @for (l of t.legs; track l.leg_id) {
             <li class="leg">
               <p class="leg-head">
-                <strong>{{ l.quantity | num }} {{ t.ticker }}</strong>
+                <strong
+                  ><span class="num">{{ l.quantity | num }}</span> {{ t.ticker }}</strong
+                >
                 <span class="muted">{{ sleeve(t.sleeve, t.sleeve_name) }}, {{ t.side }}</span>
               </p>
               <dl class="facts">
                 <div>
                   <dt>Entered</dt>
-                  <dd>
+                  <dd class="num">
                     {{ l.entry_at | dateTime }} at
                     {{ l.entry_price | money: { currency: l.currency } }}
                   </dd>
                 </div>
                 <div>
                   <dt>{{ l.is_open ? 'Last close' : 'Exited' }}</dt>
-                  <dd>
+                  <dd class="num">
                     @if (!l.is_open) {
                       {{ l.exit_at | dateTime }} at
                     }
@@ -114,19 +116,19 @@ const STOP_SOURCES: Record<string, string> = {
                 </div>
                 <div>
                   <dt>R multiple</dt>
-                  <dd>{{ r(l.r_multiple) }}</dd>
+                  <dd class="num">{{ r(l.r_multiple) }}</dd>
                 </div>
                 <div>
                   <dt>Worst move</dt>
-                  <dd>{{ share(l.mae_pct, true) }}</dd>
+                  <dd class="num">{{ share(l.mae_pct, true) }}</dd>
                 </div>
                 <div>
                   <dt>Best move</dt>
-                  <dd>{{ share(l.mfe_pct, true) }}</dd>
+                  <dd class="num">{{ share(l.mfe_pct, true) }}</dd>
                 </div>
                 <div>
                   <dt>Exit efficiency</dt>
-                  <dd>{{ share(l.exit_efficiency) }}</dd>
+                  <dd class="num">{{ share(l.exit_efficiency) }}</dd>
                 </div>
                 <div>
                   <dt>Exit</dt>

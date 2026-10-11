@@ -39,7 +39,7 @@ export function warningText(w: EarningsWarning): string {
   imports: [RouterLink],
   template: `
     @if (warning(); as w) {
-      <p class="warning" role="status">
+      <p class="warning callout" data-tone="warn" role="status">
         <span class="mark" aria-hidden="true">!</span>
         <span class="text">
           <strong>Earnings before the next open.</strong> {{ text(w) }}
@@ -58,12 +58,10 @@ export function warningText(w: EarningsWarning): string {
       display: flex;
       gap: var(--space-2);
       align-items: flex-start;
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
-      font-size: var(--text-sm);
       overflow-wrap: anywhere;
+    }
+    .warning > * + * {
+      margin-top: 0;
     }
     .mark {
       display: inline-grid;
@@ -72,7 +70,7 @@ export function warningText(w: EarningsWarning): string {
       width: 1.25rem;
       height: 1.25rem;
       border: 2px solid var(--color-warn);
-      border-radius: 50%;
+      border-radius: var(--radius-pill);
       color: var(--color-warn);
       font-weight: var(--weight-bold);
       line-height: 1;

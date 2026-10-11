@@ -257,8 +257,8 @@ export function orderLines(
             </div>
           }
 
-          <fieldset class="plan">
-            <legend>Trade plan <span class="muted">(optional)</span></legend>
+          <fieldset class="plan well">
+            <legend class="overline">Trade plan <span class="optional">(optional)</span></legend>
             <div class="plan-grid">
               <div class="field">
                 <label for="mo-stop">Stop</label>
@@ -386,11 +386,11 @@ export function orderLines(
           />
         }
         @if (failure(); as f) {
-          <p class="failure" role="alert">{{ f }}</p>
+          <p class="failure callout" data-tone="loss" role="alert">{{ f }}</p>
         }
 
         @if (placed(); as r) {
-          <div class="result" role="status">
+          <div class="result panel" role="status">
             <p class="result-head">
               <app-side-tag [side]="r.side" />
               <span class="num">{{ num(r.quantity) }} {{ r.ticker }}</span>
@@ -436,6 +436,7 @@ export function orderLines(
       gap: var(--space-4);
     }
     .lead {
+      max-width: 70ch;
       color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
@@ -443,12 +444,16 @@ export function orderLines(
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
     }
+    /* The words sit on the tag's line: one 20px line box, centred with the B or S. */
     .side-now {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
-      color: var(--color-ink-2);
+      min-height: 20px;
+      color: var(--color-ink);
       font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      line-height: 20px;
     }
     .actions {
       display: flex;
@@ -461,18 +466,30 @@ export function orderLines(
       gap: var(--space-3);
       min-width: 0;
     }
+    /* An inset well, not a box in a box. The legend floats so it sits
+       inside the well like any heading, not on its edge. */
     .plan {
       display: grid;
       gap: var(--space-3);
       margin: 0;
-      padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      border: 0;
       min-width: 0;
     }
     .plan legend {
-      padding: 0 var(--space-1);
-      font-weight: var(--weight-medium);
+      float: left;
+      width: 100%;
+      padding: 0;
+    }
+    .plan .optional {
+      font-weight: var(--weight-regular);
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    @include bp.phone {
+      .plan {
+        padding: var(--space-3);
+      }
     }
     .plan-grid {
       display: grid;
@@ -490,20 +507,16 @@ export function orderLines(
       min-width: 0;
     }
     .failure {
-      padding: var(--space-3) var(--space-4);
-      border-left: 3px solid var(--color-loss);
-      border-radius: var(--radius-sm);
-      background: var(--color-loss-soft);
       overflow-wrap: anywhere;
     }
     .result {
       display: grid;
       justify-items: start;
       gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
+      padding: var(--space-4);
+      @include bp.phone {
+        padding: var(--space-3);
+      }
     }
     .result-head {
       display: flex;

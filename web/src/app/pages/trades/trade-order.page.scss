@@ -24,14 +24,17 @@
 
 .mono {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 
 .small {
   font-size: var(--text-sm);
 }
 
+// Section titles on the ticket: 13px semibold, ink-2.
 h3 {
-  font-size: var(--text-md);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   margin-bottom: var(--space-1);
 }
@@ -41,8 +44,8 @@ dl {
 }
 
 dt {
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
 }
 
 dd {
@@ -54,6 +57,10 @@ dd {
   max-width: 48rem;
   padding: var(--space-4);
   border-top: 3px solid var(--color-ink);
+
+  @include bp.phone {
+    padding: var(--space-3);
+  }
 
   > section {
     margin-top: var(--space-4);
@@ -109,8 +116,7 @@ dd {
 
 .reason {
   margin-top: var(--space-2);
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
 }
 
 .prices {
@@ -124,7 +130,7 @@ dd {
   }
 
   dd {
-    margin-top: 2px;
+    margin-top: var(--space-1);
     font-size: var(--text-lg);
     font-weight: var(--weight-semibold);
   }
@@ -154,6 +160,8 @@ dd {
 
   dt {
     min-width: 0;
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
   }
 
   dd {
@@ -187,7 +195,7 @@ dd {
   }
 
   dd {
-    margin-top: 2px;
+    margin-top: var(--space-1);
     overflow-wrap: anywhere;
   }
 }

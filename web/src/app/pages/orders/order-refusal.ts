@@ -161,8 +161,8 @@ export function ruleReason(a: RiskAdjustmentView): string | null {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink],
   template: `
-    <div class="refusal" role="alert">
-      <p class="head">Not placed</p>
+    <div class="refusal callout" data-tone="loss" role="alert">
+      <p class="head callout-title">Not placed</p>
       <p class="message">{{ refusal().message }}</p>
       @if (refusal().halted) {
         <a class="btn" routerLink="/ops/halts">Resume trading</a>
@@ -200,14 +200,9 @@ export function ruleReason(a: RiskAdjustmentView): string | null {
     .refusal {
       display: grid;
       gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border-strong);
-      border-left: 3px solid var(--color-loss);
-      border-radius: var(--radius-sm);
-      background: var(--color-loss-soft);
     }
-    .head {
-      font-weight: var(--weight-semibold);
+    .refusal > * + * {
+      margin-top: 0;
     }
     .message {
       overflow-wrap: anywhere;
@@ -227,8 +222,7 @@ export function ruleReason(a: RiskAdjustmentView): string | null {
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 2px var(--space-3);
       padding-top: var(--space-2);
-      border-top: 1px dashed var(--color-border-strong);
-      font-size: var(--text-sm);
+      border-top: 1px solid color-mix(in srgb, var(--color-loss) 25%, transparent);
     }
     .rule {
       font-weight: var(--weight-semibold);

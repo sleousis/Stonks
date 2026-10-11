@@ -33,7 +33,7 @@ const GROUPINGS: readonly SegmentOption<ResultsBy>[] = [
   imports: [DataTable, Segmented, EmptyState, ErrorState, LoadingState],
   styleUrl: './journal.scss',
   template: `
-    <section class="panel" aria-labelledby="results-title">
+    <section class="panel panel-flush" aria-labelledby="results-title">
       <div class="panel-head">
         <h2 id="results-title">Results</h2>
         <app-segmented label="Group results by" [options]="groupings" [(value)]="by" />
