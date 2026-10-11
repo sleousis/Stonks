@@ -154,6 +154,19 @@ def test_every_setup_is_a_screener_metric():
         assert metric.unit == "ratio"
 
 
+def test_setup_metrics_carry_plain_names():
+    """The API, CLI and console all show these names, so no shorthand."""
+    nr7 = metric_for("setup_nr7")
+    assert nr7.label == "Narrowest range in 7 days"
+    assert nr7.description == (
+        "The smallest daily range of the last 7 days: +1 in an uptrend, -1 in a downtrend, 0 none."
+    )
+    squeeze = metric_for("setup_squeeze")
+    assert squeeze.label == "Tight range breakout setup"
+    assert "Keltner" not in squeeze.description
+    assert "Bollinger" not in squeeze.description
+
+
 def test_screener_metric_reads_the_lake_point_in_time(tmp_path):
     lake = DuckDBLake(tmp_path / "lake.duckdb")
     lake.migrate()
