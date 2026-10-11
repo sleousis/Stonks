@@ -37,28 +37,30 @@ export function aboveText(a: Breadth['above_50']): string {
       } @else if (!breadth.hasValue()) {
         <app-loading-state label="Loading market breadth" [rows]="3" />
       } @else if (b(); as v) {
-        <div class="panel-body body">
-          @if (v.as_of) {
-            <div class="tiles">
+        @if (v.as_of) {
+          <div class="stat-strip tiles">
+            <app-stat-tile
+              bare
+              label="Up and down"
+              [value]="upDown()"
+              [detail]="ratio()"
+              [help]="false"
+            />
+            <app-stat-tile bare label="Above 50 day average" [value]="above50()" [help]="false" />
+            <app-stat-tile bare label="Above 200 day average" [value]="above200()" [help]="false" />
+            <app-stat-tile bare label="New highs and lows" [value]="highsLows()" [help]="false" />
+            @if (v.distribution_days !== null && v.distribution_days !== undefined) {
               <app-stat-tile
-                label="Up and down"
-                [value]="upDown()"
-                [detail]="ratio()"
+                bare
+                label="Distribution days"
+                [value]="distribution()"
+                [detail]="distributionMeaning()"
                 [help]="false"
               />
-              <app-stat-tile label="Above 50 day average" [value]="above50()" [help]="false" />
-              <app-stat-tile label="Above 200 day average" [value]="above200()" [help]="false" />
-              <app-stat-tile label="New highs and lows" [value]="highsLows()" [help]="false" />
-              @if (v.distribution_days !== null && v.distribution_days !== undefined) {
-                <app-stat-tile
-                  label="Distribution days"
-                  [value]="distribution()"
-                  [detail]="distributionMeaning()"
-                  [help]="false"
-                />
-              }
-            </div>
-          }
+            }
+          </div>
+        }
+        <div class="panel-body body">
           <ul class="lines" aria-label="What the numbers mean">
             @for (line of v.lines; track line.key) {
               <li [class]="'line ' + line.tone">
@@ -83,10 +85,13 @@ export function aboveText(a: Breadth['above_50']): string {
       display: grid;
       gap: var(--space-3);
     }
+    /* The figures: one divided strip under the head, no card in a card. */
     .tiles {
-      display: grid;
       grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-      gap: var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .hint {
+      font-variant-numeric: tabular-nums;
     }
     .lines {
       list-style: none;

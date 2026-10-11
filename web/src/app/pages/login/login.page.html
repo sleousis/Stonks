@@ -142,7 +142,7 @@
             {{ busy() ? 'Checking…' : 'Confirm' }}
           </button>
         </form>
-        <button type="button" class="btn btn-ghost" (click)="startOver()">Start over</button>
+        <button type="button" class="btn btn-tertiary" (click)="startOver()">Start over</button>
       }
 
       @case ('verify') {
@@ -187,10 +187,10 @@
           </button>
         </form>
         <div class="links">
-          <button type="button" class="btn btn-ghost" (click)="toggleRecovery()">
+          <button type="button" class="btn btn-tertiary" (click)="toggleRecovery()">
             {{ useRecovery() ? 'Use the app code' : 'Lost your phone? Use a recovery code' }}
           </button>
-          <button type="button" class="btn btn-ghost" (click)="startOver()">Start over</button>
+          <button type="button" class="btn btn-tertiary" (click)="startOver()">Start over</button>
         </div>
       }
 

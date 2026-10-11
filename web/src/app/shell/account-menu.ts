@@ -85,13 +85,14 @@ const ROLE_LABEL: Readonly<Record<Role, string>> = {
       color: var(--color-ink-2);
       cursor: pointer;
       list-style: none;
+      transition: background-color var(--dur-fast) var(--ease);
     }
     summary::-webkit-details-marker {
       display: none;
     }
     summary:hover,
     details[open] > summary {
-      background: var(--color-surface-2);
+      background: var(--color-hover);
     }
     .dot {
       flex: none;
@@ -146,7 +147,7 @@ const ROLE_LABEL: Readonly<Record<Role, string>> = {
       align-items: center;
       justify-content: space-between;
       width: 100%;
-      min-height: 34px;
+      min-height: 36px;
       padding: 0 var(--space-3);
       border: 0;
       border-radius: var(--radius-sm);
@@ -157,12 +158,19 @@ const ROLE_LABEL: Readonly<Record<Role, string>> = {
       text-align: start;
       text-decoration: none;
       cursor: pointer;
+      transition:
+        background-color var(--dur-fast) var(--ease),
+        color var(--dur-fast) var(--ease);
     }
     a:hover,
-    .sign-out:hover,
+    .sign-out:hover {
+      background: var(--color-hover);
+      color: var(--color-ink);
+    }
     a.active {
       background: var(--color-surface-2);
       color: var(--color-ink);
+      font-weight: var(--weight-semibold);
     }
     .signed-out {
       justify-content: flex-start;
@@ -170,7 +178,7 @@ const ROLE_LABEL: Readonly<Record<Role, string>> = {
       font-size: var(--text-xs);
     }
     kbd {
-      font: inherit;
+      font-family: var(--font-mono);
       font-size: var(--text-xs);
       color: var(--color-ink-3);
       opacity: 0;

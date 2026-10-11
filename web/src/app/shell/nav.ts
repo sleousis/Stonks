@@ -183,32 +183,45 @@ const TICKETS = '/tickets';
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 32px;
-      margin: var(--space-2) 0 2px;
+      min-height: 28px;
+      margin: var(--space-3) 0 var(--space-1);
       padding: 0 var(--space-3);
       border-radius: var(--radius-sm);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-semibold);
       color: var(--color-ink-3);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      letter-spacing: var(--tracking-overline);
+      text-transform: uppercase;
       cursor: pointer;
       list-style: none;
       user-select: none;
+      transition:
+        background-color var(--dur-fast) var(--ease),
+        color var(--dur-fast) var(--ease);
     }
     .group::-webkit-details-marker {
       display: none;
     }
     .group:hover {
-      background: var(--color-surface-2);
-      color: var(--color-ink);
+      background: var(--color-hover);
+      color: var(--color-ink-2);
     }
+    /* A quieter chevron: thinner, smaller, half strength until hovered or open. */
     .chev {
-      width: 0.45em;
-      height: 0.45em;
-      margin-right: 2px;
-      border-right: 1.5px solid currentColor;
-      border-bottom: 1.5px solid currentColor;
+      width: 0.4em;
+      height: 0.4em;
+      margin-right: 3px;
+      border-right: 1.25px solid currentColor;
+      border-bottom: 1.25px solid currentColor;
+      opacity: 0.7;
       transform: rotate(-45deg);
-      transition: transform var(--dur-fast) var(--ease);
+      transition:
+        transform var(--dur-fast) var(--ease),
+        opacity var(--dur-fast) var(--ease);
+    }
+    .group:hover .chev,
+    details[open] > .group .chev {
+      opacity: 1;
     }
     details[open] > .group .chev {
       transform: rotate(45deg);
@@ -225,16 +238,22 @@ const TICKETS = '/tickets';
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 34px;
+      min-height: 36px;
       padding: 0 var(--space-3);
       border-radius: var(--radius-sm);
       color: var(--color-ink-2);
       text-decoration: none;
       font-weight: var(--weight-medium);
+      transition:
+        background-color var(--dur-fast) var(--ease),
+        color var(--dur-fast) var(--ease);
     }
     a:hover {
-      background: var(--color-surface-2);
+      background: var(--color-hover);
       color: var(--color-ink);
+    }
+    a:active {
+      background: var(--color-pressed);
     }
     a.active {
       background: var(--color-surface-2);
@@ -245,8 +264,8 @@ const TICKETS = '/tickets';
       content: '';
       position: absolute;
       left: 0;
-      top: 7px;
-      bottom: 7px;
+      top: 8px;
+      bottom: 8px;
       width: 3px;
       border-radius: var(--radius-xs);
       background: var(--color-accent);
@@ -260,18 +279,20 @@ const TICKETS = '/tickets';
       color: var(--color-primary-ink);
       font-size: var(--text-xs);
       font-weight: var(--weight-semibold);
+      font-family: var(--font-mono);
       line-height: 20px;
       text-align: center;
-      font-variant-numeric: tabular-nums;
+      font-variant-numeric: tabular-nums slashed-zero;
     }
     .count + kbd {
       margin-left: var(--space-2);
     }
     kbd {
-      font: inherit;
+      font-family: var(--font-mono);
       font-size: var(--text-xs);
       color: var(--color-ink-3);
       opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease);
     }
     a:hover kbd,
     a:focus-visible kbd {
@@ -287,7 +308,9 @@ const TICKETS = '/tickets';
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .chev {
+      .chev,
+      .group,
+      a {
         transition: none;
       }
     }

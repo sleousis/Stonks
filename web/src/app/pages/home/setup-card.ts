@@ -26,7 +26,7 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
   template: `
     @if (reserve()) {
       <!-- While the guide loads, hold its place so Today does not jump. -->
-      <div class="setup reserve" aria-hidden="true">
+      <div class="setup callout reserve" data-tone="info" aria-hidden="true">
         <div class="text">
           <span class="h2">&nbsp;</span>
           <span class="line">&nbsp;</span>
@@ -35,9 +35,9 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
         <div class="actions"><span class="btn">&nbsp;</span></div>
       </div>
     } @else if (view(); as v) {
-      <section class="setup" aria-labelledby="setup-title">
+      <section class="setup callout" data-tone="info" aria-labelledby="setup-title">
         <div class="text">
-          <h2 id="setup-title">Get set up</h2>
+          <h2 id="setup-title" class="display-sm">Get set up</h2>
           <p class="line">
             <span class="num">{{ progress() }}</span
             >. Next: {{ next() }}.
@@ -51,7 +51,7 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
         <div class="actions">
           <a routerLink="/welcome" class="btn btn-primary">Continue setup</a>
           <a routerLink="/demo" class="btn">See a demo</a>
-          <button type="button" class="btn btn-ghost" [disabled]="hiding()" (click)="hide()">
+          <button type="button" class="btn btn-tertiary" [disabled]="hiding()" (click)="hide()">
             Hide
           </button>
         </div>
@@ -62,18 +62,19 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
     :host {
       display: block;
     }
+    /* An info callout: a note set apart from the page, not another panel. */
     .setup {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
       gap: var(--space-3) var(--space-4);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-accent);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
-      box-shadow: var(--shadow-1);
+    }
+    .setup > * {
+      max-width: none;
+    }
+    .setup > * + * {
+      margin-top: 0;
     }
     .text {
       display: grid;
@@ -82,10 +83,9 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
       flex: 1 1 16rem;
     }
     h2 {
-      font-family: var(--font-display);
-      font-stretch: var(--display-stretch);
       font-size: var(--text-lg);
       font-weight: var(--weight-bold);
+      line-height: var(--leading-tight);
     }
     .line {
       color: var(--color-ink-2);
@@ -93,7 +93,7 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
     }
     .ticks {
       display: flex;
-      gap: 4px;
+      gap: var(--space-1);
       margin: var(--space-1) 0 0;
       padding: 0;
       list-style: none;
@@ -101,8 +101,8 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
     .ticks li {
       width: 2rem;
       height: 4px;
-      border-radius: 2px;
-      background: var(--color-border);
+      border-radius: var(--radius-xs);
+      background: color-mix(in srgb, var(--color-border-strong) 45%, transparent);
     }
     .ticks li[data-state='done'] {
       background: var(--color-accent);
@@ -114,6 +114,17 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-2);
+    }
+    /* Phones: Continue setup takes the row, the other two share the next. */
+    @media (max-width: 767.98px) {
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+      }
+      .actions .btn-primary {
+        grid-column: 1 / -1;
+      }
     }
     .reserve {
       visibility: hidden;

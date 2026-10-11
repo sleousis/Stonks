@@ -8,7 +8,7 @@
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-height: 100dvh;
   padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--gutter)
     calc(var(--space-6) + env(safe-area-inset-bottom));
@@ -34,18 +34,26 @@
   }
 }
 
+// One quiet card on the page: a hairline, the soft radius, no shadow.
 .card {
   display: grid;
   gap: var(--space-4);
   width: 100%;
-  max-width: 26rem;
+  max-width: 400px;
   min-width: 0;
   padding: var(--space-5);
   border: 1px solid var(--color-border);
-  border-top: 3px solid var(--color-ink);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: var(--shadow-1);
+}
+
+// Sign-in fields are 44px everywhere: a form people fill on any device.
+.card .input {
+  min-height: var(--touch-min);
+}
+
+.card .btn {
+  min-height: var(--touch-min);
 }
 
 h1 {
@@ -66,13 +74,14 @@ h1 {
 }
 
 .lead {
+  max-width: 70ch;
   color: var(--color-ink-2);
 }
 
 .alert,
 .note {
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-loss);
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--color-loss);
   border-radius: var(--radius-sm);
   background: var(--color-loss-soft);
   font-size: var(--text-sm);
@@ -106,7 +115,7 @@ h1 {
 
 .alt > .btn,
 .links .btn,
-.card > .btn-ghost {
+.card > .btn-tertiary {
   justify-self: start;
 }
 
@@ -180,18 +189,35 @@ h1 {
   gap: var(--space-2);
 }
 
+.forgot {
+  max-width: 400px;
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  text-align: center;
+}
+
+// Phones: the card steps back and the form fills the width inside the 16px gutters.
 @include bp.phone {
   .wrap {
+    justify-items: stretch;
+    gap: var(--space-4);
     padding-top: calc(var(--space-5) + env(safe-area-inset-top));
   }
 
-  .card {
-    padding: var(--space-4);
+  .brand {
+    justify-self: start;
   }
-}
 
-.forgot {
-  font-size: var(--text-sm);
-  color: var(--color-ink-3);
-  text-align: center;
+  .card {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .forgot {
+    max-width: none;
+    text-align: left;
+  }
 }

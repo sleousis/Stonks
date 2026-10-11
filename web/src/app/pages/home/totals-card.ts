@@ -32,20 +32,20 @@ import { ErrorState } from '../../shared/ui/states';
         <div class="panel-head">
           <h2 id="home-totals">All traders</h2>
         </div>
-        <div class="panel-body body">
-          <div class="tiles">
-            <app-stat-tile
-              label="Total value"
-              featured
-              [value]="value()"
-              [amount]="totalValue()"
-              [format]="money"
-              [help]="false"
-            />
-            <app-stat-tile label="Cash" [value]="cash()" [help]="false" />
-            <app-stat-tile label="Portfolios" [value]="portfolios()" [help]="false" />
-            <app-stat-tile label="Traders" [value]="owners()" [help]="false" />
-          </div>
+        <div class="stat-strip tiles">
+          <app-stat-tile
+            bare
+            label="Total value"
+            [value]="value()"
+            [amount]="totalValue()"
+            [format]="money"
+            [help]="false"
+          />
+          <app-stat-tile bare label="Cash" [value]="cash()" [help]="false" />
+          <app-stat-tile bare label="Portfolios" [value]="portfolios()" [help]="false" />
+          <app-stat-tile bare label="Traders" [value]="owners()" [help]="false" />
+        </div>
+        <div class="panel-body">
           <p class="hint">Sums only. Admins never see anyone's holdings.</p>
         </div>
       </section>
@@ -56,20 +56,10 @@ import { ErrorState } from '../../shared/ui/states';
       display: block;
       min-width: 0;
     }
-    .body {
-      display: grid;
-      gap: var(--space-3);
-    }
+    /* Sums in one divided strip: the page's one headline figure stays in My portfolio. */
     .tiles {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-3);
-    }
-    /* Phones: the headline figure gets the whole width. */
-    @media (max-width: 767.98px) {
-      .tiles .featured {
-        grid-column: 1 / -1;
-      }
+      grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+      border-bottom: 1px solid var(--color-border);
     }
     .line {
       margin: 0;
