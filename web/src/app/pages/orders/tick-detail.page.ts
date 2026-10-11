@@ -73,7 +73,7 @@ export const TICK_FILLS_LIMIT = 200;
         >
       </div>
 
-      <section class="tiles" aria-label="Trading run summary">
+      <section class="tiles tile-grid" aria-label="Trading run summary">
         <app-stat-tile
           label="Started"
           [value]="dateTime(t.started_at)"
@@ -100,12 +100,12 @@ export const TICK_FILLS_LIMIT = 200;
             <h2 id="decision-title">Decision</h2>
           </div>
           @if (s?.error) {
-            <p class="alert-line" role="alert">
+            <p class="alert-line callout" data-tone="loss" role="alert">
               <strong>{{ s?.error_type ?? 'Error' }}:</strong> {{ s?.error }}
             </p>
           }
           @for (note of notes(); track note) {
-            <p class="alert-line warn">{{ note }}</p>
+            <p class="alert-line callout" data-tone="warn">{{ note }}</p>
           }
           <dl class="facts">
             <div>
@@ -135,7 +135,7 @@ export const TICK_FILLS_LIMIT = 200;
           </dl>
         </section>
 
-        <section class="panel span-12" aria-labelledby="risk-title">
+        <section class="panel panel-flush span-12" aria-labelledby="risk-title">
           <div class="panel-head">
             <h2 id="risk-title">Risk adjustments</h2>
           </div>
@@ -159,7 +159,7 @@ export const TICK_FILLS_LIMIT = 200;
           }
         </section>
 
-        <section class="panel span-12" aria-labelledby="tick-orders-title">
+        <section class="panel panel-flush span-12" aria-labelledby="tick-orders-title">
           <div class="panel-head">
             <h2 id="tick-orders-title">Orders</h2>
             <span class="count num">{{ t.orders.length }}</span>
@@ -179,7 +179,7 @@ export const TICK_FILLS_LIMIT = 200;
           }
         </section>
 
-        <section class="panel span-6" aria-labelledby="tick-fills-title">
+        <section class="panel panel-flush span-6" aria-labelledby="tick-fills-title">
           <div class="panel-head">
             <h2 id="tick-fills-title">Fills</h2>
             @if (fillsCapped(); as cap) {
@@ -215,13 +215,13 @@ export const TICK_FILLS_LIMIT = 200;
           }
         </section>
 
-        <section class="panel span-6" aria-labelledby="shadow-title">
+        <section class="panel panel-flush span-6" aria-labelledby="shadow-title">
           <div class="panel-head">
             <h2 id="shadow-title">Strategies on trial</h2>
             <a class="cell-link" routerLink="/shadow">Open paper trading</a>
           </div>
           @if (s?.shadow_error) {
-            <p class="alert-line" role="alert">
+            <p class="alert-line callout" data-tone="loss" role="alert">
               Strategies on trial could not be checked: {{ s?.shadow_error }}
             </p>
           }
@@ -262,7 +262,7 @@ export const TICK_FILLS_LIMIT = 200;
     }
     .reason-text {
       display: block;
-      margin-top: 2px;
+      margin-top: var(--space-1);
       font-size: var(--text-xs);
       color: var(--color-loss);
       overflow-wrap: anywhere;

@@ -33,7 +33,7 @@ import { PageHeader } from '../../shared/ui/page-header';
       <div class="panel-head">
         <h2 id="how-title">How Stonks works</h2>
       </div>
-      <ol class="panel-body steps">
+      <ol class="panel-body steps prose">
         <li>
           Stonks runs <strong>strategies</strong>: rules that read prices after each close and
           decide what to buy and sell.
@@ -75,12 +75,16 @@ import { PageHeader } from '../../shared/ui/page-header';
     </p>
 
     @if (entries().length === 0) {
-      <p class="empty">No term matches "{{ query() }}". Try a shorter word.</p>
+      <p class="empty callout" data-tone="neutral">
+        No term matches "{{ query() }}". Try a shorter word.
+      </p>
     } @else {
       <div #list>
         @for (g of groups(); track g.title) {
-          <section class="group" [attr.aria-labelledby]="'glossary-' + $index">
-            <h2 [id]="'glossary-' + $index">{{ g.title }}</h2>
+          <section class="group panel" [attr.aria-labelledby]="'glossary-' + $index">
+            <div class="panel-head">
+              <h2 [id]="'glossary-' + $index">{{ g.title }}</h2>
+            </div>
             <dl class="terms">
               @for (e of g.entries; track e.key) {
                 <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
@@ -109,8 +113,11 @@ import { PageHeader } from '../../shared/ui/page-header';
       gap: var(--space-2);
       margin: 0;
       padding-left: calc(var(--space-4) + 1.25rem);
-      max-width: 72ch;
       color: var(--color-ink-2);
+    }
+    .steps ::marker {
+      font-family: var(--font-mono);
+      color: var(--color-ink-3);
     }
     .search {
       max-width: 28rem;
@@ -118,43 +125,69 @@ import { PageHeader } from '../../shared/ui/page-header';
     .count {
       margin: var(--space-2) 0 var(--space-4);
       font-size: var(--text-sm);
+      font-variant-numeric: tabular-nums slashed-zero;
     }
+    .empty {
+      margin: 0;
+    }
+    // One panel per group, the terms a definition list on hairlines.
     .group + .group {
-      margin-top: var(--space-6);
-    }
-    .group h2 {
-      margin-bottom: var(--space-3);
-      font-size: var(--text-lg);
+      margin-top: var(--space-4);
     }
     .terms {
       display: grid;
-      gap: var(--space-2);
       margin: 0;
+      padding: 0 var(--space-4);
     }
     .term {
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
+      padding: var(--space-3) 0;
       scroll-margin-top: var(--space-8);
     }
+    .term + .term {
+      border-top: 1px solid var(--color-border);
+    }
+    // The term a link pointed at: an accent rule at the panel edge.
     .term.target {
-      border-color: var(--color-focus);
-      box-shadow: inset 3px 0 0 var(--color-focus);
+      margin-inline: calc(-1 * var(--space-4));
+      padding-inline: calc(var(--space-4) - 2px) var(--space-4);
+      border-left: 2px solid var(--color-focus);
+      background: var(--color-accent-soft);
+    }
+    .term:focus-visible {
+      outline-offset: -2px;
     }
     dt {
+      font-size: var(--text-md);
       font-weight: var(--weight-semibold);
     }
     dd {
+      max-width: 70ch;
       margin: var(--space-1) 0 0;
+      font-size: var(--text-md);
       color: var(--color-ink-2);
       overflow-wrap: anywhere;
     }
     .aliases {
       font-size: var(--text-xs);
+      color: var(--color-ink-3);
     }
     .example {
       font-size: var(--text-sm);
+    }
+    @media (max-width: 767.98px) {
+      .intro {
+        margin-bottom: var(--space-4);
+      }
+      .group + .group {
+        margin-top: var(--space-3);
+      }
+      .terms {
+        padding: 0 var(--space-3);
+      }
+      .term.target {
+        margin-inline: calc(-1 * var(--space-3));
+        padding-inline: calc(var(--space-3) - 2px) var(--space-3);
+      }
     }
   `,
 })

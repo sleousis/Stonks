@@ -34,11 +34,11 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
       white-space: normal;
       overflow-wrap: anywhere;
       color: var(--color-loss);
-      font-size: var(--text-sm);
+      font-size: var(--text-xs);
     }
   `,
   template: `
-    <section class="panel" aria-labelledby="runs-title">
+    <section class="panel panel-flush" aria-labelledby="runs-title">
       <div class="panel-head">
         <h2 id="runs-title">Data updates</h2>
         @if (page(); as p) {

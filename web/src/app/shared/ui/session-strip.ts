@@ -265,7 +265,6 @@ function runTime(iso: string, now: number): string {
       border-radius: var(--radius-md);
       background: var(--tone-soft);
       font-size: var(--text-sm);
-      box-shadow: var(--shadow-1);
       overflow: hidden;
     }
     .strip[data-tone='kill'] {
@@ -351,7 +350,7 @@ function runTime(iso: string, now: number): string {
       font-stretch: var(--display-stretch);
       font-size: var(--text-lg);
       font-weight: var(--weight-bold);
-      letter-spacing: var(--tracking-display);
+      letter-spacing: var(--tracking-display-sm);
     }
 
     /* The day track: pre-open shaded, the open session plain, a tick at now. */
@@ -421,8 +420,8 @@ function runTime(iso: string, now: number): string {
       min-width: 6.5ch;
       padding: 1px var(--space-2);
       border-radius: var(--radius-xs);
-      background: var(--color-ink);
-      color: var(--color-surface);
+      background: var(--color-slab);
+      color: var(--color-slab-ink);
       text-align: center;
       font-weight: var(--weight-semibold);
     }
@@ -497,34 +496,55 @@ function runTime(iso: string, now: number): string {
       .strip-link {
         width: 100%;
       }
-      /* Phase and Stop share the top line; the rest wraps below. */
+      /* Two rows at most. Row 1: the phase on one line and Stop trading.
+         Row 2: the portfolio picker, its stamp and the trading run chip. */
+      .row {
+        gap: var(--space-2) var(--space-3);
+        padding: var(--space-2) var(--space-3);
+      }
       .phase {
         order: 1;
-        flex: 1 1 0;
+        flex: 1 1 9rem;
+        flex-wrap: nowrap;
         min-width: 0;
+        overflow: hidden;
       }
       .phase-label {
+        white-space: nowrap;
+      }
+      .phase-event {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
       .stop {
         order: 2;
         margin-left: auto;
       }
+      /* The day track is a desktop detail: the phase line says the same. */
       .track {
-        flex-basis: 100%;
-        max-width: none;
-        order: 3;
+        display: none;
       }
       .pick {
-        order: 4;
+        order: 3;
+        flex: 1 1 auto;
+        min-width: 8rem;
       }
-      /* The countdown gets a line of its own, clock on the right. */
       .next {
+        order: 4;
+        flex: none;
+        gap: var(--space-2);
+        margin-left: auto;
+      }
+      .next .job {
+        color: var(--color-ink-3);
+        font-size: var(--text-xs);
+        font-weight: var(--weight-medium);
+      }
+      .next.none {
+        flex: 1 1 100%;
         order: 5;
-        flex-basis: 100%;
-        justify-content: space-between;
-        margin-left: 0;
-        border-top: 1px solid var(--color-border);
       }
       .at {
         display: none;

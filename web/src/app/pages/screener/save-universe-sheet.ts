@@ -130,13 +130,13 @@ interface Open {
               </div>
             </div>
           } @else {
-            <p class="warning" role="note">
+            <p class="callout warning" data-tone="warn" role="note">
               <strong>Backtests look too good.</strong> {{ snapshotWarning }}
             </p>
           }
 
           @if (failure(); as f) {
-            <p class="failure" role="alert">{{ f }}</p>
+            <p class="callout failure" data-tone="loss" role="alert">{{ f }}</p>
           }
           <div class="sheet-actions">
             <button type="button" class="btn" [disabled]="busy()" (click)="close(null)">
@@ -164,17 +164,7 @@ interface Open {
     .hint.error {
       color: var(--color-loss);
     }
-    .warning {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
-      font-size: var(--text-sm);
-    }
     .failure {
-      padding: var(--space-3);
-      border-left: 3px solid var(--color-loss);
-      background: var(--color-loss-soft);
       overflow-wrap: anywhere;
     }
   `,

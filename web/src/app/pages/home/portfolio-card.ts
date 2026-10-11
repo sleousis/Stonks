@@ -62,47 +62,57 @@ export { sessionLabel } from '../../core/format/day-change';
           message="You get signals from the strategies you follow. A paper portfolio lets them trade for you with pretend money."
         />
       } @else {
+        <div class="stat-strip tiles">
+          <app-stat-tile
+            bare
+            label="Value"
+            featured
+            [live]="live()"
+            [value]="value()"
+            [amount]="total()"
+            [format]="money"
+            [detail]="baseLine()"
+            [help]="false"
+          />
+          <app-stat-tile
+            bare
+            [label]="dayLabel()"
+            [value]="dayChange() ?? 'No change yet'"
+            [detail]="dayReturn()"
+            [detailTone]="dayTone()"
+            [help]="false"
+          />
+        </div>
         <div class="panel-body body">
-          <div class="tiles">
-            <app-stat-tile
-              label="Value"
-              featured
-              [live]="live()"
-              [value]="value()"
-              [amount]="total()"
-              [format]="money"
-              [detail]="baseLine()"
-              [help]="false"
-            />
-            <app-stat-tile
-              [label]="dayLabel()"
-              [value]="dayChange() ?? 'No change yet'"
-              [detail]="dayReturn()"
-              [detailTone]="dayTone()"
-              [help]="false"
-            />
-          </div>
           @if (returnsLine(); as line) {
             <p class="returns">{{ line }}</p>
           }
           @if (holdings().length === 0) {
             <app-empty-state
+              compact
               title="No holdings yet"
               message="Holdings show here after your first paper or auto trade."
             >
               <a routerLink="/orders" class="btn">See orders</a>
             </app-empty-state>
           } @else {
-            <ul class="holdings" aria-label="Holdings">
-              @for (h of holdings(); track h.ticker) {
-                <li>
-                  <span class="ticker">{{ h.ticker }}</span>
-                  <span class="qty num muted">{{ h.quantity }}</span>
-                  <span class="value num">{{ h.value }}</span>
-                  <span class="pnl num" [class]="h.tone">{{ h.pnl }}</span>
-                </li>
-              }
-            </ul>
+            <div class="holdings-wrap">
+              <p class="holdings-head" aria-hidden="true">
+                <span>Holding</span>
+                <span>Value</span>
+                <span>Return</span>
+              </p>
+              <ul class="holdings" aria-label="Holdings">
+                @for (h of holdings(); track h.ticker) {
+                  <li>
+                    <span class="ticker">{{ h.ticker }}</span>
+                    <span class="qty num muted">{{ h.quantity }}</span>
+                    <span class="value num">{{ h.value }}</span>
+                    <span class="pnl num" [class]="h.tone">{{ h.pnl }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
             @if (more() > 0) {
               <a routerLink="/insights" class="more">and {{ more() }} more</a>
             }
@@ -118,15 +128,21 @@ export { sessionLabel } from '../../core/format/day-change';
     }
     .body {
       display: grid;
-      gap: var(--space-4);
-    }
-    .tiles {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: var(--space-3);
+    }
+    /* Value and today's change: one divided strip under the head, no card in a card. */
+    .tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border-bottom: 1px solid var(--color-border);
+    }
+    .tiles app-stat-tile {
+      padding: var(--space-4);
     }
     /* Phones: the headline figure gets the whole width. */
     @media (max-width: 767.98px) {
+      .tiles app-stat-tile {
+        padding: var(--space-3);
+      }
       .tiles .featured {
         grid-column: 1 / -1;
       }
@@ -144,8 +160,26 @@ export { sessionLabel } from '../../core/format/day-change';
     }
     .returns {
       margin: 0;
+      max-width: 70ch;
       color: var(--color-ink-2);
       font-size: var(--text-sm);
+    }
+    /* Holdings: value and return sit in fixed columns on one baseline. */
+    .holdings-wrap {
+      --holding-cols: minmax(0, 1fr) minmax(6.5rem, auto) 4.5rem;
+    }
+    .holdings-head {
+      display: grid;
+      grid-template-columns: var(--holding-cols);
+      column-gap: var(--space-3);
+      padding-bottom: var(--space-1);
+      border-bottom: 1px solid var(--color-border);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+      font-weight: 600;
+    }
+    .holdings-head span + span {
+      text-align: right;
     }
     .holdings {
       display: grid;
@@ -155,10 +189,10 @@ export { sessionLabel } from '../../core/format/day-change';
     }
     .holdings li {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: var(--holding-cols);
       grid-template-areas: 'ticker value pnl' 'qty value pnl';
       column-gap: var(--space-3);
-      align-items: center;
+      align-items: baseline;
       padding: var(--space-2) 0;
       border-bottom: 1px solid var(--color-border);
     }
@@ -180,9 +214,7 @@ export { sessionLabel } from '../../core/format/day-change';
     }
     .pnl {
       grid-area: pnl;
-      min-width: 4.5rem;
       text-align: right;
-      font-size: var(--text-sm);
     }
   `,
 })

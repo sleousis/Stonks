@@ -1,7 +1,7 @@
 @let u = universe.hasValue() ? universe.value() : null;
 <app-page-header [title]="u?.name || id()" [description]="u?.description ?? null">
-  <a actions class="btn btn-ghost" routerLink="/universes">All universes</a>
-  <a actions class="btn btn-ghost" routerLink="/lab" [queryParams]="{ universe: id() }"
+  <a actions class="btn btn-tertiary" routerLink="/universes">All universes</a>
+  <a actions class="btn btn-tertiary" routerLink="/lab" [queryParams]="{ universe: id() }"
     >Test in the lab</a
   >
   <button
@@ -58,7 +58,7 @@
     </div>
   </dl>
   @if (stale()) {
-    <p class="notice" role="status">
+    <p class="callout notice" data-tone="warn" role="status">
       The definition changed after the last refresh. Refresh to rebuild the members from it.
     </p>
   }
@@ -383,6 +383,7 @@
   @if (u && isAdmin()) {
     <details class="panel span-12 advanced" aria-labelledby="spec-title">
       <summary class="panel-head">
+        <span class="disclosure-chev" aria-hidden="true"></span>
         <h2 id="spec-title">Definition</h2>
         <span class="muted">Advanced</span>
       </summary>

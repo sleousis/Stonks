@@ -72,7 +72,7 @@ export function notableItems(c: PriceCheckView): PriceCheckItemView[] {
             {{ c.source }} for {{ c.as_of }}, {{ when(c.checked_at) }}.
           </p>
           @if (c.held.length) {
-            <p class="problem" role="note">
+            <p class="problem callout" data-tone="loss" role="note">
               New buys held today: <strong>{{ c.held.join(', ') }}</strong
               >. Sells still go out.
             </p>
@@ -120,10 +120,12 @@ export function notableItems(c: PriceCheckView): PriceCheckItemView[] {
       font-family: var(--font-mono);
     }
     .problem {
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-xs);
-      background: var(--color-loss-soft);
       overflow-wrap: anywhere;
+    }
+    @media (max-width: 767.98px) {
+      .body {
+        padding: var(--space-3);
+      }
     }
   `,
 })

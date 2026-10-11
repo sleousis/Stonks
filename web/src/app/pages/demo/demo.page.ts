@@ -62,6 +62,7 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
     } @else if (!view()?.exists) {
       <section class="panel">
         <app-empty-state
+          compact
           title="See Stonks with sample data"
           message="Open a demo portfolio: five made-up holdings and a year of made-up prices. It never touches your real books, and you can remove it at any time."
         >
@@ -72,12 +73,12 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
       </section>
     } @else {
       @let d = view()!;
-      <p class="sample" role="note">
+      <p class="sample callout" data-tone="neutral" role="note">
         <span class="badge">{{ d.label }}</span>
         Nothing here is real. These figures are generated, and no order can use them.
       </p>
 
-      <div class="tiles">
+      <div class="tile-grid">
         <app-stat-tile label="Value" featured [value]="money(d.total_value)" />
         <app-stat-tile
           label="Return"
@@ -96,7 +97,9 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
       <section class="panel" aria-labelledby="demo-curve">
         <div class="panel-head">
           <h2 id="demo-curve">Value over the year</h2>
-          <span class="hint">Marked {{ day(d.as_of) }}</span>
+          <span class="hint"
+            >Marked <span class="num">{{ day(d.as_of) }}</span></span
+          >
         </div>
         <div class="panel-body">
           <app-time-series-chart
@@ -108,7 +111,7 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="demo-holdings">
+      <section class="panel panel-flush" aria-labelledby="demo-holdings">
         <div class="panel-head">
           <h2 id="demo-holdings">Holdings</h2>
         </div>
@@ -122,11 +125,11 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
 
       <section class="panel next">
         <div class="panel-body next-body">
-          <p>Ready for your own? Open a portfolio, or bring a broker's history in.</p>
+          <p class="prose">Ready for your own? Open a portfolio, or bring a broker's history in.</p>
           <div class="actions">
             <a class="btn btn-primary" routerLink="/welcome">Set up your own</a>
             <a class="btn" routerLink="/connections/import">Import a CSV statement</a>
-            <button type="button" class="btn btn-ghost" [disabled]="busy()" (click)="remove()">
+            <button type="button" class="btn btn-tertiary" [disabled]="busy()" (click)="remove()">
               Remove the demo
             </button>
           </div>
@@ -135,36 +138,38 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
     }
   `,
   styles: `
+    @use 'breakpoints' as bp;
+
     :host {
       display: grid;
       gap: var(--space-4);
       min-width: 0;
+
+      @include bp.phone {
+        gap: var(--space-3);
+      }
     }
+    /* Sample data: a neutral callout led by a square flag. */
     .sample {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--space-2);
+      gap: var(--space-2) var(--space-3);
       margin: 0;
-      padding: var(--space-3) var(--space-4);
-      border: 1px dashed var(--color-border-strong);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-2);
+    }
+    .sample > * + * {
+      margin-top: 0;
     }
     .badge {
       padding: 2px var(--space-2);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-xs);
       background: var(--color-ink);
       color: var(--color-surface);
       font-size: var(--text-xs);
-      font-weight: var(--weight-semibold);
+      font-weight: 600;
+      line-height: 16px;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .tiles {
-      display: grid;
-      gap: var(--space-3);
-      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      letter-spacing: var(--tracking-overline);
     }
     .hint {
       font-size: var(--text-sm);
@@ -183,7 +188,7 @@ const COLUMNS: TableColumn<DemoPositionView>[] = [
       gap: var(--space-2);
     }
     .actions .btn {
-      min-height: 44px;
+      min-height: var(--touch-min);
     }
   `,
 })

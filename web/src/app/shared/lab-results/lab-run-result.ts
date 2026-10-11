@@ -26,8 +26,9 @@ export { formatMetric, metricLabel } from '../metrics';
 export { testLabel } from './survival-tests';
 
 /**
- * "It held up: it passed all 7 robustness tests..." or "It did not hold up:
- * it failed 2 of 7 robustness tests (Higher costs, Nearby settings)...".
+ * "It passed all 7 robustness tests..." or "It failed 2 of 7 robustness
+ * tests (Higher costs, Nearby settings)...". The bold lead before it says
+ * Held up or Did not hold up, so the sentence does not say it again.
  */
 export function verdictSentence(
   r: Pick<LabRunView, 'verdict' | 'survival_reports' | 'robustness'>,
@@ -36,16 +37,16 @@ export function verdictSentence(
   const tests = total === 1 ? 'test' : 'tests';
   if (heldUp(r)) {
     return (
-      `It held up: it passed ${total === 1 ? 'the' : `all ${total}`} robustness ${tests} ` +
+      `It passed ${total === 1 ? 'the' : `all ${total}`} robustness ${tests} ` +
       'on data the search never tuned on. That makes luck less likely, not impossible.'
     );
   }
   const failed = r.survival_reports.filter((t) => !t.passed).map((t) => testLabel(t.test_id));
   if (!failed.length) {
-    return 'It did not hold up: the run stopped before its robustness tests could pass.';
+    return 'The run stopped before its robustness tests could pass.';
   }
   return (
-    `It did not hold up: it failed ${failed.length} of ${total} robustness ${tests} ` +
+    `It failed ${failed.length} of ${total} robustness ${tests} ` +
     `(${failed.join(', ')}). The good backtest may be luck or fitted to the past.`
   );
 }
@@ -99,17 +100,26 @@ function paramText(v: unknown): string {
   imports: [FigureGrid, HelpTip, ParamHeatmap, PreflightIssues, RouterLink, StatTile, StatusPill],
   template: `
     @let r = result();
-    <div class="plain" [class.failed]="!held()" role="note">
-      <p class="plain-verdict">
-        <strong>{{ status().label }}.</strong> {{ verdictText() }}
-        <app-help-tip term="lab_verdict" />
-      </p>
-    </div>
+    <p
+      class="plain plain-verdict callout"
+      [class.failed]="!held()"
+      [attr.data-tone]="held() ? 'gain' : 'loss'"
+      role="note"
+    >
+      <strong>{{ status().label }}.</strong> {{ verdictText() }}
+      <app-help-tip term="lab_verdict" />
+    </p>
 
-    <div class="summary">
-      <app-stat-tile label="Best score" [value]="score()" [detail]="className()" />
-      <app-stat-tile label="Settings tried" [value]="count(r.n_trials_run)" detail="This run" />
+    <div class="summary tile-grid">
+      <app-stat-tile bare label="Best score" [value]="score()" [detail]="className()" />
       <app-stat-tile
+        bare
+        label="Settings tried"
+        [value]="count(r.n_trials_run)"
+        detail="This run"
+      />
+      <app-stat-tile
+        bare
         label="Settings tried in all runs"
         [value]="count(r.n_trials_class)"
         detail="Of this strategy"
@@ -222,27 +232,12 @@ function paramText(v: unknown): string {
       gap: var(--space-4);
       min-width: 0;
     }
-    .summary {
-      display: grid;
-      gap: var(--space-3);
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
-    }
+    /* The verdict: one callout (gain or loss), never a box in a box. */
     .plain {
-      display: grid;
-      gap: var(--space-1);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-gain);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
-      font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
-    .plain.failed {
-      border-left-color: var(--color-loss);
-    }
-    .plain-verdict {
-      font-weight: var(--weight-medium);
+    .plain > * {
+      margin-top: 0;
     }
     .hint {
       font-size: var(--text-xs);
@@ -256,17 +251,24 @@ function paramText(v: unknown): string {
     .bench-name {
       margin-bottom: var(--space-2);
     }
+    /* Section titles: 13px semibold, second ink. */
     h3 {
-      font-size: var(--text-md);
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
       margin-bottom: var(--space-2);
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
     }
     dl {
       margin: 0;
       display: grid;
-      gap: var(--space-2) var(--space-4);
+      gap: var(--space-3) var(--space-4);
       grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr));
     }
     dt {
+      margin-bottom: var(--space-1);
       font-size: var(--text-xs);
       color: var(--color-ink-3);
     }
@@ -287,18 +289,14 @@ function paramText(v: unknown): string {
       display: grid;
       gap: var(--space-2);
     }
+    /* One inset well per test; the receipt pill carries pass or fail. */
     .test {
       display: grid;
       gap: var(--space-2);
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-gain);
       border-radius: var(--radius-sm);
-      background: var(--color-surface);
+      background: var(--color-surface-2);
       min-width: 0;
-    }
-    .test.failed {
-      border-left-color: var(--color-loss);
     }
     .test-head {
       display: flex;
@@ -311,6 +309,7 @@ function paramText(v: unknown): string {
       font-weight: var(--weight-semibold);
     }
     .reason {
+      max-width: 70ch;
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
@@ -321,7 +320,7 @@ function paramText(v: unknown): string {
       cursor: pointer;
       font-size: var(--text-sm);
       color: var(--color-ink-2);
-      min-height: 32px;
+      min-height: var(--control-h);
       display: flex;
       align-items: center;
       @include bp.coarse {

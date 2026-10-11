@@ -131,6 +131,31 @@ describe('GoliveCheckList', () => {
     expect(el.textContent).not.toMatch(/shadow|promot|regist|go live/i);
   });
 
+  it('reads Failed only for a measured bad result, Not yet while data is missing', () => {
+    const r = report(true);
+    const swap = (name: string, patch: object) => {
+      r.checks = r.checks.map((c) => (c.name === name ? { ...c, ...patch } : c));
+    };
+    // Measured: a 22% fall against a 15% limit.
+    swap('max_drawdown', { passed: false, value: 0.22, limit: 0.15 });
+    // Missing: no paper results yet, no Monte Carlo report, no backtest drawdown.
+    swap('max_drift', { passed: false, value: null, limit: 0.1 });
+    swap('within_mc_band', { passed: false, value: 0.04, limit: null });
+    swap('quit_rule', { passed: false, value: 0.04, limit: 0.12 });
+    const el = render(r);
+    const pill = (label: string) =>
+      Array.from(el.querySelectorAll('.checks li'))
+        .find((li) => li.querySelector('.check-label')?.textContent?.trim() === label)!
+        .querySelector('app-status-pill')!
+        .textContent!.trim();
+    const labels = Array.from(el.querySelectorAll('.checks .check-label')).map((l) =>
+      l.textContent!.trim(),
+    );
+    expect(labels.length).toBe(4);
+    expect(pill(labels[0])).toBe('Failed');
+    for (const l of labels.slice(1)) expect(pill(l)).toBe('Not yet');
+  });
+
   it('names where the trial result came from', () => {
     expect(sourceWords('shadow')).toBe('its own test book');
     expect(sourceWords('portfolio')).toBe('the shared portfolio');

@@ -84,6 +84,7 @@ export interface LinkChoice {
       display: grid;
       gap: var(--space-2);
       padding: var(--space-3) 0;
+      font-variant-numeric: tabular-nums slashed-zero;
       border-top: 1px solid var(--color-border);
       min-width: 0;
     }
@@ -99,7 +100,8 @@ export interface LinkChoice {
       font-weight: var(--weight-semibold);
     }
     .who .muted {
-      font-size: var(--text-sm);
+      font-size: var(--text-xs);
+      color: var(--color-ink-3);
     }
     .linked {
       display: flex;

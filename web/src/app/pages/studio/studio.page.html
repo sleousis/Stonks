@@ -23,7 +23,7 @@
   <section class="panel create" aria-labelledby="create-title">
     <div class="panel-head">
       <h2 id="create-title">New draft</h2>
-      <button type="button" class="btn btn-ghost" (click)="creating.set(false)">Cancel</button>
+      <button type="button" class="btn btn-tertiary" (click)="creating.set(false)">Cancel</button>
     </div>
     <form class="panel-body create-body" (submit)="$event.preventDefault(); create()">
       <fieldset class="starts">
@@ -48,7 +48,7 @@
         </div>
       </fieldset>
       @if (start() === 'code' && codeDisabled()) {
-        <div class="callout" role="note">
+        <div class="callout" data-tone="warn" role="note">
           <p class="callout-title">Code strategies are turned off</p>
           <p>Code strategies are turned off on this server. Ask your admin.</p>
         </div>
@@ -159,7 +159,7 @@
               <a class="btn" [routerLink]="['/studio', d.id]">Open</a>
               <button
                 type="button"
-                class="btn btn-ghost"
+                class="btn btn-tertiary"
                 [attr.data-rename-for]="d.id"
                 [disabled]="!canLab()"
                 (click)="startRename(d)"
@@ -168,7 +168,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-ghost danger"
+                class="btn btn-tertiary danger"
                 [disabled]="deletingId() === d.id || !canLab()"
                 (click)="remove(d)"
               >

@@ -193,14 +193,15 @@ class LightweightChart implements ChartHandle {
   private seriesStyle(spec: ChartSeries) {
     const color = this.theme.colors[spec.color];
     if (spec.kind === 'area') {
-      // Filled between the line and zero (drawdown hangs below the zero line).
+      // Filled between the line and zero (drawdown hangs below the zero line),
+      // a quiet 12% wash of the line colour.
       return {
         topLineColor: color,
-        topFillColor1: withAlpha(color, 0.35),
-        topFillColor2: withAlpha(color, 0.05),
+        topFillColor1: withAlpha(color, 0.12),
+        topFillColor2: withAlpha(color, 0.02),
         bottomLineColor: color,
-        bottomFillColor1: withAlpha(color, 0.05),
-        bottomFillColor2: withAlpha(color, 0.35),
+        bottomFillColor1: withAlpha(color, 0.02),
+        bottomFillColor2: withAlpha(color, 0.12),
         lineWidth: 1 as const,
       };
     }

@@ -302,7 +302,7 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
           </form>
 
           @if (offNote()) {
-            <p class="off-note" role="status">
+            <p class="off-note callout" data-tone="loss" role="status">
               Research needs the assistant switched on, with a model and its training cutoff date
               set. Ask your admin to set both.
             </p>
@@ -364,10 +364,6 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
     }
     .off-note {
       margin: var(--space-4) 0 0;
-      padding: var(--space-3) var(--space-4);
-      border-left: 3px solid var(--color-loss);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
     }
     .job {
       display: grid;

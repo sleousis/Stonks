@@ -12,20 +12,22 @@
   min-height: 64px;
   padding: var(--space-2) var(--space-3);
   resize: vertical;
-  line-height: var(--leading-normal, 1.4);
+  line-height: var(--leading-body);
 }
 
 .count {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
+// A .callout list: room on the left for the bullets.
 .problems {
   margin: 0;
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-6);
-  border-left: 3px solid var(--color-loss);
-  border-radius: var(--radius-sm);
-  background: var(--color-loss-soft);
-  font-size: var(--text-sm);
+  padding-left: var(--space-6);
+}
+
+.field,
+.input {
+  min-width: 0;
 }
 
 .actions {

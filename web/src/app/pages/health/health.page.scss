@@ -1,30 +1,21 @@
 @use 'breakpoints' as bp;
 
-// Overall state: text + shape + colour, never colour alone.
+// Overall state: a callout in the level's tone with a small mark. Text,
+// shape and colour together, never colour alone.
 .overall {
-  --level: var(--color-gain);
-  --level-soft: var(--color-gain-soft);
-
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
   margin-bottom: var(--space-4);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-left: 4px solid var(--level);
-  border-radius: var(--radius-md);
-  background: linear-gradient(90deg, var(--level-soft), var(--color-surface) 60%);
-  box-shadow: var(--shadow-1);
 
-  &[data-level='warning'] {
-    --level: var(--color-warn);
-    --level-soft: var(--color-warn-soft);
+  // The callout's child spacing is replaced by the grid gap.
+  > * + * {
+    margin-top: 0;
   }
 
-  &[data-level='critical'] {
-    --level: var(--color-loss);
-    --level-soft: var(--color-loss-soft);
+  > * {
+    max-width: none;
   }
 
   h2 {
@@ -32,14 +23,19 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: var(--space-1) var(--space-3);
-    font-size: var(--text-xl);
-    color: var(--level);
+    font-size: var(--text-panel);
+    font-weight: var(--weight-semibold);
+    color: var(--color-ink);
   }
 
   p {
     margin-top: var(--space-1);
     color: var(--color-ink-2);
     max-width: 70ch;
+  }
+
+  @include bp.phone {
+    margin-bottom: var(--space-3);
   }
 
   .version {
@@ -57,49 +53,53 @@
 }
 
 .overall-count {
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  color: var(--color-ink);
+  color: var(--color-ink-2);
 }
 
-// Circle = good, triangle = warning, diamond = critical.
+// A small mark in the level's tone. Circle = good, triangle = warning,
+// diamond = critical.
 .glyph {
-  width: 28px;
-  height: 28px;
-  background: var(--level);
+  width: 10px;
+  height: 10px;
+  background: var(--callout-tone);
   border-radius: 50%;
 }
 
 .overall[data-level='warning'] .glyph {
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
 .overall[data-level='critical'] .glyph {
-  width: 22px;
-  height: 22px;
-  margin: 3px;
-  border-radius: 2px;
+  width: 8px;
+  height: 8px;
+  margin: 1px;
+  border-radius: var(--radius-xs);
   transform: rotate(45deg);
 }
 
+// The tile grid (global .tile-grid) lays the three tiles out.
 .tiles {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: var(--space-4);
 
-  // Three tiles: the freshness one spans the row until there is room for all.
-  > :first-child {
-    grid-column: 1 / -1;
+  @include bp.phone {
+    margin-bottom: var(--space-3);
   }
+}
 
-  @include bp.from-desktop {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+// A panel component that has nothing to show leaves an empty host: keep it
+// out of the grid so the 16px rhythm between panels holds.
+.page-grid > :empty {
+  display: none;
+}
 
-    > :first-child {
-      grid-column: auto;
-    }
+.all-fresh {
+  margin: var(--space-3) var(--space-4) var(--space-4);
+
+  @include bp.phone {
+    margin: var(--space-3);
   }
 }
 
@@ -108,6 +108,10 @@
   gap: var(--space-2) var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
+
+  @include bp.phone {
+    padding: var(--space-3);
+  }
 
   @include bp.from-tablet {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -131,6 +135,10 @@
   margin: 0;
   padding: 0 var(--space-4) var(--space-2);
   list-style: none;
+
+  @include bp.phone {
+    padding: 0 var(--space-3) var(--space-1);
+  }
 
   li {
     padding: var(--space-3) 0;
@@ -171,18 +179,22 @@
   margin-top: 2px;
   font-size: var(--text-xs);
   color: var(--color-ink-3);
-  max-width: 60ch;
+  max-width: 70ch;
 }
 
 .panel-intro {
   margin: 0;
   padding: var(--space-3) var(--space-4) 0;
+
+  @include bp.phone {
+    padding: var(--space-3) var(--space-3) 0;
+  }
 }
 
 .check-action {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: var(--control-h);
   margin-top: var(--space-1);
   font-size: var(--text-sm);
 

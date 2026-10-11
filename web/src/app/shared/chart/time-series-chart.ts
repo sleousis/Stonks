@@ -112,7 +112,7 @@ import { readChartTheme } from './chart-theme';
     .swatch {
       width: 10px;
       height: 3px;
-      border-radius: 2px;
+      border-radius: var(--radius-xs);
       background: var(--color-ink-3);
     }
     .swatch[data-color='brass'] {

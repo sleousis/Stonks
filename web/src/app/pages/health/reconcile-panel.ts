@@ -93,7 +93,7 @@ export function itemWords(item: DriftItemView): string {
         </div>
         <ul class="reports">
           @for (r of reports.value(); track r.id) {
-            <li class="report" [attr.data-state]="state(r).status">
+            <li class="report well" [attr.data-state]="state(r).status">
               <div class="report-head">
                 <h3>{{ kind(r.kind) }}</h3>
                 <span class="muted">{{ r.portfolio_id }}</span>
@@ -105,7 +105,7 @@ export function itemWords(item: DriftItemView): string {
                 <span class="muted num when">{{ when(r.taken_at) }}</span>
               </div>
               @if (r.detail) {
-                <p class="problem" role="note">{{ r.detail }}</p>
+                <p class="problem callout" data-tone="loss" role="note">{{ r.detail }}</p>
               }
               @if (r.items.length) {
                 <ul class="items">
@@ -147,23 +147,18 @@ export function itemWords(item: DriftItemView): string {
       padding: var(--space-4);
       list-style: none;
     }
+    // Each report is an inset well; its status pill carries the state.
     .report {
       display: grid;
       gap: var(--space-2);
       min-width: 0;
       padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 4px solid var(--color-gain);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface);
     }
-    .report[data-state='halted'],
-    .report[data-state='unhealthy'] {
-      border-left-color: var(--color-loss);
-    }
-    .report[data-state='warn'],
-    .report[data-state='skipped'] {
-      border-left-color: var(--color-border-strong);
+    @media (max-width: 767.98px) {
+      .reports,
+      .report {
+        padding: var(--space-3);
+      }
     }
     .report-head {
       display: flex;
@@ -172,7 +167,8 @@ export function itemWords(item: DriftItemView): string {
       gap: var(--space-2) var(--space-3);
     }
     h3 {
-      font-size: var(--text-md);
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
     }
     .when {
       margin-left: auto;
@@ -194,9 +190,6 @@ export function itemWords(item: DriftItemView): string {
       font-family: var(--font-mono);
     }
     .problem {
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-xs);
-      background: var(--color-loss-soft);
       overflow-wrap: anywhere;
     }
   `,

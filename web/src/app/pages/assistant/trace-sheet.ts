@@ -151,8 +151,8 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
     }
     .turn {
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
       border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
     }
     .turn-head {
       display: flex;
@@ -182,7 +182,8 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
       gap: var(--space-2);
     }
     .args dt {
-      color: var(--color-ink-2);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
     }
     .args dd {
       margin: 0;
@@ -195,7 +196,7 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
       padding: var(--space-2);
       border: 1px solid var(--color-border);
       border-radius: var(--radius-xs);
-      background: var(--color-surface-2);
+      background: var(--color-surface);
       font-size: var(--text-xs);
       white-space: pre-wrap;
       overflow-wrap: anywhere;

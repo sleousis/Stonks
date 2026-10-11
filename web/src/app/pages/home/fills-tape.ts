@@ -137,29 +137,34 @@ interface TapeItem {
       display: block;
       min-width: 0;
     }
+    /* One hairline bar: a dark slab names it, the window runs the fills. */
     .tape {
       display: flex;
       align-items: stretch;
       min-height: var(--touch-min);
-      border-block: 1px solid var(--color-ink);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
       background: var(--color-surface);
       font-size: var(--text-sm);
     }
+    /* A dark slab in both themes, never an inverted light block. In dark it
+       is a raised slate so it still stands off the surface. */
     .label {
       display: flex;
       align-items: center;
       padding: 0 var(--space-3);
-      background: var(--color-ink);
-      color: var(--color-surface);
+      background: var(--color-slab);
+      color: var(--color-slab-ink);
       font-family: var(--font-display);
       font-stretch: var(--display-stretch);
       font-weight: var(--weight-bold);
-      letter-spacing: 0.02em;
+      letter-spacing: var(--tracking-display-sm);
     }
     .day {
       margin-left: var(--space-1);
+      color: var(--color-slab-ink);
       font-weight: var(--weight-regular);
-      opacity: 0.8;
     }
     .window {
       position: relative;
@@ -189,7 +194,7 @@ interface TapeItem {
       padding: 0;
       border: 0;
       background: none;
-      color: var(--color-primary);
+      color: var(--color-link);
       text-decoration: underline;
       cursor: pointer;
     }
@@ -204,13 +209,17 @@ interface TapeItem {
       padding: 0 var(--space-5) 0 var(--space-3);
       list-style: none;
     }
+    /* Every item sits on the 20px line of its side tag. */
     li {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
+      line-height: 20px;
       white-space: nowrap;
     }
     .ticker {
+      font-family: var(--font-mono);
+      font-size: var(--mono-scale);
       font-weight: var(--weight-semibold);
     }
     .at,
@@ -237,13 +246,13 @@ interface TapeItem {
       min-height: var(--touch-min);
       white-space: nowrap;
     }
+    /* The bar clips its edges, so focus rings draw inside. */
+    .all:focus-visible,
+    .link:focus-visible {
+      outline-offset: -2px;
+    }
     /* Reduced motion: the tape sits still and scrolls by hand. */
     @media (prefers-reduced-motion: reduce) {
-      .day {
-        margin-left: var(--space-1);
-        font-weight: var(--weight-regular);
-        opacity: 0.8;
-      }
       .window {
         overflow-x: auto;
         mask-image: none;

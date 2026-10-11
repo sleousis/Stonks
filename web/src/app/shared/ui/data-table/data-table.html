@@ -49,6 +49,7 @@
               [class.num]="isFigure(col)"
               [class.cell-title]="col.mobile === 'title'"
               [class.hide-phone]="col.mobile === 'hide'"
+              [class.wrap]="col.wrap"
               [class]="tone(row, col)"
             >
               @if (cellTemplates().get(col.key); as tpl) {
@@ -71,12 +72,17 @@
 @if (pageSize() > 0 && pageCount() > 1) {
   <nav class="pager" [attr.aria-label]="caption() + ' pages'">
     <span class="range num">{{ rangeLabel() }}</span>
-    <button type="button" class="btn" [disabled]="page() === 0" (click)="goTo(page() - 1)">
+    <button
+      type="button"
+      class="btn btn-tertiary"
+      [disabled]="page() === 0"
+      (click)="goTo(page() - 1)"
+    >
       Previous
     </button>
     <button
       type="button"
-      class="btn"
+      class="btn btn-tertiary"
       [disabled]="page() >= pageCount() - 1"
       (click)="goTo(page() + 1)"
     >

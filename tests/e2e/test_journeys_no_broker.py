@@ -104,8 +104,10 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(browse, stack, vie
     v.go("/studio")
     page.get_by_role("button", name="New draft").click()
     page.get_by_role("radio", name=re.compile(r"^SMA trend following")).check()
+    # The template fills a default name: wait for it, so ours replaces it
+    # instead of racing it.
+    expect(page.locator("#new-name")).to_have_value(re.compile(r"^SMA trend following"))
     page.locator("#new-name").fill(name)
-    # The template can fill a default name a moment later: be sure ours stuck.
     expect(page.locator("#new-name")).to_have_value(name)
     page.get_by_role("button", name="Create draft").click()
     page.get_by_role("tab", name=re.compile("Test")).click()
@@ -166,6 +168,10 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(browse, stack, vie
 
         LinkStore(state).redeem(code, chat, f"owner_{viewport}")
     panel.get_by_role("button", name="Check the link").click()
+    expect(panel).to_contain_text("Linked")
+    # The grid reads the link once, as it loads, which can be before the
+    # link above. A fresh visit shows the Telegram column.
+    page.reload()
     expect(panel).to_contain_text("Linked")
     grid = page.locator("app-notification-prefs")
     push = grid.get_by_role("checkbox", name="Signals by Push")

@@ -35,8 +35,10 @@
   --text-xs: 0.75rem; // 12px: captions, table meta, stamps
   --text-sm: 0.8125rem; // 13px: table cells, secondary text
   --text-md: 0.875rem; // 14px: body
-  --text-lg: 1rem; // 16px: panel titles
-  --text-xl: 1.25rem; // 20px: stat values
+  --text-lg: 1rem; // 16px: phone inputs, large meta
+  --text-panel: 0.9375rem; // 15px: panel titles
+  --text-xl: 1.25rem; // 20px: sub figures
+  --text-stat: 1.5rem; // 24px: stat values (display face)
   --text-2xl: 1.625rem; // 26px: small headline figures
   --text-title: 1.875rem; // 30px: page titles (display face)
   --text-figure: 2.75rem; // 44px: the headline figure (display face)
@@ -47,6 +49,8 @@
   --weight-semibold: 620;
   --weight-bold: 720;
   --tracking-display: -0.01em;
+  --tracking-display-sm: 0.01em; // display face under 24px opens up a touch
+  --tracking-overline: 0.06em;
   --tracking-stamp: 0.09em;
 
   // Spacing (4px grid) ----------------------------------------------------
@@ -62,10 +66,10 @@
 
   // Radius: tickets and tags are square-ish, panels a little softer,
   // overlays the softest. Status marks differ by shape, not by radius.
-  --radius-xs: 2px; // side tags, stamps, tape items
-  --radius-sm: 4px; // inputs, buttons
-  --radius-md: 6px; // panels, tables
-  --radius-lg: 10px; // dialogs, drawer
+  --radius-xs: 2px; // side tags, stamps, tickets, tape items
+  --radius-sm: 5px; // controls: inputs, buttons, wells, callouts
+  --radius-md: 8px; // panels, tables
+  --radius-lg: 12px; // dialogs, drawer, palette, sheets
   --radius-pill: 999px; // lifecycle status only
 
   // Borders
@@ -76,6 +80,7 @@
   --control-h: 32px; // dense desktop control height
   --touch-min: 44px; // minimum touch target on coarse pointers / phones
   --row-h: 34px;
+  --row-h-2: 40px; // a table row with two lines
   --sidebar-w: 224px;
   --strip-h: 40px;
   --content-max: 1440px;
@@ -90,20 +95,38 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
+  // Layers: the only z-index values. Sticky chrome, the phone drawer,
+  // overlays (palette, dialogs, sheets, tips) and toasts on top.
+  --z-sticky: 20;
+  --z-drawer: 30;
+  --z-overlay: 40;
+  --z-toast: 50;
+  --z-skip: 60;
+
   // Palette: light ("desk") -----------------------------------------------
-  --color-bg: #eceff2;
+  //
+  // Contrast (WCAG 2.x, checked for the axe e2e run):
+  //   ink-3 #5a6672 on bg 4.99, on surface-2 5.46, on surface-3 4.86
+  //   ink-2 #43505d on surface-2 7.69
+  //   link #1e4f91 on surface 8.13, on bg 6.91
+  //   warn #a24400 on surface 6.24, on bg 5.31, on warn-soft 5.18
+  //   live #8f610c on surface 5.41, on bg 4.60
+  //   control-border #7d8995 on surface 3.57, on bg 3.03 (3:1 for controls)
+  --color-bg: #e9edf1;
   --color-surface: #ffffff;
-  --color-surface-2: #f4f6f8;
-  --color-surface-3: #e5e9ee;
-  --color-border: #d2d9e0;
-  --color-border-strong: #a8b3be;
+  --color-surface-2: #f5f7f9; // inset wells, table heads
+  --color-surface-3: #e6eaef;
+  --color-border: #d9dfe5;
+  --color-border-strong: #aab4bf;
   --color-control-border: #7d8995; // text fields and checkboxes: 3:1 on bg and surface
   --color-ink: #101a24;
   --color-ink-2: #43505d;
   --color-ink-3: #5a6672;
-  --color-primary: #1e4f91; // research blue: primary buttons, links
-  --color-primary-ink: #ffffff;
+  --color-primary: #1e4f91; // research blue: primary buttons
+  --color-primary-ink: #ffffff; // 8.13 on primary
+  --color-primary-hover: #19437c;
   --color-primary-soft: #e2eaf6;
+  --color-link: #1e4f91; // text links: always readable on the page
   --color-accent: #2c64ad; // markers: current page, selected option, progress
   --color-accent-soft: #e4ecf7;
   // Real money only.
@@ -117,53 +140,67 @@
   --color-gain-soft: #dff1e7;
   --color-loss: #b0302a;
   --color-loss-soft: #fbe4e1;
-  --color-warn: #9a4a00; // red-orange, kept apart from the brass of real money (FR-12)
-  --color-warn-soft: #fde8d7;
+  --color-loss-ink: #ffffff; // text on a loss fill (badges)
+  --color-warn: #a24400; // red-orange, kept apart from the brass of real money (FR-12)
+  --color-warn-soft: #fbe6d9;
   --color-info: #2a5aa8;
   --color-info-soft: #e3ebf8;
   --color-neutral-soft: #e5e9ee;
   --color-focus: #1e4f91;
   --color-scrim: rgb(16 26 36 / 45%);
+  --color-hover: rgb(16 26 36 / 4%); // ink at 4%: hover on rows, tabs, ghost buttons
+  --color-pressed: rgb(16 26 36 / 8%); // ink at 8%: pressed
   // The rail (sidebar): a slate slab in both themes.
   --color-rail: #16222e;
   --color-rail-2: #1f2d3b;
   --color-rail-ink: #e6ecf2;
   --color-rail-ink-2: #a9b6c3;
   --color-rail-accent: #8db4ea;
+  // A solid slab for a picked option or the countdown chip: ink in light,
+  // a raised slate in dark (never an inverted light block).
+  --color-slab: var(--color-ink);
+  --color-slab-ink: var(--color-surface);
   // Kept for older names: brass is the live colour.
   --color-brass: var(--color-live);
   --color-brass-soft: var(--color-live-soft);
 
   // Elevation: panels sit flat on a hairline; overlays lift.
   --shadow-0: none;
-  --shadow-1: 0 1px 0 rgb(16 26 36 / 5%);
-  --shadow-2: 0 12px 32px rgb(16 26 36 / 18%), 0 2px 6px rgb(16 26 36 / 10%);
+  // Panels carry no shadow (the hairline does the work), so --shadow-1 is none.
+  --shadow-1: none;
+  --shadow-overlay: 0 16px 40px -12px rgb(16 26 36 / 28%), 0 2px 6px rgb(16 26 36 / 8%);
+  --shadow-2: var(--shadow-overlay); // older name
   --shadow-ticket: 0 1px 0 rgb(16 26 36 / 6%), 0 8px 20px -12px rgb(16 26 36 / 35%);
   --ring-live: 0 0 0 var(--border-live) var(--color-live);
 
   // Chart palette (read by the chart engine at runtime)
   --chart-line: var(--color-primary);
   --chart-line-2: var(--color-accent);
-  --chart-grid: #e2e7ec;
+  --chart-grid: #e6eaee;
   --chart-violet: #6a3fa0; // a categorical line, never brass or amber
   --chart-text: var(--color-ink-3);
 }
 
 @mixin dark-palette {
   color-scheme: dark;
-  --color-bg: #0b1117;
-  --color-surface: #121a22;
-  --color-surface-2: #17212b;
-  --color-surface-3: #1f2b37;
-  --color-border: #273440;
-  --color-border-strong: #3e4d5b;
+  // Contrast: ink-3 #8e9aa7 on surface 6.30, on surface-3 5.35; link
+  // #8db2ea on surface 8.33; white on primary #4374bc 4.71; control-border
+  // #66778a on surface 3.93, on bg 4.19.
+  --color-bg: #0a0f14;
+  --color-surface: #10171e;
+  --color-surface-2: #151d26;
+  --color-surface-3: #1c2631;
+  --color-border: #232f3b;
+  --color-border-strong: #3c4a58;
   --color-control-border: #66778a;
   --color-ink: #e4eaf0;
   --color-ink-2: #a9b4c0;
   --color-ink-3: #8e9aa7;
-  --color-primary: #8db2ea;
-  --color-primary-ink: #0b1117;
+  --color-primary: #4374bc; // a filled blue with white text, never pastel
+  --color-primary-ink: #ffffff;
+  --color-primary-hover: #3a67a8;
   --color-primary-soft: #1b2b42;
+  --color-link: #8db2ea;
   --color-accent: #7fa8e0;
   --color-accent-soft: #1b2a3f;
   --color-live: #dcaa4c;
@@ -175,6 +212,7 @@
   --color-gain-soft: #14301f;
   --color-loss: #f2786f;
   --color-loss-soft: #3a1d1b;
+  --color-loss-ink: #0a0f14;
   --color-warn: #f0955a; // red-orange, apart from brass (FR-12)
   --color-warn-soft: #3a2316;
   --color-info: #8db2ea;
@@ -182,15 +220,18 @@
   --color-neutral-soft: #1f2b37;
   --color-focus: #8db2ea;
   --color-scrim: rgb(0 0 0 / 60%);
+  --color-hover: rgb(228 234 240 / 4%);
+  --color-pressed: rgb(228 234 240 / 8%);
   --color-rail: #0e161e;
   --color-rail-2: #16212c;
   --color-rail-ink: #e4eaf0;
   --color-rail-ink-2: #9aa7b4;
   --color-rail-accent: #8db4ea;
-  --shadow-1: 0 1px 0 rgb(0 0 0 / 30%);
-  --shadow-2: 0 16px 40px rgb(0 0 0 / 55%), 0 2px 8px rgb(0 0 0 / 40%);
+  --color-slab: #2f3f50; // rail ink on it 8.6
+  --color-slab-ink: #e4eaf0;
+  --shadow-overlay: 0 16px 40px -12px rgb(0 4 8 / 70%), 0 2px 6px rgb(0 4 8 / 40%);
   --shadow-ticket: 0 1px 0 rgb(0 0 0 / 35%), 0 10px 24px -12px rgb(0 0 0 / 70%);
-  --chart-grid: #1e2934;
+  --chart-grid: #1a242e;
   --chart-violet: #b9a0e8;
 }
 
@@ -208,8 +249,8 @@
 @media (max-width: 767.98px) {
   :root {
     --gutter: var(--space-4);
-    --text-title: 1.625rem;
-    --text-figure: 2.25rem;
+    --text-title: 1.625rem; // 26px
+    --text-figure: 2.25rem; // 36px
   }
 }
 

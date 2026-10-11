@@ -40,7 +40,7 @@ import { OrdersTabs } from './orders-tabs';
       <ng-container ngProjectAs="[actions]">
         @if (book() !== 'none') {
           @if (!onNew()) {
-            <a class="btn btn-primary" routerLink="/orders/new">New order</a>
+            <a class="btn btn-primary paired" routerLink="/orders/new">New order</a>
           }
           <a class="btn" routerLink="/orders/rebalance">Rebalance</a>
           @if (showExports()) {
@@ -61,6 +61,17 @@ import { OrdersTabs } from './orders-tabs';
       />
     } @else {
       <app-loading-state label="Loading your portfolios" [rows]="4" />
+    }
+  `,
+  styles: `
+    @use 'breakpoints' as bp;
+
+    /* Phones: New order and Rebalance share the first row of the header grid
+       and the two CSV downloads the second, so nothing sits alone. */
+    @include bp.phone {
+      .btn.btn-primary.paired {
+        grid-column: auto;
+      }
     }
   `,
 })

@@ -96,24 +96,26 @@ let nextId = 0;
       color: var(--color-ink-3);
       cursor: help;
     }
-    /* Phones and touch screens: the button itself is 44px (M12), and
-       negative margins keep the line as tall as the 24px icon made it. */
+    /* Phones and touch screens: padding grows the hit box to 44px (M12)
+       around the same 24px box, and negative margins give the space back so
+       the line keeps its height. */
     @media (pointer: coarse), (max-width: 767.98px) {
       .trigger {
-        width: var(--touch-min);
-        height: var(--touch-min);
+        box-sizing: content-box;
+        padding: 10px;
         margin: -13px -10px;
       }
     }
     .trigger:hover,
     .trigger[aria-expanded='true'] {
-      color: var(--color-accent);
+      color: var(--color-ink);
     }
     .panel-tip:popover-open {
       display: block;
     }
     .panel-tip {
       position: fixed;
+      z-index: var(--z-overlay);
       inset: auto;
       margin: 0;
       width: min(300px, calc(100vw - 32px));
@@ -122,7 +124,7 @@ let nextId = 0;
       border-radius: var(--radius-md);
       background: var(--color-surface);
       color: var(--color-ink);
-      box-shadow: var(--shadow-2);
+      box-shadow: var(--shadow-overlay);
       font-size: var(--text-sm);
       font-weight: var(--weight-regular);
       line-height: var(--leading-body);
@@ -143,7 +145,7 @@ let nextId = 0;
     .more {
       display: inline-block;
       margin-top: var(--space-2);
-      color: var(--color-primary);
+      color: var(--color-link);
     }
   `,
 })

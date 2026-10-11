@@ -148,7 +148,7 @@ export class JobResult<T> {
       height: 8px;
       appearance: none;
       border: 0;
-      border-radius: 999px;
+      border-radius: var(--radius-pill);
       overflow: hidden;
       background: var(--color-surface-3);
       accent-color: var(--color-accent);

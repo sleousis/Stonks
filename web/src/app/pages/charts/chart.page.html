@@ -66,10 +66,9 @@
       </div>
       <div class="toggles" role="group" aria-label="What to draw">
         @for (a of averages; track a.length) {
-          <label class="toggle">
+          <label class="toggle check">
             <input
               type="checkbox"
-              class="check"
               [checked]="shownAverages().includes(a.length)"
               (change)="toggleAverage(a.length)"
             />
@@ -77,28 +76,21 @@
             MA {{ a.length }}
           </label>
         }
-        <label class="toggle">
-          <input
-            type="checkbox"
-            class="check"
-            [checked]="showFills()"
-            (change)="showFills.set(!showFills())"
-          />
+        <label class="toggle check">
+          <input type="checkbox" [checked]="showFills()" (change)="showFills.set(!showFills())" />
           Fills
         </label>
-        <label class="toggle">
+        <label class="toggle check">
           <input
             type="checkbox"
-            class="check"
             [checked]="showSignals()"
             (change)="showSignals.set(!showSignals())"
           />
           Signals
         </label>
-        <label class="toggle">
+        <label class="toggle check">
           <input
             type="checkbox"
-            class="check"
             [checked]="showVolume()"
             (change)="showVolume.set(!showVolume())"
           />
@@ -218,7 +210,7 @@
           @if (comparison.value().missing.length) {
             <p class="hint">No prices for {{ comparison.value().missing.join(', ') }}.</p>
           }
-          <div class="figures-scroll">
+          <div class="figures-scroll well">
             <table class="figures-table">
               <caption class="visually-hidden">
                 Change, worst drawdown and rolling Sharpe of each ticker over the range

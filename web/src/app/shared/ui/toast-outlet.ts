@@ -68,7 +68,7 @@ import { ToastService } from '../../core/notify/toast.service';
       color: inherit;
       overflow: visible;
       position: fixed;
-      z-index: 50;
+      z-index: var(--z-toast);
       right: var(--space-4);
       bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
       display: grid;
@@ -94,12 +94,12 @@ import { ToastService } from '../../core/notify/toast.service';
       gap: var(--space-2);
       padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
       border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-info);
-      border-radius: var(--radius-md);
+      border-left: 2px solid var(--color-info);
+      border-radius: var(--radius-lg);
       background: var(--color-surface);
-      box-shadow: var(--shadow-2);
+      box-shadow: var(--shadow-overlay);
       pointer-events: auto;
-      animation: rise var(--dur) var(--ease);
+      animation: rise var(--dur) var(--ease-out);
     }
     .toast[data-tone='success'] {
       border-left-color: var(--color-gain);

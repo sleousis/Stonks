@@ -48,11 +48,13 @@
           </div>
           <div>
             <dt>Next sync</dt>
-            <dd>{{ c.next_sync_at ? (c.next_sync_at | dateTime) : 'Not planned' }}</dd>
+            <dd [class.num]="!!c.next_sync_at">
+              {{ c.next_sync_at ? (c.next_sync_at | dateTime) : 'Not planned' }}
+            </dd>
           </div>
         </dl>
         @if (c.last_error) {
-          <p class="problem" role="alert">{{ c.last_error }}</p>
+          <p class="problem callout" data-tone="loss" role="alert">{{ c.last_error }}</p>
         }
       }
 
@@ -92,7 +94,7 @@
             <app-status-pill [status]="r.status" [label]="syncLabel[r.status]" />
           </h3>
           @if (r.error) {
-            <p class="problem">{{ r.error }}</p>
+            <p class="problem callout" data-tone="loss">{{ r.error }}</p>
           }
           <p>
             Found <span class="num">{{ r.accounts_seen }}</span>

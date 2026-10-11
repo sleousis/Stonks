@@ -35,7 +35,7 @@ const STATUSES: readonly SegmentOption<Status>[] = [
   imports: [RouterLink, DataTable, TableCell, Segmented, EmptyState, ErrorState, LoadingState],
   styleUrl: './journal.scss',
   template: `
-    <section class="panel" aria-labelledby="trips-title">
+    <section class="panel panel-flush" aria-labelledby="trips-title">
       <div class="panel-head">
         <h2 id="trips-title">Trades</h2>
         <app-segmented label="Show trades" [options]="statuses" [(value)]="status" />
@@ -167,6 +167,7 @@ const COLUMNS: TableColumn<JournalTradeView>[] = [
     label: 'Tags',
     mobile: 'hide',
     sortable: false,
+    wrap: true,
     value: (t) => [...t.tags, ...t.mistakes].join(', '),
   },
 ];

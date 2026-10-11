@@ -5,7 +5,7 @@
   font-size: var(--text-sm);
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: var(--control-h);
 
   @include bp.coarse {
     min-height: var(--touch-min);
@@ -31,22 +31,18 @@
     min-width: 0;
   }
 
+  // Values: mono figures, 4px under the label.
   dd {
     min-width: 0;
-    margin: 0;
+    margin: var(--space-1) 0 0;
     font-size: var(--text-lg);
     overflow-wrap: anywhere;
   }
 
   @media (max-width: 479.98px) {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
   }
 }
 
-.touch-link {
-  @include bp.coarse {
-    display: inline-block;
-    min-height: var(--touch-min);
-    line-height: var(--touch-min);
-  }
-}
+// .touch-link is global (styles.scss).

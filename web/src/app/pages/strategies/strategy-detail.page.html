@@ -81,7 +81,7 @@
               >Printable tear sheet</a
             >
           </p>
-          <section class="tiles" aria-label="Trial result">
+          <section class="tiles tile-grid" aria-label="Trial result">
             @for (t of tiles(); track t.label) {
               <app-stat-tile [label]="t.label" [value]="t.value" [help]="t.help" />
             }
@@ -408,31 +408,47 @@
       <!-- Overview: the verdict, its trial result and how to follow it ---------->
       @default {
         <div class="page-grid">
-          <section class="panel span-12 verdict-panel" aria-label="Verdict">
-            @if (sheet.error(); as err) {
+          @if (sheet.error(); as err) {
+            <section class="panel span-12 verdict-panel" aria-label="Verdict">
               <app-error-state
                 title="Could not judge it yet"
                 [error]="err"
                 (retry)="sheet.reload()"
               />
-            } @else if (verdict(); as v) {
+            </section>
+          } @else if (verdict(); as v) {
+            <section
+              class="callout span-12 verdict-panel"
+              aria-label="Verdict"
+              [attr.data-tone]="
+                v.level === 'worth'
+                  ? 'gain'
+                  : v.level === 'promising'
+                    ? 'warn'
+                    : v.level === 'not_yet'
+                      ? 'loss'
+                      : 'info'
+              "
+            >
               <app-strategy-verdict [verdict]="v" details>
                 <div details class="verdict-details">
                   @if (verdictChecks(); as vc) {
-                    <p class="muted">Go-live check: {{ vc.passed }} of {{ vc.total }} pass.</p>
+                    <p>Go-live check: {{ vc.passed }} of {{ vc.total }} pass.</p>
                   }
                   @if (reportSummary(); as sum) {
-                    <p class="muted">Robustness tests: {{ sum.label }}.</p>
+                    <p>Robustness tests: {{ sum.label }}.</p>
                   }
-                  <button type="button" class="btn btn-ghost" (click)="setTab('review')">
+                  <button type="button" class="btn btn-tertiary" (click)="setTab('review')">
                     Open the full go-live check
                   </button>
                 </div>
               </app-strategy-verdict>
-            } @else {
+            </section>
+          } @else {
+            <section class="panel span-12 verdict-panel" aria-label="Verdict">
               <app-loading-state label="Judging it" [rows]="2" />
-            }
-          </section>
+            </section>
+          }
 
           @if (s.status !== 'retired') {
             <app-follow-panel

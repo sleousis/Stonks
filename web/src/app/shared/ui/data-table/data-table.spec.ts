@@ -41,6 +41,17 @@ describe('DataTable', () => {
     expect(el.querySelector('caption')?.textContent).toContain('Test table');
   });
 
+  it('marks long-text columns to wrap at a readable width', async () => {
+    const columns: TableColumn<Row>[] = [
+      { key: 'ticker', label: 'Ticker', wrap: true },
+      { key: 'value', label: 'Value', format: 'money' },
+    ];
+    const { el } = await render({ columns });
+    const cells = el.querySelectorAll('tbody tr:first-child td');
+    expect(cells[0].classList).toContain('wrap');
+    expect(cells[1].classList).not.toContain('wrap');
+  });
+
   it('shows a column through its own display text but sorts on the value', async () => {
     const columns: TableColumn<Row>[] = [
       { key: 'ticker', label: 'Ticker' },

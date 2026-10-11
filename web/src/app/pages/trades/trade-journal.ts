@@ -29,7 +29,7 @@ export const JOURNAL_PAGE_SIZE = 25;
   ],
   styleUrl: './trades.scss',
   template: `
-    <section class="panel" aria-labelledby="journal-title">
+    <section class="panel panel-flush" aria-labelledby="journal-title">
       <div class="panel-head">
         <h2 id="journal-title">Trade journal</h2>
         @if (latest(); as p) {

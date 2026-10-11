@@ -126,13 +126,6 @@ export function categoryLabel(category: string | null): string {
                     [label]="pill(n.level).label"
                   />
                 }
-                <time
-                  class="when muted"
-                  [attr.datetime]="n.created_at"
-                  [title]="exact(n.created_at)"
-                >
-                  {{ ago(n.created_at) }}
-                </time>
               </div>
               <p class="title">{{ n.title }}</p>
               @if (n.message) {
@@ -140,20 +133,29 @@ export function categoryLabel(category: string | null): string {
               }
               <div class="actions">
                 @if (link(n); as href) {
-                  <a class="btn btn-ghost open" [routerLink]="href" (click)="opened(n)">
+                  <a class="btn btn-tertiary open" [routerLink]="href" (click)="opened(n)">
                     Open<span class="visually-hidden">: {{ n.title }}</span>
                   </a>
                 }
-                @if (!n.read_at) {
-                  <button
-                    type="button"
-                    class="btn btn-ghost"
-                    [disabled]="busy() || !canManage()"
-                    (click)="markOne(n)"
+                <span class="end">
+                  <time
+                    class="when num"
+                    [attr.datetime]="n.created_at"
+                    [title]="exact(n.created_at)"
                   >
-                    Mark read<span class="visually-hidden">: {{ n.title }}</span>
-                  </button>
-                }
+                    {{ ago(n.created_at) }}
+                  </time>
+                  @if (!n.read_at) {
+                    <button
+                      type="button"
+                      class="text-btn"
+                      [disabled]="busy() || !canManage()"
+                      (click)="markOne(n)"
+                    >
+                      Mark read<span class="visually-hidden">: {{ n.title }}</span>
+                    </button>
+                  }
+                </span>
               </div>
             </li>
           }
@@ -198,17 +200,21 @@ export function categoryLabel(category: string | null): string {
       padding: 0;
       list-style: none;
     }
+    /* One item: meta, title, message, then Open and the time on one row. */
     li {
       display: grid;
       gap: var(--space-1);
       min-width: 0;
       padding: var(--space-3) var(--space-4);
       border-bottom: 1px solid var(--color-border);
-      border-left: 3px solid transparent;
+      box-shadow: inset 2px 0 0 transparent;
     }
+    li:last-child {
+      border-bottom: 0;
+    }
+    /* Unread: a 2px accent rule at the start, a dot and a semibold title. */
     li.unread {
-      border-left-color: var(--color-primary);
-      background: var(--color-surface-2);
+      box-shadow: inset 2px 0 0 var(--color-accent);
     }
     .meta {
       display: flex;
@@ -220,32 +226,35 @@ export function categoryLabel(category: string | null): string {
     .unread-tag {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--space-1);
       font-weight: var(--weight-semibold);
-      color: var(--color-primary);
+      color: var(--color-link);
     }
     .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: currentColor;
+      background: var(--color-accent);
     }
     .category {
       color: var(--color-ink-2);
       font-weight: var(--weight-medium);
     }
     .when {
-      margin-left: auto;
-      white-space: nowrap;
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
     }
     .title {
+      max-width: 70ch;
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     li:not(.unread) .title {
+      color: var(--color-ink-2);
       font-weight: var(--weight-medium);
     }
     .message {
+      max-width: 70ch;
       color: var(--color-ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
@@ -253,10 +262,51 @@ export function categoryLabel(category: string | null): string {
     .actions {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: var(--space-2);
+      min-height: var(--control-h);
     }
-    .actions:empty {
-      display: none;
+    /* Open pulls flush with the text above it. */
+    .open {
+      margin-left: calc(-1 * var(--space-3));
+    }
+    .end {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-left: auto;
+    }
+    /* Mark read: a quiet text button, a 44px target on touch. */
+    .text-btn {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--control-h);
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--color-link);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+    }
+    .text-btn:hover:not(:disabled) {
+      text-decoration: underline;
+    }
+    .text-btn:disabled {
+      color: var(--color-ink-3);
+      cursor: not-allowed;
+    }
+    @media (pointer: coarse), (max-width: 767.98px) {
+      li {
+        padding: var(--space-3);
+      }
+      .text-btn,
+      .actions {
+        min-height: var(--touch-min);
+      }
+      .note-row {
+        padding: 0 var(--space-3);
+      }
     }
     .more {
       display: flex;

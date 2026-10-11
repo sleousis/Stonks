@@ -21,8 +21,7 @@ export const LAB_SECTIONS: readonly LabSection[] = [
 
 /**
  * Underline tabs for the Lab's screens: the two everyday ones, then "More
- * tools". On phones the tabs wrap onto two lines, so every screen shows,
- * and the "More tools" label is dropped.
+ * tools". One row that scrolls sideways on phones, like the page tabs.
  */
 @Component({
   selector: 'app-lab-nav',
@@ -70,29 +69,44 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       margin-bottom: var(--space-4);
       border-bottom: 1px solid var(--color-border);
     }
+    /* One row like the page tabs: it scrolls sideways, and a fading right
+       edge hints at tabs past the edge. */
     ul {
       display: flex;
-      flex-wrap: wrap;
       align-items: stretch;
       gap: 0 var(--space-1);
       margin: 0;
       padding: 0;
       list-style: none;
       white-space: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    }
+    ul::-webkit-scrollbar {
+      display: none;
     }
     li {
       display: flex;
+      flex: none;
+    }
+    li:last-child {
+      margin-right: 24px;
     }
     a {
       display: inline-flex;
       align-items: center;
-      min-height: 2.5rem;
+      min-height: 36px;
       padding: 0 var(--space-3);
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
       color: var(--color-ink-2);
-      text-decoration: none;
+      font-size: var(--text-sm);
       font-weight: var(--weight-medium);
+      text-decoration: none;
+      transition:
+        color var(--dur-fast) var(--ease),
+        background-color var(--dur-fast) var(--ease);
       @include bp.phone {
         min-height: var(--touch-min);
         padding: 0 var(--space-2);
@@ -102,27 +116,33 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       }
     }
     a:hover {
+      background: var(--color-hover);
       color: var(--color-ink);
     }
     a.active {
       color: var(--color-ink);
+      font-weight: var(--weight-semibold);
       border-bottom-color: var(--color-accent);
     }
     a:focus-visible {
       outline: 2px solid var(--color-focus);
       outline-offset: -2px;
     }
+    /* "More tools": an overline set off by a hairline, inside the row. */
     .more-label {
       align-items: center;
-      margin-left: var(--space-3);
-      padding-left: var(--space-3);
+      margin-left: var(--space-2);
+      padding: 0 var(--space-2) 0 var(--space-3);
       border-left: 1px solid var(--color-border);
-      font-size: var(--text-xs);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
       color: var(--color-ink-3);
-      @include bp.phone {
-        display: none;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      letter-spacing: var(--tracking-overline);
+      text-transform: uppercase;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      a {
+        transition: none;
       }
     }
   `,

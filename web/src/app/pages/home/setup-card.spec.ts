@@ -45,6 +45,10 @@ describe('SetupCard', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('1 of 3 done');
+    // The ticks count the same steps as the text: the optional ones are left out.
+    const ticks = [...el.querySelectorAll('.ticks li')];
+    expect(ticks.length).toBe(3);
+    expect(ticks.filter((t) => t.getAttribute('data-state') === 'done').length).toBe(1);
     expect(el.querySelector('h2')!.textContent).toBe('Get set up');
     // The no-broker path comes first (FR-01).
     expect(el.textContent).toContain('Next: follow a strategy');

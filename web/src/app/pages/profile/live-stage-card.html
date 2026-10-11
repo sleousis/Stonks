@@ -30,7 +30,7 @@
           </li>
         }
       </ol>
-      <p class="stage-note" role="note">
+      <p class="stage-note callout" data-tone="neutral" role="note">
         A week that is not clean sends you an alert. It never moves the stage or the amount. Only
         you do.
       </p>
@@ -53,7 +53,7 @@
             <h3 id="gate-title">This is the top stage</h3>
             <p class="muted">Raise the allocation by hand when you are ready.</p>
           }
-          <dl class="figures">
+          <dl class="figures well">
             @for (f of figures(); track f.label) {
               <div>
                 <dt>{{ f.label }}</dt>
@@ -67,8 +67,9 @@
                 <li [attr.data-state]="checkState(c)">
                   <span class="check-name">{{ checkLabel(c.name) }}</span>
                   <app-status-pill
-                    [status]="checkState(c)"
+                    [status]="checkState(c) === 'none' ? 'not_yet' : checkState(c)"
                     [label]="checkWords[checkState(c)]"
+                    form="receipt"
                     [tone]="
                       checkState(c) === 'pass'
                         ? 'positive'
@@ -138,7 +139,7 @@
       </div>
 
       <!-- Last sessions ------------------------------------------------------->
-      <h3>Last sessions</h3>
+      <h3 class="section-title">Last sessions</h3>
       @if (days().length === 0) {
         <p class="muted">
           No sessions yet. Stonks records them each evening once the portfolio is past simulated
@@ -153,6 +154,7 @@
                 [status]="d.clean ? 'clean' : 'not clean'"
                 [label]="d.clean ? 'Clean' : 'Not clean'"
                 [tone]="d.clean ? 'positive' : 'warn'"
+                form="receipt"
               />
               <span class="day-facts num"
                 >{{ d.orders_sent }} sent, {{ d.orders_filled }} filled,

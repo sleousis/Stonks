@@ -24,10 +24,12 @@
   font-size: var(--text-sm);
 }
 
+// The started time: a mono ink link to the run.
 .cell-link {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
+  font-weight: var(--weight-medium);
 
   @include bp.phone {
     min-height: var(--touch-min);
@@ -42,9 +44,6 @@
 }
 
 .tiles {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   margin-bottom: var(--space-4);
 }
 
@@ -58,8 +57,9 @@
   }
 
   dt {
+    margin-bottom: var(--space-1);
     font-size: var(--text-xs);
-    color: var(--color-ink-2);
+    color: var(--color-ink-3);
   }
 
   dd {
@@ -81,11 +81,8 @@
   font-size: var(--text-sm);
 }
 
+// Why the run failed: a loss callout above the figures.
 .failed-reason {
+  display: block;
   margin: 0 0 var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-loss);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
 }

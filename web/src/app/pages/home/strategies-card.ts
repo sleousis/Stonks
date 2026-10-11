@@ -82,7 +82,9 @@ interface Row {
                 [compact]="true"
                 (changed)="replace($event)"
               >
-                <a [routerLink]="['/strategies', row.sub.strategy_id]">{{ row.name }}</a>
+                <a class="name table-link" [routerLink]="['/strategies', row.sub.strategy_id]">{{
+                  row.name
+                }}</a>
                 @if (row.sub.strategy_status !== 'active') {
                   <app-status-pill [status]="row.sub.strategy_status" />
                 }
@@ -116,17 +118,19 @@ interface Row {
       padding: 0 var(--space-4);
       list-style: none;
     }
+    /* One strategy per row, a hairline between, on a 16px rhythm. */
     li {
-      padding: var(--space-3) 0;
+      padding: var(--space-4) 0;
       border-bottom: 1px solid var(--color-border);
     }
     li:last-child {
       border-bottom: 0;
     }
-    li a {
+    .name {
       display: inline-flex;
       align-items: center;
       min-height: var(--touch-min);
+      font-weight: var(--weight-semibold);
     }
     .where {
       font-size: var(--text-xs);
@@ -135,9 +139,22 @@ interface Row {
     }
     .rule {
       margin: 0;
-      padding: var(--space-3) var(--space-4) 0;
+      max-width: 70ch;
+      padding: var(--space-4) var(--space-4) 0;
       font-size: var(--text-sm);
       color: var(--color-ink-2);
+    }
+    @media (max-width: 767.98px) {
+      .list,
+      .gate {
+        padding-inline: var(--space-3);
+      }
+      .rule {
+        padding: var(--space-3) var(--space-3) 0;
+      }
+      li {
+        padding: var(--space-3) 0;
+      }
     }
     .gate {
       padding: 0 var(--space-4);

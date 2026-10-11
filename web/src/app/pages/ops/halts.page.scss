@@ -3,6 +3,7 @@
 .intro {
   margin-bottom: var(--space-2);
   font-size: var(--text-sm);
+  color: var(--color-ink-2);
   max-width: 70ch;
 }
 
@@ -18,22 +19,6 @@ textarea.input {
   min-height: 4.5rem;
   padding: var(--space-2) var(--space-3);
   resize: vertical;
-}
-
-fieldset.scope {
-  display: grid;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-
-  legend {
-    padding: 0;
-    margin-bottom: var(--space-1);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-  }
 }
 
 .form-actions {
@@ -68,6 +53,7 @@ app-page-header.kill-on {
   display: block;
   padding-left: var(--space-3);
   border-left: var(--border-live) solid var(--color-loss);
+  border-radius: var(--radius-xs);
 }
 
 .cell-action {

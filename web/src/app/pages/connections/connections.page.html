@@ -3,7 +3,7 @@
   description="Link your brokerage so Stonks can read your positions, cash and activity. Some brokers can also take orders, only when you allow it."
 >
   <a actions class="btn" routerLink="/connections/import">Import a CSV statement</a>
-  <a actions class="btn btn-ghost" routerLink="/going-live">Going live checklist</a>
+  <a actions class="btn btn-tertiary" routerLink="/going-live">Going live checklist</a>
 </app-page-header>
 
 <div class="page-grid">
@@ -102,7 +102,7 @@
         }
         <ul class="providers">
           @for (p of enabled(); track p.name) {
-            <li class="provider">
+            <li class="provider well">
               <div class="provider-head">
                 <h3>{{ p.display_name }}</h3>
               </div>

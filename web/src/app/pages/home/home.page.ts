@@ -40,13 +40,13 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
   ],
   template: `
     <app-page-header [title]="greeting()" [description]="dateLine()">
-      <app-watchlist-filter actions ariaLabel="Show fills and signals for" />
+      <app-watchlist-filter actions class="show" ariaLabel="Show fills and signals for" />
     </app-page-header>
 
     <app-setup-card class="setup" />
 
     @if (session.status() === 'open') {
-      <p class="banner">
+      <p class="banner callout" data-tone="info">
         You are not signed in. Reads work on this machine, but your portfolio and strategies need
         you to <a routerLink="/login">sign in</a>.
       </p>
@@ -75,6 +75,10 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     .home {
       display: grid;
       gap: var(--space-4);
+
+      @include bp.phone {
+        gap: var(--space-3);
+      }
       grid-template-columns: minmax(0, 1fr);
       /* Phones: following a strategy comes before the signals it sends (FR-05). */
       grid-template-areas: 'tape' 'portfolio' 'strategies' 'signals' 'breadth';
@@ -113,8 +117,12 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     .portfolio {
       grid-area: portfolio;
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-4);
       min-width: 0;
+
+      @include bp.phone {
+        gap: var(--space-3);
+      }
     }
     .signals {
       grid-area: signals;
@@ -125,16 +133,21 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     .breadth {
       grid-area: breadth;
     }
-    .setup:not(:empty) {
-      margin-bottom: var(--space-4);
-    }
+    .setup:not(:empty),
     .banner {
+      display: block;
       margin-bottom: var(--space-4);
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
-      border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
-      font-size: var(--text-sm);
+
+      @include bp.phone {
+        margin-bottom: var(--space-3);
+      }
+    }
+    /* Phones: the Show picker sits under the description at full width. */
+    @include bp.phone {
+      .show {
+        display: block;
+        width: 100%;
+      }
     }
   `,
 })

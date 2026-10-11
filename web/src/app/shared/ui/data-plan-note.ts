@@ -78,8 +78,13 @@ export class DataCoverageService {
   template: `
     @if (missing()) {
       @let c = copy();
-      <div class="plan-note" role="note" [attr.aria-label]="'Needs a data plan'">
-        <p class="title">Needs a data plan</p>
+      <div
+        class="plan-note callout"
+        data-tone="warn"
+        role="note"
+        [attr.aria-label]="'Needs a data plan'"
+      >
+        <p class="title callout-title">Needs a data plan</p>
         <p>{{ c.what }}</p>
         @if (isAdmin()) {
           <p>
@@ -101,20 +106,7 @@ export class DataCoverageService {
       display: none;
     }
     .plan-note {
-      display: grid;
-      gap: var(--space-1);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-warn, var(--color-accent));
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
-      font-size: var(--text-sm);
-      color: var(--color-ink-2);
       overflow-wrap: anywhere;
-    }
-    .title {
-      color: var(--color-ink);
-      font-weight: var(--weight-semibold);
     }
     .link {
       margin-left: var(--space-1);

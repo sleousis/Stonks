@@ -56,7 +56,7 @@ export function isWorking(order: Pick<OrderView, 'status'>): boolean {
     OrderChangeSheet,
   ],
   template: `
-    <section class="panel" aria-labelledby="manual-list-title">
+    <section class="panel panel-flush" aria-labelledby="manual-list-title">
       <div class="panel-head">
         <h2 id="manual-list-title">Your orders by hand</h2>
       </div>
@@ -83,7 +83,9 @@ export function isWorking(order: Pick<OrderView, 'status'>): boolean {
           [initialSort]="{ key: 'created_at', dir: 'desc' }"
         >
           <ng-template appCell="ticker" [appCellOf]="orders.value().items" let-o>
-            <a class="cell-link" [routerLink]="['/trades/orders', o.client_id]">{{ o.ticker }}</a>
+            <a class="cell-link ticker" [routerLink]="['/trades/orders', o.client_id]">{{
+              o.ticker
+            }}</a>
           </ng-template>
           <ng-template appCell="side" [appCellOf]="orders.value().items" let-o>
             <app-side-tag [side]="o.side" />
@@ -119,11 +121,8 @@ export function isWorking(order: Pick<OrderView, 'status'>): boolean {
     <app-status-change-dialog />
     <app-order-change-sheet />
   `,
+  styleUrl: './orders-views.scss',
   styles: `
-    :host {
-      display: block;
-      min-width: 0;
-    }
     .row-actions {
       display: inline-flex;
       flex-wrap: wrap;
@@ -153,7 +152,7 @@ export class ManualOrdersList {
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
     { key: 'limit_price', label: 'Limit', format: 'money', mobile: 'hide' },
-    { key: 'status', label: 'Status' },
+    { key: 'status', label: 'Status', wrap: true },
     { key: 'created_at', label: 'Placed', format: 'datetime' },
   ];
   /** Actions only while some order can still change or cancel (PO-10). */

@@ -11,6 +11,21 @@
     grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
     align-items: end;
   }
+
+  @include bp.phone {
+    padding: var(--space-3);
+  }
+
+  // Date and search inputs have a wide intrinsic size: let them shrink.
+  .field,
+  .input {
+    min-width: 0;
+  }
+}
+
+// Freshness and status pills sit on the row's centre line.
+app-status-pill {
+  vertical-align: middle;
 }
 
 // A ticker that selects itself when pressed: looks like a link, is a button.
@@ -21,7 +36,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-primary);
+  color: var(--color-link);
   font-weight: var(--weight-semibold);
   text-align: start;
   cursor: pointer;
@@ -42,7 +57,7 @@
       width: 3px;
       height: 1em;
       margin-right: var(--space-2);
-      border-radius: 2px;
+      border-radius: var(--radius-xs);
       background: var(--color-accent);
     }
   }
@@ -57,7 +72,7 @@
 }
 
 .count {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 :host {

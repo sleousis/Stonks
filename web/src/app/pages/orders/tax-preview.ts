@@ -45,13 +45,13 @@ export function worthShowing(p: TaxPreviewView): boolean {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (preview(); as p) {
-      <section class="tax" aria-label="Tax preview">
+      <section class="tax panel" aria-label="Tax preview">
         <p class="head">
-          <strong>Tax preview</strong>
+          <strong class="title">Tax preview</strong>
           <span class="muted">An estimate, not tax advice.</span>
         </p>
         @if (p.wash_sale_warning; as w) {
-          <p class="warning" role="status">{{ w }}</p>
+          <p class="warning callout" data-tone="warn" role="status">{{ w }}</p>
         }
         @if (p.lots.length) {
           <table class="lots">
@@ -113,14 +113,24 @@ export function worthShowing(p: TaxPreviewView): boolean {
     :host {
       display: block;
     }
+    /* A panel of its own beside the ticket. */
     .tax {
       display: grid;
-      gap: var(--space-2);
-      padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
+      gap: var(--space-3);
+      padding: var(--space-4);
       font-size: var(--text-sm);
+    }
+    @include bp.phone {
+      .tax {
+        padding: var(--space-3);
+      }
+    }
+    /* Inside a ticket it is an inset well, never a box in a box. */
+    :host-context(.ticket) .tax {
+      padding: var(--space-3);
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-3);
     }
     .head {
       display: flex;
@@ -129,10 +139,6 @@ export function worthShowing(p: TaxPreviewView): boolean {
       align-items: baseline;
     }
     .warning {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
       overflow-wrap: anywhere;
     }
     .lots {
@@ -141,9 +147,23 @@ export function worthShowing(p: TaxPreviewView): boolean {
     }
     .lots th,
     .lots td {
-      padding: var(--space-1) var(--space-2);
+      height: var(--row-h);
+      padding: 0 var(--space-2);
       text-align: left;
       border-bottom: 1px solid var(--color-border);
+    }
+    .lots th {
+      color: var(--color-ink-2);
+      font-size: var(--text-xs);
+      font-weight: 600;
+    }
+    .lots th:first-child,
+    .lots td:first-child {
+      padding-left: 0;
+    }
+    .lots th:last-child,
+    .lots td:last-child {
+      padding-right: 0;
     }
     .lots .num {
       text-align: right;
@@ -153,8 +173,15 @@ export function worthShowing(p: TaxPreviewView): boolean {
       grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
       gap: var(--space-2);
     }
+    .sums {
+      margin: 0;
+    }
     .sums dt {
-      color: var(--color-ink-2);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+    }
+    .sums dd {
+      margin: var(--space-1) 0 0;
     }
     .gain {
       color: var(--color-gain);
@@ -177,6 +204,8 @@ export function worthShowing(p: TaxPreviewView): boolean {
         border-bottom: 1px solid var(--color-border);
       }
       .lots td {
+        height: auto;
+        padding: 0;
         border: 0;
       }
       .lots td::before {

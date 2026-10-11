@@ -9,18 +9,22 @@
   margin-top: var(--space-4);
 }
 
+// The intro under a panel head: running text, 13px, ink-2, a 70ch measure.
 .lead {
-  padding: 0 var(--space-4) var(--space-4);
-  max-width: 70ch;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  max-width: calc(70ch + 2 * var(--space-4));
   color: var(--color-ink-2);
   font-size: var(--text-sm);
+
+  @include bp.phone {
+    padding: var(--space-3);
+  }
 }
 
+// Totals inside a panel: one divided strip (.stat-strip), no boxes.
 .tiles {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: var(--space-4);
+  border-block: 1px solid var(--color-border);
+  margin-bottom: var(--space-4);
 
   @include bp.from-desktop {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -34,6 +38,10 @@
   min-height: var(--control-h);
   font-weight: var(--weight-semibold);
   overflow-wrap: anywhere;
+
+  .muted {
+    font-weight: var(--weight-regular);
+  }
 
   @include bp.phone {
     min-height: var(--touch-min);
@@ -75,7 +83,8 @@
   th {
     padding: var(--space-1);
     color: var(--color-ink-2);
-    font-weight: var(--weight-medium);
+    font-size: var(--text-xs);
+    font-weight: 600;
     text-align: center;
   }
 
@@ -120,14 +129,17 @@
 
     .amt,
     .week {
-      font-size: 0.625rem;
+      font-size: var(--text-xs);
+      letter-spacing: -0.02em;
     }
   }
 }
 
 .sub-title {
   padding: 0 var(--space-4);
-  font-size: var(--text-md);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .months {
@@ -197,7 +209,7 @@
 }
 
 .hint {
-  color: var(--color-ink-2);
+  color: var(--color-ink-3);
   font-size: var(--text-xs);
 }
 
@@ -229,13 +241,33 @@
   padding: 0;
 
   dt {
-    color: var(--color-ink-2);
+    color: var(--color-ink-3);
     font-size: var(--text-xs);
   }
 
   dd {
-    margin: 0;
+    margin: var(--space-1) 0 0;
     overflow-wrap: anywhere;
+  }
+
+  // Figures wrap here: a date and a price share one value.
+  dd.num {
+    white-space: normal;
+  }
+}
+
+// Phone cards (trades, results): the title row, then P&L and R first, so
+// the figures that matter sit right under the ticker.
+@include bp.phone {
+  :host ::ng-deep app-data-table tbody tr {
+    > td[data-label='P&L'],
+    > td[data-label='R'] {
+      order: -1;
+    }
+
+    > td.cell-title {
+      order: -2;
+    }
   }
 }
 

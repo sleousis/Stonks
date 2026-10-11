@@ -33,7 +33,12 @@
 } @else if (!report.hasValue()) {
   <app-loading-state label="Running health checks" [rows]="2" />
 } @else {
-  <section class="overall" [attr.data-level]="level()" aria-labelledby="overall-title">
+  <section
+    class="overall callout"
+    [attr.data-level]="level()"
+    [attr.data-tone]="level() === 'critical' ? 'loss' : level() === 'warning' ? 'warn' : 'gain'"
+    aria-labelledby="overall-title"
+  >
     <span class="glyph" aria-hidden="true"></span>
     <div class="overall-text">
       <h2 id="overall-title">
@@ -43,12 +48,14 @@
       <p>{{ advice() }}</p>
     </div>
     @if (version.hasValue()) {
-      <span class="muted version">API {{ version.value().version }}</span>
+      <span class="muted version"
+        >API <span class="num">{{ version.value().version }}</span></span
+      >
     }
   </section>
 }
 
-<section class="tiles" aria-label="Health summary">
+<section class="tiles tile-grid" aria-label="Health summary">
   <app-stat-tile
     label="Fresh tickers"
     [loading]="!report.hasValue() && !report.error()"
@@ -110,7 +117,7 @@
       <div class="form-actions">
         <button type="submit" class="btn">Check</button>
         @if (tickers().length) {
-          <button type="button" class="btn btn-ghost" (click)="resetTickers(tickerInput)">
+          <button type="button" class="btn btn-tertiary" (click)="resetTickers(tickerInput)">
             Check the tickers we trade
           </button>
         }
@@ -136,7 +143,7 @@
         />
       }
     } @else if (staleRows().length === 0) {
-      <p class="panel-body all-fresh" role="status">
+      <p class="all-fresh callout" data-tone="gain" role="status">
         All {{ freshness().length }} {{ freshness().length === 1 ? 'ticker' : 'tickers' }} fresh.
       </p>
     } @else {
@@ -177,6 +184,7 @@
       <app-loading-state label="Loading system checks" [rows]="3" />
     } @else if (runChecks().length === 0) {
       <app-empty-state
+        compact
         title="No system checks"
         message="The server sent no checks besides data freshness. Run the checks again, or look at the server's log."
       />
@@ -227,6 +235,7 @@
       <app-loading-state label="Loading data update failures" [rows]="4" />
     } @else if (failedIngest.value().items.length === 0) {
       <app-empty-state
+        compact
         title="No failed data updates"
         message="Updates that end in error show here with the data provider's message."
       />
@@ -263,6 +272,7 @@
       <app-loading-state label="Loading trading run failures" [rows]="4" />
     } @else if (failedTicks.value().items.length === 0) {
       <app-empty-state
+        compact
         title="No failed trading runs"
         message="Trading runs that fail show here with the reason."
       />

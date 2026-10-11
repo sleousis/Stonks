@@ -176,7 +176,11 @@ interface Group {
                             <app-mode-stamp [live]="group.live" [stage]="group.stage" />
                           </p>
                           @if (hold(t); as why) {
-                            <p class="hold" [class.alarm]="t.hold === 'runaway'">{{ why }}</p>
+                            @if (t.hold === 'runaway') {
+                              <p class="hold alarm callout" data-tone="warn">{{ why }}</p>
+                            } @else {
+                              <p class="hold well">{{ why }}</p>
+                            }
                           }
                           <dl class="ticket-lines">
                             <div>
@@ -279,26 +283,28 @@ interface Group {
               message="Every order a strategy you follow with Approve each trade decides is kept here, with what became of it."
             />
           } @else {
-            <app-data-table
-              caption="Your order tickets, newest first"
-              [rows]="history()"
-              [columns]="columns"
-              [rowKey]="key"
-            >
-              <ng-template appCell="ticker" [appCellOf]="history()" let-t>
-                <span class="order"
-                  ><app-side-tag [side]="t.side" /> <span class="num">{{ t.ticker }}</span></span
-                >
-              </ng-template>
-              <ng-template appCell="status" [appCellOf]="history()" let-t>
-                <app-status-pill
-                  [status]="t.status"
-                  [label]="look(t.status).label"
-                  [tone]="look(t.status).tone"
-                  [form]="look(t.status).form"
-                />
-              </ng-template>
-            </app-data-table>
+            <div class="panel panel-flush">
+              <app-data-table
+                caption="Your order tickets, newest first"
+                [rows]="history()"
+                [columns]="columns"
+                [rowKey]="key"
+              >
+                <ng-template appCell="ticker" [appCellOf]="history()" let-t>
+                  <span class="order"
+                    ><app-side-tag [side]="t.side" /> <span class="num">{{ t.ticker }}</span></span
+                  >
+                </ng-template>
+                <ng-template appCell="status" [appCellOf]="history()" let-t>
+                  <app-status-pill
+                    [status]="t.status"
+                    [label]="look(t.status).label"
+                    [tone]="look(t.status).tone"
+                    [form]="look(t.status).form"
+                  />
+                </ng-template>
+              </app-data-table>
+            </div>
           }
         </section>
         @if (pastDrafts().length) {
@@ -320,7 +326,9 @@ interface Group {
       min-width: 0;
     }
     .lead {
+      max-width: 70ch;
       color: var(--color-ink-2);
+      font-size: var(--text-sm);
     }
     .view {
       display: grid;
@@ -336,11 +344,14 @@ interface Group {
       display: flex;
       align-items: baseline;
       gap: var(--space-2);
-      font-size: var(--text-lg);
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
     }
     .source-title .muted {
+      font-family: var(--font-mono);
       font-size: var(--text-sm);
-      font-weight: var(--weight-regular, 400);
+      font-variant-numeric: tabular-nums slashed-zero;
+      font-weight: var(--weight-regular);
     }
     .run {
       display: grid;
@@ -359,8 +370,12 @@ interface Group {
       flex: 1 1 16rem;
     }
     .run-title h3 {
-      font-size: var(--text-lg);
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
+    }
+    .run-title p {
+      margin-top: var(--space-1);
     }
     .muted {
       color: var(--color-ink-2);
@@ -369,14 +384,28 @@ interface Group {
     .tickets {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: var(--space-3);
+      gap: var(--space-4);
       margin: 0;
       padding: 0;
       list-style: none;
 
+      @include bp.phone {
+        gap: var(--space-3);
+      }
+
       @include bp.from-tablet {
         grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
       }
+    }
+    /* Each ticket fills its grid cell, so Approve lines up along a row. */
+    .tickets > li {
+      display: grid;
+    }
+    /* A column, so the Reject and Approve row sits at the foot of every
+       ticket in a grid row. */
+    .tickets .ticket {
+      display: flex;
+      flex-direction: column;
     }
     .ticket-kind {
       display: inline-flex;
@@ -388,16 +417,18 @@ interface Group {
       min-width: 0;
       overflow-wrap: anywhere;
     }
+    /* Why it waits: an inset well on the ticket, not a bordered box. */
     .hold {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
-      border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
       font-size: var(--text-sm);
+      color: var(--color-ink-2);
+      overflow-wrap: anywhere;
+    }
+    .hold.well {
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-surface-3);
     }
     .hold.alarm {
-      border-left-color: var(--color-warn);
-      background: var(--color-warn-soft);
+      color: var(--color-ink);
     }
     .rules summary {
       display: flex;
@@ -417,7 +448,8 @@ interface Group {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: var(--space-2);
-      padding-top: var(--space-2);
+      margin-top: auto;
+      padding-top: var(--space-3);
       border-top: 1px dashed var(--color-border-strong);
     }
     .actions .btn {

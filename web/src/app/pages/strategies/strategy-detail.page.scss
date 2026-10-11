@@ -4,7 +4,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-4);
-  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
 }
 
 .related-link {
@@ -25,7 +25,7 @@
 
 .tabs {
   display: flex;
-  margin: var(--space-4) 0;
+  margin: var(--space-5) 0 var(--space-4);
   max-width: 100%;
 }
 
@@ -102,7 +102,7 @@ dd {
 .chip {
   padding: 1px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-surface-2);
   font-size: var(--text-xs);
   line-height: 18px;
@@ -163,16 +163,11 @@ dd {
 .report {
   display: grid;
   align-content: start;
-  gap: var(--space-2);
+  gap: var(--space-3);
   min-width: 0;
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-gain);
   border-radius: var(--radius-sm);
-
-  &.failed {
-    border-left-color: var(--color-loss);
-  }
+  background: var(--color-surface-2);
 }
 
 .report-head {
@@ -182,28 +177,27 @@ dd {
   gap: var(--space-2);
 
   h3 {
-    font-size: var(--text-md);
+    font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
 }
 
 .notes {
+  max-width: 70ch;
   color: var(--color-ink-2);
   font-size: var(--text-sm);
 }
 
+// Figures inside a report well: a plain grid, no box round each.
 .metrics {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-  gap: var(--space-2);
+  gap: var(--space-3);
 
   > div {
     display: grid;
-    gap: 2px;
-    padding: var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--color-surface-2);
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -226,10 +220,10 @@ dd {
 
 blockquote {
   margin: var(--space-1) 0 0;
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-accent);
+  padding: var(--space-3);
+  border-left: 2px solid var(--color-accent);
   background: var(--color-surface-2);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius-sm);
   max-width: 70ch;
   overflow-wrap: anywhere;
 }
@@ -339,7 +333,6 @@ blockquote {
 // Stage bar, performance and orders -----------------------------------------
 app-stage-bar {
   display: block;
-  margin-bottom: var(--space-4);
 }
 
 .action-note {
@@ -372,10 +365,12 @@ app-stage-bar {
 .perf {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) 0;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-4) 0;
 
   > div {
+    display: grid;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -383,22 +378,44 @@ app-stage-bar {
     font-size: var(--text-lg);
     font-weight: var(--weight-semibold);
   }
+
+  @include bp.phone {
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-3) 0;
+  }
 }
 
 .chart {
   min-width: 0;
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-4);
+
+  @include bp.phone {
+    padding: var(--space-3);
+  }
 }
 
 // Verdict, results and review ------------------------------------------------
+// The verdict sits in a callout toned by its level (warn for promising,
+// never brass). The callout draws the rule, so the verdict's own rule and
+// padding step aside.
 .verdict-panel {
   overflow: hidden;
+
+  &.callout > * {
+    max-width: none;
+  }
+}
+
+:host ::ng-deep .verdict-panel.callout app-strategy-verdict .verdict {
+  padding: 0;
+  border-left: 0;
 }
 
 .verdict-details {
   display: grid;
   gap: var(--space-2);
   justify-items: start;
+  color: var(--color-ink-2);
   font-size: var(--text-sm);
 }
 
@@ -423,20 +440,14 @@ app-stage-bar {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-3);
-  margin-bottom: var(--space-3);
+  max-width: 70ch;
+  margin-bottom: var(--space-4);
   color: var(--color-ink-2);
   font-size: var(--text-sm);
 }
 
 .tiles {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: var(--space-4);
-
-  @include bp.from-tablet {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 .back {

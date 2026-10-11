@@ -91,7 +91,8 @@ export function previewLines(preview: unknown): string[] {
       border-color: var(--color-loss);
     }
     h3 {
-      font-size: var(--text-md);
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     .decided {
@@ -100,6 +101,7 @@ export function previewLines(preview: unknown): string[] {
       color: var(--color-ink-2);
     }
     .about {
+      max-width: 70ch;
       color: var(--color-ink-2);
       font-size: var(--text-sm);
       white-space: pre-line;
@@ -121,7 +123,9 @@ export function previewLines(preview: unknown): string[] {
     summary {
       display: inline-flex;
       align-items: center;
-      min-height: 24px;
+      min-height: var(--control-h);
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
       cursor: pointer;
       @include bp.phone {
         min-height: var(--touch-min);

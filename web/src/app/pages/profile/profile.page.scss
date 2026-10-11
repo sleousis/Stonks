@@ -5,16 +5,18 @@
   min-width: 0;
 }
 
+// Account: a definition list on hairlines, values right aligned.
 .facts {
   display: grid;
   margin: 0;
-  padding: var(--space-2) var(--space-4) var(--space-4);
+  padding: var(--space-1) var(--space-4) var(--space-2);
 
   > div {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-1) var(--space-3);
+    min-height: var(--row-h-2);
     padding: var(--space-2) 0;
     border-bottom: 1px solid var(--color-border);
   }
@@ -24,12 +26,16 @@
   }
 
   dt {
+    flex: none;
     color: var(--color-ink-2);
+    font-size: var(--text-sm);
   }
 
   dd {
     margin: 0;
     min-width: 0;
+    font-weight: var(--weight-medium);
+    text-align: end;
     overflow-wrap: anywhere;
   }
 }
@@ -40,6 +46,7 @@
 }
 
 .lead {
+  max-width: 70ch;
   color: var(--color-ink-2);
 }
 
@@ -48,45 +55,32 @@
   color: var(--color-ink-3);
 }
 
-.error {
-  font-size: var(--text-sm);
-  color: var(--color-loss);
-}
-
-.note {
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-info);
-  border-radius: var(--radius-sm);
-  background: var(--color-info-soft);
-  font-size: var(--text-sm);
-}
-
+// The legend is the fieldset.group overline.
 .scopes {
   display: grid;
   gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  border: 0;
-
-  legend {
-    margin-bottom: var(--space-1);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-  }
 
   .check {
     align-items: flex-start;
     padding: var(--space-1) 0;
 
     input {
-      margin-top: 0.2em;
-      flex: none;
+      margin-top: 0.15em;
     }
   }
 
   .scope {
     display: grid;
+    gap: 2px;
     font-size: var(--text-sm);
+
+    strong {
+      font-weight: var(--weight-semibold);
+    }
+
+    .muted {
+      font-size: var(--text-xs);
+    }
   }
 }
 
@@ -121,11 +115,35 @@
 .dates {
   font-size: var(--text-xs);
   color: var(--color-ink-3);
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 
 .toolsets {
   display: grid;
   gap: var(--space-2);
+
+  > p {
+    font-size: var(--text-sm);
+    max-width: 70ch;
+  }
+
+  .check {
+    align-items: flex-start;
+
+    input {
+      margin-top: 0.15em;
+    }
+  }
+
+  .scope {
+    display: grid;
+    gap: 2px;
+    font-size: var(--text-sm);
+
+    .muted {
+      font-size: var(--text-xs);
+    }
+  }
 
   summary {
     display: flex;
@@ -134,6 +152,8 @@
     min-height: var(--touch-min);
     cursor: pointer;
     list-style: none;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
   }
   summary::-webkit-details-marker {
     display: none;

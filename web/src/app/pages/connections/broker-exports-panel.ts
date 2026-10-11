@@ -64,7 +64,7 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
         } @else {
           <ul class="brokers">
             @for (b of brokers(); track b.broker) {
-              <li class="broker">
+              <li class="broker well">
                 <h3>{{ b.broker }}</h3>
                 <p class="muted">Reads only. Export these files, in this order:</p>
                 <ol class="exports">
@@ -104,23 +104,47 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
       color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
+    p {
+      max-width: 70ch;
+    }
     .brokers {
       display: grid;
-      gap: var(--space-4);
+      gap: var(--space-3);
       margin-top: var(--space-3);
+    }
+    .broker {
+      display: grid;
+      justify-items: start;
+      gap: var(--space-1);
+      padding: var(--space-4);
     }
     .broker h3 {
       margin: 0;
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
     }
     .exports {
       display: grid;
       gap: var(--space-2);
+      max-width: 70ch;
       margin: var(--space-2) 0 var(--space-3);
       padding-left: var(--space-5);
       list-style: decimal;
     }
+    .exports ::marker {
+      font-family: var(--font-mono);
+      color: var(--color-ink-3);
+    }
     .btn {
       min-height: var(--touch-min);
+    }
+    @media (max-width: 767.98px) {
+      .broker {
+        padding: var(--space-3);
+      }
+      .btn {
+        width: 100%;
+      }
     }
     .exports li {
       display: list-item;

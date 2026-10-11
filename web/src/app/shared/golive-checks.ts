@@ -237,6 +237,32 @@ export interface TraderCheck {
   label: string;
   sentence: string;
   fix: CheckFix | null;
+  /** A measured bad result (red "Failed"), not only "not yet". */
+  failed: boolean;
+}
+
+/**
+ * Checks whose limit measures a bad result (a drop too deep, drift too
+ * wide). Every other open check only needs time or a step (more trial days,
+ * a full test run), so it reads as a neutral "Not yet".
+ */
+const MEASURED_CHECKS: ReadonlySet<string> = new Set([
+  'max_drawdown',
+  'within_mc_band',
+  'quit_rule',
+  'max_drift',
+]);
+
+/**
+ * True when an open check measured a bad result. The server also fails
+ * these checks while their data is missing (no paper days yet, no Monte
+ * Carlo report, no backtest drawdown): those stay "Not yet". The Monte Carlo
+ * band can also fail on its return floor, so any measured miss counts there.
+ */
+export function isFailedCheck(c: GoLiveCheckView): boolean {
+  if (c.passed || !MEASURED_CHECKS.has(c.name)) return false;
+  if (c.value == null || c.limit == null) return false;
+  return c.name === 'within_mc_band' || Math.abs(c.value) > c.limit;
 }
 
 /**
@@ -257,6 +283,7 @@ export function traderChecks(report: GoLiveReport): {
       label: CHECK_LABELS[c.name] ?? c.name,
       sentence: failReason(c),
       fix: checkFix(c, report.strategy_id),
+      failed: isFailedCheck(c),
     }));
   return { failing, passed: shown.length - failing.length, total: shown.length };
 }

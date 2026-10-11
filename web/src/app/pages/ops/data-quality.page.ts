@@ -53,7 +53,9 @@ type SeverityFilter = '' | StatementFlagView['severity'];
       <div class="panel-head">
         <h2 id="flags-title">Statement flags</h2>
         @if (shown(); as p) {
-          <span class="muted">{{ p.total }} flagged</span>
+          <span class="muted"
+            ><span class="num">{{ p.total }}</span> flagged</span
+          >
         }
       </div>
       <form class="filters panel-body" (submit)="$event.preventDefault(); apply(tickerInput.value)">
@@ -85,7 +87,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
         <div class="actions">
           <button type="submit" class="btn">Filter</button>
           @if (filtered()) {
-            <button type="button" class="btn btn-ghost" (click)="reset(tickerInput)">
+            <button type="button" class="btn btn-tertiary" (click)="reset(tickerInput)">
               Show all
             </button>
           }
@@ -157,6 +159,11 @@ type SeverityFilter = '' | StatementFlagView['severity'];
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-2);
+      @include bp.phone {
+        .btn {
+          flex: 1;
+        }
+      }
     }
   `,
 })

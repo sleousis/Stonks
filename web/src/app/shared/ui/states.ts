@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  booleanAttribute,
+  computed,
+  input,
+  output,
+} from '@angular/core';
 
 import { errorMessage } from '../../core/http/api-error';
 import { BrandMark } from './brand-mark';
@@ -43,11 +50,40 @@ import { BrandMark } from './brand-mark';
       font-size: var(--text-sm);
       color: var(--color-ink-3);
     }
+    /* A slow, subtle shimmer: stops under reduced motion. */
     .bar {
       height: 10px;
       border-radius: var(--radius-xs);
-      background: var(--color-surface-3);
-      opacity: 0.7;
+      background:
+        linear-gradient(
+            90deg,
+            transparent 0%,
+            var(--color-hover) 40%,
+            var(--color-pressed) 50%,
+            var(--color-hover) 60%,
+            transparent 100%
+          )
+          0 0 / 200% 100% no-repeat,
+        var(--color-surface-3);
+      opacity: 0.8;
+      animation: shimmer 1.6s var(--ease) infinite;
+    }
+    @keyframes shimmer {
+      from {
+        background-position:
+          150% 0,
+          0 0;
+      }
+      to {
+        background-position:
+          -50% 0,
+          0 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bar {
+        animation: none;
+      }
     }
   `,
 })
@@ -61,12 +97,14 @@ export class LoadingState {
 
 /**
  * Nothing to show yet: the still brand mark, what would fill this space, and
- * one clear action in the content slot (a button or a link).
+ * one clear action in the content slot (a button or a link). Pass `compact`
+ * when the empty state is a panel's only content: a lower floor.
  */
 @Component({
   selector: 'app-empty-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [BrandMark],
+  host: { '[class.compact]': 'compact()' },
   template: `
     <div class="empty">
       <app-brand-mark class="mark" [size]="28" />
@@ -89,11 +127,16 @@ export class LoadingState {
       min-height: 9.5rem;
       padding: var(--space-5) var(--space-4);
     }
+    :host(.compact) .empty {
+      min-height: 7rem;
+      padding: var(--space-4);
+    }
+    /* A quiet solid square, not a dashed frame that reads as a missing image. */
     .mark {
       padding: var(--space-2);
-      border: 1px dashed var(--color-border-strong);
       border-radius: var(--radius-sm);
-      color: var(--color-paper);
+      background: var(--color-surface-2);
+      color: var(--color-ink-3);
     }
     .body {
       display: grid;
@@ -104,14 +147,14 @@ export class LoadingState {
     .title {
       font-family: var(--font-display);
       font-stretch: var(--display-stretch);
-      font-size: var(--text-xl);
+      font-size: 1.125rem;
       font-weight: var(--weight-bold);
-      letter-spacing: var(--tracking-display);
+      letter-spacing: var(--tracking-display-sm);
       line-height: var(--leading-tight);
     }
     .message {
       color: var(--color-ink-2);
-      max-width: 60ch;
+      max-width: 70ch;
     }
     .action {
       display: flex;
@@ -128,6 +171,8 @@ export class LoadingState {
 export class EmptyState {
   readonly title = input.required<string>();
   readonly message = input<string | null>(null);
+  /** The panel's only content: a 7rem floor instead of 9.5rem. */
+  readonly compact = input(false, { transform: booleanAttribute });
 }
 
 /**
@@ -158,9 +203,9 @@ export class EmptyState {
       /* 9.5rem with its margins: the loading and empty states' floor. */
       min-height: calc(9.5rem - 2 * var(--space-3));
       margin: var(--space-3);
+      /* The shared .callout look in the loss tone. */
       padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-loss);
-      border-left-width: 4px;
+      border-left: 2px solid var(--color-loss);
       background: var(--color-loss-soft);
       border-radius: var(--radius-sm);
     }
@@ -175,6 +220,7 @@ export class EmptyState {
       color: var(--color-loss);
     }
     .message {
+      max-width: 70ch;
       color: var(--color-ink);
       overflow-wrap: anywhere;
     }

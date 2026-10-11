@@ -1,21 +1,26 @@
 @use 'breakpoints' as bp;
 
+// Summary tiles: a .tile-grid, the value spanning two from tablet.
 .tiles {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: var(--space-4);
 
-  .tile-value {
-    grid-column: 1 / -1;
-  }
+  // Phones: the value takes the first row, the other four sit two by two.
+  @include bp.phone {
+    margin-bottom: var(--space-3);
 
-  @include bp.from-desktop {
-    grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr));
+    > .tile-value {
+      grid-column: 1 / -1;
+    }
 
-    .tile-value {
+    > :last-child:nth-child(odd) {
       grid-column: auto;
     }
+  }
+
+  // Wide screens: five tiles with the value spanning two fill six columns,
+  // so no tile is left alone on a second row.
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 
@@ -48,6 +53,10 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
+
+  @include bp.phone {
+    padding-inline: var(--space-3);
+  }
 }
 
 .checks {
@@ -59,15 +68,24 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-3);
     padding: var(--space-2) 0;
     border-top: 1px solid var(--color-border);
+  }
+
+  app-status-pill {
+    margin-top: 1px;
+  }
+
+  @include bp.phone {
+    padding-inline: var(--space-3);
   }
 }
 
 .check-name {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  line-height: 20px;
 }
 
 .check-detail {
@@ -76,6 +94,7 @@
   overflow-wrap: anywhere;
 }
 
+// Run dates: mono figures in ink, underlined on hover or focus (.table-link).
 .cell-link {
   display: inline-flex;
   align-items: center;

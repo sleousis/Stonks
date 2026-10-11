@@ -72,12 +72,12 @@
           <a
             class="btn"
             [class.btn-primary]="!canShip()"
-            [class.btn-ghost]="canShip()"
+            [class.btn-tertiary]="canShip()"
             [routerLink]="['/strategies', strategyId()]"
             >{{ canShip() ? 'Open the strategy' : 'Follow it' }}</a
           >
           <a
-            class="btn btn-ghost"
+            class="btn btn-tertiary"
             [routerLink]="['/strategies', strategyId()]"
             [queryParams]="{ tab: 'results' }"
             >See its trial results</a

@@ -22,7 +22,7 @@
     } @else {
       @let v = view()!;
       @if (v.account; as a) {
-        <dl class="figures" aria-label="The account as the broker reports it now">
+        <dl class="figures well" aria-label="The account as the broker reports it now">
           <div>
             <dt>Equity</dt>
             <dd class="num">{{ money(a.equity, { currency: a.currency }) }}</dd>
@@ -74,7 +74,18 @@
               >.
             </p>
           </div>
-          <p class="level-effect" [attr.data-level]="a.level" role="status">
+          <p
+            class="level-effect callout"
+            [attr.data-level]="a.level"
+            [attr.data-tone]="
+              a.level === 'warn'
+                ? 'warn'
+                : a.level === 'reduce' || a.level === 'call'
+                  ? 'loss'
+                  : 'neutral'
+            "
+            role="status"
+          >
             {{ level().effect }}
           </p>
           <ul class="notes" aria-label="How Stonks guards the margin">
@@ -96,7 +107,7 @@
             }
           </ul>
           @if (a.reported_type !== 'margin') {
-            <p class="warn-text">
+            <p class="warn-text callout" data-tone="warn">
               The broker does not report this as a margin account, so nothing new opens on margin.
             </p>
           }
@@ -107,7 +118,7 @@
           </p>
         }
       } @else {
-        <p class="warn-text" data-testid="margin-read-error">
+        <p class="warn-text callout" data-tone="warn" data-testid="margin-read-error">
           Could not read the account from the broker: {{ v.read_error ?? 'no broker linked' }}.
         </p>
       }
@@ -120,7 +131,7 @@
         </p>
       }
       @if (v.profile_type === 'margin' && !v.margin_accounts_on) {
-        <p class="warn-text">
+        <p class="warn-text callout" data-tone="warn">
           Margin accounts are off, so this account opens nothing new. Your admin turns them on.
         </p>
       }

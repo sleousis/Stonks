@@ -59,8 +59,8 @@ class IncompleteReturn extends Error {
       <div class="panel-body">
         @if (result.error(); as err) {
           <!-- No retry: the provider's state works once, so a new attempt starts over. -->
-          <div class="failed" role="alert">
-            <p class="title">Could not finish connecting</p>
+          <div class="failed callout" data-tone="loss" role="alert">
+            <p class="callout-title">Could not finish connecting</p>
             <p>{{ message(err) }}</p>
           </div>
           <p class="actions">
@@ -109,26 +109,17 @@ class IncompleteReturn extends Error {
   `,
   styles: `
     .failed {
-      display: grid;
-      gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      border-left: 3px solid var(--color-loss);
-      background: var(--color-loss-soft);
-      border-radius: var(--radius-sm);
       overflow-wrap: anywhere;
     }
     .failed p {
       margin: 0;
-    }
-    .failed .title {
-      font-weight: var(--weight-semibold);
-      color: var(--color-loss);
     }
     .lead {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: var(--space-2);
+      max-width: 70ch;
       margin: 0 0 var(--space-3);
     }
     .actions {

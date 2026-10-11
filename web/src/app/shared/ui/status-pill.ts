@@ -30,6 +30,7 @@ const TONES: Record<string, PillTone> = {
   success: 'positive',
   filled: 'positive',
   completed: 'positive',
+  done: 'positive',
   shadow: 'info',
   draft: 'info',
   pending: 'progress',
@@ -42,6 +43,12 @@ const TONES: Record<string, PillTone> = {
   skipped: 'neutral',
   disabled: 'neutral',
   paused: 'neutral',
+  // Not started yet, or not needed: neutral receipts, never red.
+  to_do: 'neutral',
+  not_yet: 'neutral',
+  optional: 'neutral',
+  waiting: 'neutral',
+  waiting_admin: 'neutral',
   warn: 'warn',
   warning: 'warn',
   stale: 'warn',
@@ -88,6 +95,12 @@ export const PILL_WORDS: Readonly<Record<string, string>> = {
   running: 'Running',
   queued: 'Waiting',
   cancelled: 'Cancelled',
+  done: 'Done',
+  to_do: 'To do',
+  not_yet: 'Not yet',
+  optional: 'Optional',
+  waiting: 'Waiting',
+  waiting_admin: 'Waiting for an admin',
 };
 
 /** The form for a status; outcomes (passed, filled, failed...) are receipts. */
@@ -125,6 +138,8 @@ export function pillForm(status: string | null | undefined, tone: PillTone): Pil
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
       line-height: 18px;
+      /* Every form is 20px tall, so pills in one row share a baseline. */
+      height: 20px;
       white-space: nowrap;
       color: var(--tone);
     }
@@ -184,6 +199,10 @@ export function pillForm(status: string | null | undefined, tone: PillTone): Pil
       border: 1px solid currentColor;
       border-radius: var(--radius-xs);
       background: transparent;
+    }
+    /* Not yet, to do, optional: quiet, in the third ink. */
+    :host([data-form='receipt'][data-tone='neutral']) {
+      color: var(--color-ink-3);
     }
     :host([data-form='receipt']) .mark {
       width: 9px;

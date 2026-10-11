@@ -23,6 +23,9 @@ export interface SegmentOption<T extends string = string> {
  *
  * `emphasis="strong"` fills the picked option solid, for choices that must
  * not be misread (Buy or Sell on an order ticket).
+ *
+ * On phones, more than three options form an equal two-column grid (a last
+ * odd option takes the whole row), so no option is left alone on a line.
  */
 @Component({
   selector: 'app-segmented',
@@ -33,6 +36,7 @@ export interface SegmentOption<T extends string = string> {
       role="radiogroup"
       [attr.aria-label]="label()"
       [attr.data-emphasis]="emphasis()"
+      [attr.data-many]="options().length > 3 ? '' : null"
     >
       @for (o of options(); track o.value; let i = $index) {
         <button
@@ -73,7 +77,7 @@ export interface SegmentOption<T extends string = string> {
       min-height: calc(var(--control-h) - 4px);
       padding: 0 var(--space-3);
       border: 0;
-      border-radius: 3px;
+      border-radius: var(--radius-xs);
       background: transparent;
       color: var(--color-ink-2);
       font: inherit;
@@ -81,25 +85,31 @@ export interface SegmentOption<T extends string = string> {
       font-weight: var(--weight-medium);
       white-space: nowrap;
       cursor: pointer;
+      transition:
+        background-color var(--dur-fast) var(--ease),
+        color var(--dur-fast) var(--ease);
     }
     .segment:hover {
+      background: var(--color-hover);
       color: var(--color-ink);
     }
+    /* Subtle: a surface chip with a strong ring, readable at a glance. */
     .segment[aria-checked='true'] {
       background: var(--color-surface);
       color: var(--color-ink);
-      box-shadow: var(--shadow-1);
+      box-shadow: inset 0 0 0 1px var(--color-border-strong);
+      font-weight: var(--weight-semibold);
     }
     /* Strong: the picked option is a solid block, like the B side tag (M13). */
     .segmented[data-emphasis='strong'] .segment[aria-checked='true'] {
-      background: var(--color-ink);
-      color: var(--color-surface);
+      background: var(--color-slab);
+      color: var(--color-slab-ink);
       box-shadow: none;
       font-weight: var(--weight-bold);
     }
     .segment:focus-visible {
       outline: 2px solid var(--color-focus);
-      outline-offset: 1px;
+      outline-offset: 2px;
     }
     @include bp.phone {
       :host {
@@ -107,6 +117,16 @@ export interface SegmentOption<T extends string = string> {
       }
       .segment {
         min-height: var(--touch-min);
+      }
+      .segmented[data-many] {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .segmented[data-many] .segment:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+      }
+      .segmented[data-many] .segment {
+        white-space: normal;
       }
     }
     @include bp.coarse {

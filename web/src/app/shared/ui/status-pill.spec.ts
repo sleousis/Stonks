@@ -36,4 +36,18 @@ describe('StatusPill', () => {
     expect(render('active', 'Turned on')).toBe('Turned on');
     expect(render('stale')).toBe('stale');
   });
+
+  it('gives not-yet states quiet neutral receipts, never red', () => {
+    expect(render('to_do')).toBe('To do');
+    expect(render('not_yet')).toBe('Not yet');
+    expect(render('optional')).toBe('Optional');
+    expect(render('waiting_admin')).toBe('Waiting for an admin');
+    expect(render('done')).toBe('Done');
+    const fixture = TestBed.createComponent(StatusPill);
+    fixture.componentRef.setInput('status', 'not_yet');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.getAttribute('data-tone')).toBe('neutral');
+    expect(el.getAttribute('data-form')).toBe('receipt');
+  });
 });

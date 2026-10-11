@@ -92,7 +92,7 @@
           </button>
         </div>
         <div class="pw-tools">
-          <button type="button" class="btn btn-ghost" (click)="generateNewPassword()">
+          <button type="button" class="btn btn-tertiary" (click)="generateNewPassword()">
             Generate
           </button>
           @if (form.controls.password.value) {
@@ -127,7 +127,7 @@
   <div class="panel-head">
     <h2 id="people-title">People</h2>
     @if (users.hasValue()) {
-      <span class="muted">{{ users.value().length }}</span>
+      <span class="muted num">{{ users.value().length }}</span>
     }
   </div>
   @if (users.error(); as err) {
@@ -180,35 +180,35 @@
               type="button"
               class="btn"
               [disabled]="busy() === u.id || u.id === myId()"
+              [attr.aria-label]="'Reset password for ' + u.display_name"
+              (click)="openReset(u)"
+            >
+              Reset password
+            </button>
+            <button
+              type="button"
+              class="btn btn-tertiary"
+              [disabled]="busy() === u.id || u.id === myId()"
               (click)="toggleStatus(u)"
             >
               {{ u.status === 'active' ? 'Disable' : 'Enable' }}
             </button>
             <button
               type="button"
-              class="btn"
+              class="btn btn-tertiary"
               [disabled]="busy() === u.id || !u.mfa_enrolled || u.id === myId()"
               [attr.aria-label]="'Reset authenticator app for ' + u.display_name"
               (click)="resetMfa(u)"
             >
               Reset authenticator app
             </button>
-            <button
-              type="button"
-              class="btn"
-              [disabled]="busy() === u.id || u.id === myId()"
-              [attr.aria-label]="'Reset password for ' + u.display_name"
-              (click)="openReset(u)"
-            >
-              Reset password
-            </button>
           </div>
         </li>
       }
     </ul>
     @if (sorted().length === 1) {
-      <div class="first-run" role="note">
-        <p><strong>Only you so far.</strong></p>
+      <div class="first-run callout" role="note">
+        <p class="callout-title">Only you so far.</p>
         <p>
           Use Add person to invite a trader: choose their role and a first password, then give them
           the password yourself. They set up the authenticator app the first time they sign in.
@@ -266,7 +266,7 @@
           </button>
         </div>
         <div class="pw-tools">
-          <button type="button" class="btn btn-ghost" (click)="generateResetPassword()">
+          <button type="button" class="btn btn-tertiary" (click)="generateResetPassword()">
             Generate
           </button>
           @if (newPassword()) {

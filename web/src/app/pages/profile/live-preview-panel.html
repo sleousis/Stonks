@@ -33,7 +33,7 @@
           {{ outcome(p) }}
         </p>
         @if (p.account; as a) {
-          <dl class="figures" aria-label="The account as the broker reports it">
+          <dl class="figures well" aria-label="The account as the broker reports it">
             <div>
               <dt>Equity</dt>
               <dd class="num">{{ money(a.equity, { currency: a.currency }) }}</dd>
@@ -68,7 +68,7 @@
           </app-data-table>
         }
         @if (dropped().length) {
-          <h3>Dropped by a rule</h3>
+          <h3 class="section-title">Dropped by a rule</h3>
           <ul class="dropped">
             @for (a of dropped(); track $index) {
               <li>
@@ -78,9 +78,11 @@
           </ul>
         }
         @for (n of p.notes; track n) {
-          <p class="note" role="note">{{ n }}</p>
+          <p class="note callout" data-tone="warn" role="note">{{ n }}</p>
         }
-        <p class="sent" data-testid="preview-not-sent">Nothing was sent to the broker.</p>
+        <p class="sent callout" data-tone="neutral" data-testid="preview-not-sent">
+          Nothing was sent to the broker.
+        </p>
       }
     </div>
   </div>

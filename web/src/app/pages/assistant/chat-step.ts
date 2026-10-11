@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { StatusPill } from '../../shared/ui/status-pill';
 import type { StepItem } from './chat-model';
 import { argLabel, argValue, resultText, toolLabel } from './tool-labels';
 
@@ -19,12 +20,16 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
 @Component({
   selector: 'app-chat-step',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [StatusPill],
   template: `
     @let s = step();
     <div class="step" [attr.data-state]="s.state">
-      <span class="mark" aria-hidden="true">{{ state().mark }}</span>
       <span class="label">{{ label() }}</span>
-      <span class="state">{{ state().text }}</span>
+      <app-status-pill
+        class="state"
+        [status]="s.state === 'declined' ? 'skipped' : s.state"
+        [label]="state().text"
+      />
     </div>
     @if (s.error && s.state !== 'running') {
       <p class="step-error">{{ s.error }}</p>
@@ -53,27 +58,21 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
   `,
   styles: `
     @use 'breakpoints' as bp;
+    // A tool step: an inset well, the state as a working or receipt pill.
     :host {
       display: block;
       min-width: 0;
+      max-width: min(100%, 46rem);
       padding: var(--space-2) var(--space-3);
-      border-left: 2px solid var(--color-border-strong);
+      border-radius: var(--radius-sm);
       background: var(--color-surface-2);
-      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
       font-size: var(--text-sm);
     }
     .step {
       display: flex;
       flex-wrap: wrap;
-      align-items: baseline;
+      align-items: center;
       gap: var(--space-1) var(--space-2);
-    }
-    .mark {
-      display: inline-grid;
-      place-items: center;
-      width: 1.25rem;
-      font-family: var(--font-mono);
-      font-weight: var(--weight-semibold);
     }
     .label {
       font-weight: var(--weight-medium);
@@ -81,20 +80,6 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
     }
     .state {
       margin-left: auto;
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
-    }
-    [data-state='done'] .mark {
-      color: var(--color-gain);
-    }
-    [data-state='failed'] .mark {
-      color: var(--color-loss);
-    }
-    [data-state='waiting'] .mark {
-      color: var(--color-warn);
-    }
-    [data-state='running'] .mark {
-      color: var(--color-primary);
     }
     .step-error {
       margin: var(--space-1) 0 0;
@@ -107,8 +92,10 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
     summary {
       display: inline-flex;
       align-items: center;
-      min-height: 24px;
+      min-height: var(--control-h);
       color: var(--color-ink-2);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
       cursor: pointer;
       @include bp.phone {
         min-height: var(--touch-min);
@@ -128,7 +115,8 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
       gap: var(--space-2);
     }
     .args dt {
-      color: var(--color-ink-2);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
     }
     .args dd {
       margin: 0;
@@ -136,7 +124,8 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
     }
     .seen {
       margin: var(--space-2) 0 var(--space-1);
-      color: var(--color-ink-2);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
     }
     .result {
       max-height: 16rem;

@@ -7,7 +7,7 @@
 
 .skip-link {
   position: absolute;
-  z-index: 100;
+  z-index: var(--z-skip);
   top: var(--space-2);
   left: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -35,6 +35,11 @@
   --color-ink-2: var(--color-rail-ink-2);
   --color-ink-3: var(--color-rail-ink-2);
   --color-primary: var(--color-rail-accent);
+  --color-link: var(--color-rail-accent);
+  --color-primary-ink: var(--color-rail);
+  --color-primary-hover: color-mix(in srgb, var(--color-rail-accent) 85%, var(--color-rail-ink));
+  --color-hover: color-mix(in srgb, var(--color-rail-ink) 6%, transparent);
+  --color-pressed: color-mix(in srgb, var(--color-rail-ink) 10%, transparent);
   --color-accent: var(--color-rail-accent);
   --color-focus: var(--color-rail-accent);
   background: var(--color-rail);
@@ -70,15 +75,20 @@
   line-height: 1;
 }
 
+// Phone top bar: the wordmark steps down so five controls fit at 375px.
+.topbar .wordmark {
+  font-size: 1.25rem;
+}
+
 // Phone top bar ------------------------------------------------------------
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding: env(safe-area-inset-top) calc(var(--space-2) + env(safe-area-inset-right)) 0
     calc(var(--space-2) + env(safe-area-inset-left));
   min-height: calc(52px + env(safe-area-inset-top));
@@ -87,6 +97,8 @@
   .brand {
     display: inline-flex;
     align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
     min-height: var(--touch-min);
     padding: 0 var(--space-2);
   }
@@ -123,6 +135,9 @@
   font-size: var(--text-sm);
   text-align: start;
   cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 
   &:hover {
     border-color: var(--color-border-strong);
@@ -134,11 +149,11 @@
   }
 
   kbd {
-    padding: 0 5px;
+    padding: 0 var(--space-1);
     border: 1px solid var(--color-border-strong);
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     background: var(--color-surface);
-    font: inherit;
+    font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--color-ink-3);
   }
@@ -271,14 +286,15 @@ main.bare {
   padding: 0;
   border: 0;
   @include rail-scope;
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-overlay);
+  z-index: var(--z-drawer);
 
   &::backdrop {
     background: var(--color-scrim);
   }
 
   &[open] {
-    animation: slide-in var(--dur) var(--ease);
+    animation: slide-in var(--dur) var(--ease-out);
   }
 }
 
@@ -301,6 +317,7 @@ main.bare {
 
 @keyframes slide-in {
   from {
+    opacity: 0;
     transform: translateX(-100%);
   }
 }

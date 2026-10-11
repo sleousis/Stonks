@@ -2,14 +2,18 @@
   title="Data"
   description="The price data we hold, how fresh it is, and the data updates that fill it."
 >
-  <a actions class="btn btn-ghost" routerLink="/universes">Universes</a>
+  <a actions class="btn btn-tertiary" routerLink="/universes">Universes</a>
   <button actions type="button" class="btn" (click)="refresh()">Refresh</button>
 </app-page-header>
 
 <div class="page-grid">
-  <app-instrument-search class="span-5" [selected]="ticker()" (picked)="pickTicker($event)" />
+  <app-instrument-search
+    class="span-5 browse"
+    [selected]="ticker()"
+    (picked)="pickTicker($event)"
+  />
   <app-coverage-panel
-    class="span-7"
+    class="span-7 browse"
     [ticker]="ticker()"
     [refresh]="refreshKey()"
     (picked)="pickSeries($event)"

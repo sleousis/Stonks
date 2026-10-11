@@ -59,11 +59,11 @@
 } @else {
   @let view = guide.value();
   @if (view.dismissed) {
-    <p class="note">
+    <p class="note callout" data-tone="info">
       You closed this guide. It stays here if you want it.
       <button
         type="button"
-        class="btn btn-ghost"
+        class="btn btn-tertiary"
         [disabled]="busy() === 'reopen'"
         (click)="reopen()"
       >
@@ -93,12 +93,22 @@
             (click)="toggle(s.id)"
           >
             <span class="step-title">{{ copy[s.id].title }}</span>
-            <span class="tag" [attr.data-state]="s.state">
-              {{ tagWord(s) }}
-            </span>
+            <app-status-pill
+              class="tag"
+              [status]="
+                s.state === 'done'
+                  ? 'done'
+                  : s.state === 'skipped'
+                    ? 'skipped'
+                    : s.optional
+                      ? 'optional'
+                      : 'to_do'
+              "
+              [label]="tagWord(s)"
+            />
           </button>
           @if (open() === s.id) {
-            <div class="step-panel" [id]="'step-' + s.id">
+            <div class="step-panel well" [id]="'step-' + s.id">
               <p class="lead">{{ s.state === 'done' ? copy[s.id].done : copy[s.id].lead }}</p>
 
               @switch (s.id) {
@@ -112,11 +122,10 @@
                     <ul class="books">
                       @for (p of portfolios.options(); track p.id) {
                         <li>
-                          <label class="book">
+                          <label class="book check">
                             <input
                               type="radio"
                               name="welcome-book"
-                              class="check"
                               [checked]="portfolios.current()?.id === p.id"
                               (change)="portfolios.select(p.id)"
                             />
@@ -199,7 +208,7 @@
                         </button>
                         <!-- Universes is an admin page: traders keep to their watchlists (F11). -->
                         @if (session.isAdmin()) {
-                          <a routerLink="/universes" class="btn btn-ghost"
+                          <a routerLink="/universes" class="btn btn-tertiary"
                             >Use a universe instead</a
                           >
                         }
@@ -238,21 +247,19 @@
                       </div>
                       <fieldset class="modes">
                         <legend>How</legend>
-                        <label class="mode">
+                        <label class="mode check">
                           <input
                             type="radio"
                             name="welcome-mode"
-                            class="check"
                             [checked]="followMode() === 'notify'"
                             (change)="followMode.set('notify')"
                           />
                           Alerts only
                         </label>
-                        <label class="mode">
+                        <label class="mode check">
                           <input
                             type="radio"
                             name="welcome-mode"
-                            class="check"
                             [checked]="followMode() === 'paper'"
                             (change)="followMode.set('paper')"
                           />
@@ -279,7 +286,7 @@
                         <button type="submit" class="btn btn-primary" [disabled]="!!busy()">
                           Follow
                         </button>
-                        <a routerLink="/leaderboard" class="btn btn-ghost">Compare strategies</a>
+                        <a routerLink="/leaderboard" class="btn btn-tertiary">Compare strategies</a>
                       </div>
                     </form>
                   }
@@ -302,7 +309,7 @@
                     @if (s.id === 'account') {
                       <button
                         type="button"
-                        class="btn btn-ghost"
+                        class="btn btn-tertiary"
                         [disabled]="!!busy()"
                         (click)="mark(s.id, 'done')"
                       >
@@ -311,7 +318,7 @@
                     }
                     <button
                       type="button"
-                      class="btn btn-ghost"
+                      class="btn btn-tertiary"
                       [disabled]="!!busy()"
                       (click)="mark(s.id, 'skipped')"
                     >
@@ -320,7 +327,7 @@
                   } @else {
                     <button
                       type="button"
-                      class="btn btn-ghost"
+                      class="btn btn-tertiary"
                       [disabled]="!!busy()"
                       (click)="mark(s.id, 'todo')"
                     >

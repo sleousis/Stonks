@@ -43,6 +43,7 @@ import {
 import { STATUS_WORDS } from '../../shared/governance-labels';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { TelegramLink } from '../notifications/telegram-link';
+import { StatusPill } from '../../shared/ui/status-pill';
 
 /** The starting cash of a paper portfolio the guide opens. */
 const DEFAULT_PAPER_CASH = 100000;
@@ -67,6 +68,7 @@ const DEFAULT_PAPER_CASH = 100000;
     LoadingState,
     ErrorState,
     EmptyState,
+    StatusPill,
   ],
   templateUrl: './welcome.page.html',
   styleUrl: './welcome.page.scss',

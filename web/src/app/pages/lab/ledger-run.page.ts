@@ -99,14 +99,15 @@ export function searchName(tuner: string): string {
         <div class="panel-body">
           @if (r.robustness === 'error') {
             <app-job-failure
-              class="failed-reason"
+              class="failed-reason callout"
+              data-tone="loss"
               role="note"
               [live]="false"
               [text]="r.error || failedText"
               [detail]="r.error_detail"
             />
           }
-          <div class="tiles">
+          <div class="tiles tile-grid">
             <app-stat-tile label="Settings tried" [value]="count(r.n_trials)" detail="This run" />
             <app-stat-tile
               label="Settings with errors"

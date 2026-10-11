@@ -24,7 +24,13 @@ export type StatTone = 'gain' | 'loss' | '';
  * `amount` and `format` as well and it counts up to the figure.
  *
  * A value made of words (a strategy name, a date) wraps instead of running
- * off a narrow tile (UX-27); figures stay on one line.
+ * off a narrow tile (UX-27) and is set in the body face, so a phrase like
+ * "Too early to tell" does not shout. Figures stay on one line.
+ *
+ * Inside a panel, use `bare` tiles in a `.stat-strip`: no box, a hairline
+ * between tiles. A tile inside `.stat-strip` is bare on its own.
+ *
+ *   <div class="stat-strip"><app-stat-tile bare label="Cash" [value]="cash" /> ...</div>
  *
  *   <app-stat-tile label="Value" featured [live]="isLive()" [amount]="total" [format]="money" />
  */
@@ -37,6 +43,7 @@ export type StatTone = 'gain' | 'loss' | '';
     '[class.featured]': 'featured()',
     '[class.live]': 'live()',
     '[class.text]': 'isText()',
+    '[class.bare]': 'bare()',
   },
   template: `
     <p class="label">
@@ -70,6 +77,15 @@ export type StatTone = 'gain' | 'loss' | '';
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
     }
+    /* Bare: part of a divided strip inside a panel. */
+    :host(.bare),
+    :host-context(.stat-strip) {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      border-inline-start: 1px solid var(--color-border);
+      border-top: 1px solid var(--color-border);
+    }
     :host(.featured) {
       border-left: var(--border-live) solid var(--color-paper);
     }
@@ -88,7 +104,7 @@ export type StatTone = 'gain' | 'loss' | '';
       /* Shrinks on narrow tiles instead of breaking a figure across lines. */
       font-family: var(--font-display);
       font-stretch: var(--display-stretch);
-      font-size: clamp(var(--text-lg), 15cqi, var(--text-2xl));
+      font-size: clamp(var(--text-lg), 15cqi, var(--text-stat));
       font-weight: var(--weight-bold);
       font-variant-numeric: tabular-nums lining-nums;
       letter-spacing: var(--tracking-display);
@@ -102,13 +118,21 @@ export type StatTone = 'gain' | 'loss' | '';
     :host(.featured.live) .value {
       color: var(--color-live);
     }
+    /* Words, not a figure: body face, quieter. */
     :host(.text) .value {
+      font-family: var(--font-sans);
+      font-stretch: normal;
+      font-size: var(--text-panel);
+      font-weight: var(--weight-medium);
+      letter-spacing: normal;
+      color: var(--color-ink-2);
       white-space: normal;
       overflow-wrap: anywhere;
     }
     :host(.featured.text) .value {
-      font-size: clamp(var(--text-lg), 9cqi, var(--text-2xl));
+      font-size: var(--text-lg);
       line-height: var(--leading-tight);
+      color: var(--color-ink);
     }
     .detail {
       margin-top: var(--space-1);
@@ -125,7 +149,7 @@ export type StatTone = 'gain' | 'loss' | '';
     }
     .skeleton {
       width: 60%;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-xs);
       background: var(--color-surface-3);
     }
   `,
@@ -140,6 +164,8 @@ export class StatTile {
   readonly featured = input(false, { transform: booleanAttribute });
   /** Real money: the headline figure and its frame turn brass. */
   readonly live = input(false, { transform: booleanAttribute });
+  /** Inside a panel: no box, a hairline at the start (see `.stat-strip`). */
+  readonly bare = input(false, { transform: booleanAttribute });
   /** The raw number behind `value`; with `format`, the figure counts up to it. */
   readonly amount = input<number | null>(null);
   readonly format = input<((n: number) => string) | null>(null);
@@ -160,8 +186,12 @@ export class StatTile {
     return fmt && n !== null ? fmt(n) : this.finalText();
   });
 
-  /** Words, not a figure: two letters in a row ("Momentum 3fa9", "Sep 2"). */
-  protected readonly isText = computed(() => /\p{L}{2}/u.test(this.finalText() ?? ''));
+  /** Words, not a figure: two letters in a row ("Momentum 3fa9", "Sep 2").
+   *  A leading currency code ("US$10,000", "CHF 3,400") is part of a figure. */
+  protected readonly isText = computed(() => {
+    const text = (this.finalText() ?? '').replace(/^[+\-−]?\s*[A-Z]{1,3}(?:\$|\s)(?=[\d.,])/u, '');
+    return /\p{L}{2}/u.test(text);
+  });
 
   protected readonly helpTerm = computed(() => {
     const help = this.help();

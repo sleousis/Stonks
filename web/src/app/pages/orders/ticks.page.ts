@@ -57,7 +57,7 @@ export function tickStatusLabel(status: string): string {
   ],
   template: `
     <div class="page-grid">
-      <section class="panel span-8 history" aria-labelledby="ticks-title">
+      <section class="panel panel-flush span-8 history" aria-labelledby="ticks-title">
         <div class="panel-head">
           <h2 id="ticks-title">Trading runs</h2>
           <div class="head-tools">

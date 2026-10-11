@@ -17,7 +17,7 @@
 </app-page-header>
 
 <!-- Tiles ------------------------------------------------------------------>
-<section class="tiles" aria-label="Trial results summary">
+<section class="tiles tile-grid" aria-label="Trial results summary">
   <app-stat-tile
     label="On trial"
     [loading]="!summaries.hasValue() && !summaries.error()"
@@ -118,7 +118,7 @@
           }
         </p>
         @if (failedSeries().length) {
-          <p class="chart-note warn" role="status">
+          <p class="chart-note warn callout" data-tone="warn" role="status">
             Could not load {{ failedNames() }}. Refresh to try again.
           </p>
         }
@@ -127,7 +127,7 @@
   </section>
 
   <!-- Summary table -------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="summary-title">
+  <section class="panel panel-flush span-12" aria-labelledby="summary-title">
     <div class="panel-head">
       <h2 id="summary-title">Strategies and their test books</h2>
     </div>
@@ -159,7 +159,7 @@
         </ng-template>
         <ng-template appCell="go_live" [appCellOf]="rows()" let-r>
           <a
-            class="btn go-live"
+            class="btn btn-tertiary go-live"
             [routerLink]="['/strategies', r.strategy_id]"
             [queryParams]="{ tab: 'review' }"
             [attr.aria-label]="'Review ' + r.name"
@@ -171,7 +171,7 @@
   </section>
 
   <!-- Decisions ------------------------------------------------------------>
-  <section class="panel span-12" aria-labelledby="decisions-title">
+  <section class="panel panel-flush span-12" aria-labelledby="decisions-title">
     <div class="panel-head">
       <h2 id="decisions-title">Test book decisions</h2>
       @if (decisionsPageShown(); as dp) {
