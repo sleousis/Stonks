@@ -94,26 +94,31 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
     }
+    .desc {
+      max-width: 70ch;
+    }
+    /* The list is an inset well: no border, a hairline between rows, the
+       picked row a surface chip with an accent rule. */
     .list {
       max-height: 18rem;
       overflow-y: auto;
       overscroll-behavior: contain;
-      border: 1px solid var(--color-border);
       border-radius: var(--radius-sm);
       background: var(--color-surface-2);
     }
     .group + .group {
       border-top: 1px solid var(--color-border);
     }
+    /* Group labels (Yardsticks, Trend following): the one overline style. */
     .group-label {
       position: sticky;
       top: 0;
       z-index: 1;
-      padding: var(--space-1) var(--space-3);
+      padding: var(--space-2) var(--space-3) var(--space-1);
       font-size: var(--text-xs);
-      font-weight: var(--weight-semibold);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: var(--tracking-overline);
       color: var(--color-ink-3);
       background: var(--color-surface-2);
     }
@@ -125,21 +130,32 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       min-height: var(--touch-min);
       padding: var(--space-2) var(--space-3);
       cursor: pointer;
-      border-left: 3px solid transparent;
-      transition: background-color var(--dur-fast) var(--ease);
+      box-shadow: inset 2px 0 0 transparent;
+      transition:
+        background-color var(--dur-fast) var(--ease),
+        box-shadow var(--dur-fast) var(--ease);
+    }
+    .option + .option {
+      border-top: 1px solid var(--color-border);
     }
     .option:hover {
-      background: var(--color-surface-3);
+      background: var(--color-hover);
     }
     .option.selected {
       background: var(--color-surface);
-      border-left-color: var(--color-accent);
+      box-shadow: inset 2px 0 0 var(--color-accent);
     }
     input[type='radio'] {
-      margin: 3px 0 0;
+      margin: 2px 0 0;
       width: 16px;
       height: 16px;
-      accent-color: var(--color-primary);
+      accent-color: var(--color-accent);
+    }
+    @media (pointer: coarse) {
+      input[type='radio'] {
+        width: 18px;
+        height: 18px;
+      }
     }
     .text {
       display: grid;
@@ -147,7 +163,8 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       min-width: 0;
     }
     .name {
-      font-weight: var(--weight-medium);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     .desc {

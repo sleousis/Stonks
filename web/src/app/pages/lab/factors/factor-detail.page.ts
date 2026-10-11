@@ -118,7 +118,7 @@ import { FormulaEditor } from './formula-editor';
               <div class="formula">
                 <code class="mono">{{ f.expression }}</code>
                 <a
-                  class="btn btn-ghost"
+                  class="btn btn-tertiary"
                   [routerLink]="['/lab/factors', formulaRoute]"
                   [queryParams]="{ expression: f.expression }"
                   >Edit as a formula</a
@@ -217,7 +217,7 @@ import { FormulaEditor } from './formula-editor';
     .tag {
       padding: 0 var(--space-2);
       border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-xs);
       font-size: var(--text-xs);
       color: var(--color-ink-2);
     }

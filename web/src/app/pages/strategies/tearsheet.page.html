@@ -2,13 +2,15 @@
   [title]="displayName()"
   [description]="sheet.hasValue() ? cls() + '. ' + statusWord() + '.' : 'Tear sheet'"
 >
-  <a actions class="btn btn-ghost" routerLink="/leaderboard">Compare</a>
-  <a actions class="btn btn-ghost" [routerLink]="['/strategies', id()]">Strategy page</a>
-  <a actions class="btn" routerLink="/lab" [queryParams]="{ strategy: id() }">Backtest it</a>
+  <a actions class="btn btn-tertiary" routerLink="/leaderboard">Compare</a>
+  <a actions class="btn btn-tertiary" [routerLink]="['/strategies', id()]">Strategy page</a>
+  <a actions class="btn btn-tertiary" routerLink="/lab" [queryParams]="{ strategy: id() }"
+    >Backtest it</a
+  >
   <button
     actions
     type="button"
-    class="btn btn-ghost print-button"
+    class="btn print-button"
     [disabled]="!sheet.hasValue()"
     (click)="print()"
   >
@@ -28,12 +30,24 @@
   @let s = sheet.value();
 
   @if (verdict(); as v) {
-    <section class="panel verdict-card" aria-label="Verdict">
+    <section
+      class="callout verdict-card"
+      aria-label="Verdict"
+      [attr.data-tone]="
+        v.level === 'worth'
+          ? 'gain'
+          : v.level === 'promising'
+            ? 'warn'
+            : v.level === 'not_yet'
+              ? 'loss'
+              : 'info'
+      "
+    >
       <app-strategy-verdict [verdict]="v" />
     </section>
   }
 
-  <section class="tiles" aria-label="Trial result">
+  <section class="tiles tile-grid" aria-label="Trial result">
     @for (t of tiles(); track t.label) {
       <app-stat-tile [label]="t.label" [value]="t.value" [help]="t.help" />
     }
@@ -78,7 +92,12 @@
     <section class="panel" aria-labelledby="golive-title">
       <div class="panel-head">
         <h2 id="golive-title">Go-live check</h2>
-        <span class="verdict" [attr.data-passed]="s.golive?.passed">{{ golive() }}</span>
+        <app-status-pill
+          [status]="
+            s.golive?.passed === true ? 'pass' : s.golive?.passed === false ? 'fail' : 'not_yet'
+          "
+          [label]="golive()"
+        />
       </div>
       @if (!s.golive) {
         <p class="panel-body muted">A retired strategy is not checked.</p>
@@ -89,7 +108,11 @@
             <ul class="rows">
               @for (c of gc.failing; track c.name) {
                 <li class="row">
-                  <app-status-pill status="failed" label="Not yet" />
+                  @if (failedCheck(c.name)) {
+                    <app-status-pill status="failed" label="Failed" />
+                  } @else {
+                    <app-status-pill status="not_yet" />
+                  }
                   <div class="row-text">
                     <span class="row-title">{{ c.label }}</span>
                     <span class="row-detail">{{ c.sentence }}</span>

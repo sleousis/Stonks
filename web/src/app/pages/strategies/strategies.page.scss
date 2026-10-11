@@ -13,11 +13,18 @@
     align-items: center;
     justify-content: space-between;
   }
+
+  @include bp.phone {
+    padding: var(--space-3);
+  }
 }
 
+// Same look as app-segmented: a surface-2 track, the picked option a
+// surface chip with a strong hairline and semibold ink.
 .segmented {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
   margin: 0;
   padding: 2px;
   border: 1px solid var(--color-border);
@@ -25,41 +32,48 @@
   background: var(--color-surface-2);
   min-width: 0;
 
-  @include bp.from-tablet {
-    display: inline-grid;
-    grid-template-columns: repeat(4, auto);
+  // Phones: more than three options form an equal two-column grid.
+  @include bp.phone {
+    &[data-many] {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 }
 
 .segment {
+  flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: calc(var(--control-h) - 4px);
   padding: 0 var(--space-3);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--color-ink-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  white-space: nowrap;
   cursor: pointer;
   user-select: none;
   transition:
-    background var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
     color var(--dur-fast) var(--ease);
 
   &:hover {
+    background: var(--color-hover);
     color: var(--color-ink);
   }
 
   &.selected {
     background: var(--color-surface);
     color: var(--color-ink);
-    box-shadow: var(--shadow-1);
+    box-shadow: inset 0 0 0 1px var(--color-border-strong);
+    font-weight: var(--weight-semibold);
   }
 
   &:has(input:focus-visible) {
     outline: 2px solid var(--color-focus);
-    outline-offset: 1px;
+    outline-offset: 2px;
   }
 
   @include bp.phone {
@@ -83,8 +97,9 @@
   }
 }
 
+// The strategy name: an ink table link, semibold like a ticker.
 .id-link {
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   overflow-wrap: anywhere;
 
   @include bp.phone {
@@ -95,20 +110,14 @@
 }
 
 .paper-note {
-  padding: 0 var(--space-4) var(--space-2);
-}
-
-// A link in the header reads as a link, not a button (m2).
-.related-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch-min);
-  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
 }
 
 // A starter strategy's one-line summary under its name.
 .summary {
   display: block;
-  font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  color: var(--color-ink-3);
 }

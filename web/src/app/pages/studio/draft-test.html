@@ -146,7 +146,7 @@
         <app-status-pill [status]="bt.status() ?? 'queued'" />
         <span class="job-message">{{ jobText(bt) }}</span>
         @if (isRunning(bt)) {
-          <button type="button" class="btn btn-ghost" (click)="cancel(bt)">Cancel</button>
+          <button type="button" class="btn btn-tertiary" (click)="cancel(bt)">Cancel</button>
         }
       </div>
       @if (isRunning(bt)) {
@@ -269,7 +269,7 @@
         <app-status-pill [status]="lr.status() ?? 'queued'" />
         <span class="job-message">{{ jobText(lr) }}</span>
         @if (isRunning(lr)) {
-          <button type="button" class="btn btn-ghost" (click)="cancel(lr)">Cancel</button>
+          <button type="button" class="btn btn-tertiary" (click)="cancel(lr)">Cancel</button>
         }
       </div>
       @if (isRunning(lr)) {

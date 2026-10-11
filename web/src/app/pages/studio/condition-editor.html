@@ -73,15 +73,17 @@
 
       <div class="node-actions">
         @if (isRoot()) {
-          <button type="button" class="btn btn-ghost" (click)="addSibling()">Add condition</button>
+          <button type="button" class="btn btn-tertiary" (click)="addSibling()">
+            Add condition
+          </button>
         }
-        <button type="button" class="btn btn-ghost" title="Turn it around" (click)="negate()">
+        <button type="button" class="btn btn-tertiary" title="Turn it around" (click)="negate()">
           Is not
         </button>
         @if (removable()) {
           <button
             type="button"
-            class="btn btn-ghost btn-icon remove"
+            class="btn btn-tertiary btn-icon remove"
             aria-label="Remove comparison"
             title="Remove comparison"
             (click)="remove.emit()"
@@ -109,13 +111,13 @@
         <option value="any">Any of these is true</option>
       </select>
       <div class="node-actions">
-        <button type="button" class="btn btn-ghost" title="Turn it around" (click)="negate()">
+        <button type="button" class="btn btn-tertiary" title="Turn it around" (click)="negate()">
           Is not
         </button>
         @if (removable()) {
           <button
             type="button"
-            class="btn btn-ghost btn-icon remove"
+            class="btn btn-tertiary btn-icon remove"
             aria-label="Remove group"
             title="Remove group"
             (click)="remove.emit()"
@@ -164,7 +166,9 @@
       <span class="not-label">Is not</span>
       <span class="muted">true when the condition below is false</span>
       <div class="node-actions">
-        <button type="button" class="btn btn-ghost" (click)="unwrapNot()">Remove “is not”</button>
+        <button type="button" class="btn btn-tertiary" (click)="unwrapNot()">
+          Remove “is not”
+        </button>
       </div>
     </div>
     <app-condition-editor

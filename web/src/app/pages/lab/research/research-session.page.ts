@@ -72,7 +72,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
           <app-status-pill [status]="s.status" />
         </div>
         <div class="panel-body">
-          <ul class="budgets" aria-label="Budget used">
+          <ul class="budgets tile-grid" aria-label="Budget used">
             @for (b of budgets(); track b.label) {
               <li class="budget">
                 <span class="b-label">{{ b.label }}</span>
@@ -222,15 +222,12 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       list-style: none;
       margin: 0 0 var(--space-4);
       padding: 0;
-      display: grid;
-      gap: var(--space-3);
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
     }
+    /* Budget tiles: inset wells in the panel, no border. */
     .budget {
       display: grid;
       gap: var(--space-1);
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
       border-radius: var(--radius-sm);
       background: var(--color-surface-2);
     }
@@ -255,19 +252,14 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       display: grid;
       gap: var(--space-3);
     }
+    /* One inset well per proposal; its status pill says how it went. */
     .proposal {
       display: grid;
       gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-accent);
+      padding: var(--space-3);
       border-radius: var(--radius-sm);
-      background: var(--color-surface);
+      background: var(--color-surface-2);
       min-width: 0;
-    }
-    .proposal[data-status='rejected'],
-    .proposal[data-status='failed'] {
-      border-left-color: var(--color-loss);
     }
     .p-head {
       display: flex;
@@ -276,7 +268,8 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       gap: var(--space-2);
       h3 {
         margin: 0;
-        font-size: var(--text-md);
+        font-size: var(--text-sm);
+        font-weight: var(--weight-semibold);
         overflow-wrap: anywhere;
       }
     }
@@ -307,7 +300,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       cursor: pointer;
       font-size: var(--text-sm);
       color: var(--color-ink-2);
-      min-height: 32px;
+      min-height: var(--control-h);
       display: flex;
       align-items: center;
       @include bp.coarse {

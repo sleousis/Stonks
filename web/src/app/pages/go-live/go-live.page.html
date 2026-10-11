@@ -3,7 +3,7 @@
   description="Strategies on trial and whether each is ready to approve. Read a strategy's Review tab, then approve it there with a reason."
 />
 
-<div class="page-grid">
+<div class="page-grid review-grid">
   <section class="panel span-8" aria-labelledby="queue-title">
     <div class="panel-head">
       <h2 id="queue-title">To review</h2>
@@ -46,7 +46,9 @@
           <app-status-pill [status]="r.status" />
         </ng-template>
         <ng-template appCell="verdict" [appCellOf]="rows()" let-r>
-          <app-strategy-verdict compact [verdict]="verdict(r)" />
+          <span class="verdict-cell" [title]="verdict(r).label">
+            <app-strategy-verdict compact [verdict]="verdict(r)" />
+          </span>
         </ng-template>
         <ng-template appCell="review" [appCellOf]="rows()" let-r>
           <a

@@ -50,15 +50,17 @@
       @if (strategy(); as id) {
         <div class="preset panel-body" role="status">
           @if (sourceStrategy.error()) {
-            <p class="preset-warn">Could not load that strategy, so the forms start empty.</p>
+            <p class="preset-warn callout" data-tone="warn">
+              Could not load that strategy, so the forms start empty.
+            </p>
           } @else if (strategyPreset(); as p) {
             @if (presetUncatalogued()) {
-              <p class="preset-warn">
+              <p class="preset-warn callout" data-tone="warn">
                 {{ presetName() }} uses a strategy that is not available to test here, so the forms
                 start empty.
               </p>
             } @else {
-              <p>
+              <p class="callout">
                 Testing <strong>{{ presetName() }}</strong> again. Its strategy is picked, and its
                 saved settings are in Advanced.
               </p>
@@ -221,7 +223,7 @@
               }
               @case ('lab_run') {
                 @if (next(); as n) {
-                  <div class="next-step" role="region" aria-label="Next step">
+                  <div class="next-step callout" role="region" aria-label="Next step">
                     @switch (n.kind) {
                       @case ('paper') {
                         <p class="next-text">
@@ -344,7 +346,7 @@
               @if (canRun() && canCancel(job.kind, job.status)) {
                 <button
                   type="button"
-                  class="btn btn-ghost cancel"
+                  class="btn btn-tertiary cancel"
                   [disabled]="cancelling() === job.id"
                   [attr.aria-label]="'Cancel job ' + job.id"
                   (click)="cancel(job.id, job.kind, jobStrategy(job))"

@@ -25,6 +25,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 import { type Verdict, strategyVerdict } from '../../shared/strategy-verdict';
+import { isFailedCheck } from './golive-check-list';
 import { goliveLabel } from './leaderboard.page';
 import { DAYS_FOR_RATIOS, TOO_EARLY, curveSeries, curveSummary } from './tearsheet-data';
 import { testLabel } from '../../shared/lab-results/survival-tests';
@@ -131,6 +132,7 @@ export class TearsheetPage {
     const g = this.sheet.hasValue() ? this.sheet.value().golive : null;
     return g ? traderChecks(g) : null;
   });
+  protected readonly failedCheck = isFailedCheck;
   protected readonly golive = computed(() =>
     goliveLabel(this.sheet.hasValue() ? this.sheet.value().golive?.passed : null),
   );

@@ -205,7 +205,7 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     result = page.locator("section", has=page.get_by_role("heading", name="Result"))
     expect(result).to_contain_text(re.compile("pass|fail", re.I), timeout=180_000)
     # The verdict in words, said once (R06), and "trial" only means On trial (R04).
-    expect(result).to_contain_text(re.compile("It held up|It did not hold up"))
+    expect(result).to_contain_text(re.compile("Held up\\.|Did not hold up\\."))
     expect(result.locator(".plain-verdict")).to_have_count(1)
     expect(result).not_to_contain_text(re.compile(r"\btrials?\b", re.I))
     v.check_page("lab-run-result")

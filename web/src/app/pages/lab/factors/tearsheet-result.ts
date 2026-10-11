@@ -67,7 +67,7 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
   imports: [DataTable, TableCell, StatTile, TimeSeriesChart],
   template: `
     @let r = result();
-    <div class="tiles">
+    <div class="tiles tile-grid">
       <app-stat-tile
         label="Mean IC"
         featured
@@ -89,12 +89,12 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       />
       <app-stat-tile label="Beta" [value]="num(r.alpha_beta?.beta)" />
     </div>
-    <p class="explain">
+    <p class="explain prose">
       {{ directionLine() }} Values are raw, so a factor where lower is better shows a negative IC
       when it works. A t-stat above 2 is unlikely to be luck.
     </p>
     @if (r.status !== 'ok') {
-      <p class="note" role="status">
+      <p class="note callout" data-tone="neutral" role="status">
         Not enough data for a tear sheet.{{ r.note ? ' ' + r.note : '' }}
       </p>
     }
@@ -298,14 +298,12 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       gap: var(--space-2);
       min-width: 0;
     }
+    /* Section titles: 13px semibold, second ink. */
     h3 {
-      font-size: var(--text-md);
       margin: 0;
-    }
-    .tiles {
-      display: grid;
-      gap: var(--space-3);
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
     }
     .explain,
     .note,
@@ -314,11 +312,6 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
     }
     .small {
       font-size: var(--text-sm);
-    }
-    .note {
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-2);
     }
     .na {
       color: var(--color-ink-3);
@@ -383,7 +376,7 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       display: inline-block;
       width: 12px;
       height: 3px;
-      border-radius: 2px;
+      border-radius: var(--radius-xs);
       &.gain {
         background: var(--color-gain);
       }

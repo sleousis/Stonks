@@ -5,12 +5,12 @@
   <a actions class="btn btn-primary" routerLink="/studio" [queryParams]="{ step: 'new' }"
     >New strategy</a
   >
-  <a actions class="related-link" routerLink="/lab">Test a strategy</a>
-  <a actions class="related-link" routerLink="/leaderboard">Compare on the Leaderboard</a>
+  <a actions class="btn btn-tertiary" routerLink="/lab">Test a strategy</a>
+  <a actions class="btn btn-tertiary" routerLink="/leaderboard">Compare on the Leaderboard</a>
   <button
     actions
     type="button"
-    class="btn btn-ghost"
+    class="btn btn-tertiary"
     [disabled]="strategies.isLoading()"
     [attr.aria-busy]="strategies.isLoading()"
     (click)="strategies.reload(); paper.reload()"
@@ -28,7 +28,7 @@
   </div>
 
   <div class="filters">
-    <fieldset class="segmented">
+    <fieldset class="segmented" data-many>
       <legend class="visually-hidden">Status</legend>
       @for (f of filters; track f.label) {
         <label class="segment" [class.selected]="statusFilter() === f.value">
@@ -102,7 +102,7 @@
       [pageSize]="25"
     >
       <ng-template appCell="id" [appCellOf]="visible()" let-s>
-        <a class="id-link" [routerLink]="['/strategies', s.id]">{{ s.name }}</a>
+        <a class="id-link table-link" [routerLink]="['/strategies', s.id]">{{ s.name }}</a>
         @if (s.summary) {
           <span class="summary">{{ s.summary }}</span>
         }
