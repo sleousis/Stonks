@@ -184,15 +184,7 @@
               }
               @if (f.handle.error(); as e) {
                 @let failure = jobError(e, f.handle.errorDetail());
-                <div class="job-error" role="alert">
-                  <p>{{ failure.text }}</p>
-                  @if (failure.details) {
-                    <details class="job-error-details">
-                      <summary>Details</summary>
-                      <code>{{ failure.details }}</code>
-                    </details>
-                  }
-                </div>
+                <app-job-failure [text]="failure.text" [detail]="failure.details" />
               } @else if (status === 'cancelled') {
                 <p class="muted">The job was cancelled before it finished.</p>
               }

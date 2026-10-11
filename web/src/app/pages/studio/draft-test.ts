@@ -29,6 +29,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
 import { HelpTip } from '../../shared/ui/help-tip';
+import { JobFailure } from '../../shared/ui/job-failure';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { CostField } from '../lab/cost-field';
@@ -79,7 +80,15 @@ export function noTrades(r: BacktestResult): boolean {
 @Component({
   selector: 'app-draft-test',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote, CostField, HelpTip],
+  imports: [
+    BacktestResultView,
+    LabRunResultView,
+    StatusPill,
+    PermissionNote,
+    CostField,
+    HelpTip,
+    JobFailure,
+  ],
   templateUrl: './draft-test.html',
   styleUrl: './draft-test.scss',
 })

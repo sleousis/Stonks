@@ -2,10 +2,14 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import type { JobStatus } from '../../api/models';
+import { SessionService } from '../../core/auth/session.service';
 import type { JobHandle } from '../../core/jobs/jobs.service';
 import { JobProgress, JobResult, jobText } from './job-progress';
 
-function handle(status: JobStatus | null, extra: { message?: string; error?: string } = {}) {
+function handle(
+  status: JobStatus | null,
+  extra: { message?: string; error?: string; detail?: string } = {},
+) {
   const done = status === 'succeeded' || status === 'failed' || status === 'cancelled';
   return {
     jobId: 'job_1',
@@ -14,7 +18,7 @@ function handle(status: JobStatus | null, extra: { message?: string; error?: str
     progress: signal(0.4),
     message: signal(extra.message ?? null),
     error: signal(extra.error ?? null),
-    errorDetail: signal(null),
+    errorDetail: signal(extra.detail ?? null),
     done: signal(done),
     finished: Promise.resolve(null),
     stop: () => undefined,
@@ -94,5 +98,38 @@ describe('JobProgress', () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(result.value()).toBe('ok');
     expect(el.querySelector('app-error-state')).toBeNull();
+  });
+});
+
+describe('JobProgress error details', () => {
+  function failed(admin: boolean) {
+    TestBed.configureTestingModule({
+      providers: [{ provide: SessionService, useValue: { isAdmin: signal(admin) } }],
+    });
+    const fixture = TestBed.createComponent(JobProgress);
+    fixture.componentRef.setInput('label', 'Signal check');
+    fixture.componentRef.setInput(
+      'handle',
+      handle('failed', {
+        error: 'The job stopped because of a problem on our side.',
+        detail: 'RuntimeError: kaboom',
+      }),
+    );
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('shows an admin the raw error under Details', () => {
+    const el = failed(true);
+    expect(el.querySelector('[role="alert"]')!.textContent).toContain('problem on our side');
+    expect(el.querySelector('details summary')!.textContent!.trim()).toBe('Details');
+    expect(el.querySelector('details code')!.textContent).toContain('RuntimeError: kaboom');
+  });
+
+  it('never shows a trader the raw error', () => {
+    const el = failed(false);
+    expect(el.querySelector('[role="alert"]')!.textContent).toContain('problem on our side');
+    expect(el.querySelector('details')).toBeNull();
+    expect(el.textContent).not.toContain('kaboom');
   });
 });

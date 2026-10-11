@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
 
 import { formatPercent } from '../../core/format/format';
 import type { JobHandle } from '../../core/jobs/jobs.service';
+import { JobFailure } from './job-failure';
 import { ErrorState } from './states';
 import { StatusPill } from './status-pill';
 
@@ -86,7 +87,7 @@ export class JobResult<T> {
 @Component({
   selector: 'app-job-progress',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusPill, ErrorState],
+  imports: [StatusPill, ErrorState, JobFailure],
   template: `
     @let h = handle();
     <div class="job" aria-live="polite">
@@ -100,7 +101,7 @@ export class JobResult<T> {
         <progress [id]="id" max="1" [value]="h.progress()">{{ percent() }}</progress>
       }
       @if (h.error(); as e) {
-        <p class="error" role="alert">{{ e }}</p>
+        <app-job-failure [text]="e" [detail]="h.errorDetail()" />
       }
       @if (result()?.error(); as err) {
         <app-error-state
@@ -140,11 +141,6 @@ export class JobResult<T> {
       min-width: 0;
       font-size: var(--text-sm);
       color: var(--color-ink-2);
-      overflow-wrap: anywhere;
-    }
-    .error {
-      font-size: var(--text-sm);
-      color: var(--color-loss);
       overflow-wrap: anywhere;
     }
     progress {
