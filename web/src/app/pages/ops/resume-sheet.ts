@@ -5,6 +5,7 @@ import type { ResumeChecksView } from '../../api/models';
 import type { TicketLine } from '../../core/confirm/confirm.service';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { Sheet, TypedConfirm, typedMatches } from '../../shared/ui/sheet';
+import { StatusPill } from '../../shared/ui/status-pill';
 
 export interface ResumeRequest {
   /** Ticket lines: who it covers, what it stopped, since when. */
@@ -52,7 +53,7 @@ const CHECK_LABEL: Record<string, string> = {
 @Component({
   selector: 'app-resume-sheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Sheet, TypedConfirm, ModeStamp],
+  imports: [Sheet, TypedConfirm, ModeStamp, StatusPill],
   template: `
     <app-sheet
       [open]="!!current()"
@@ -100,9 +101,15 @@ const CHECK_LABEL: Record<string, string> = {
                     <ul class="check-list">
                       @for (c of checkList(); track c.name + (c.portfolio_id ?? '')) {
                         <li [class.fail]="c.passed === false" [class.ok]="c.passed === true">
-                          <span class="check-mark" aria-hidden="true">{{ mark(c.passed) }}</span>
-                          <span class="visually-hidden">{{ spoken(c.passed) }}:</span>
                           <strong>{{ label(c.name) }}</strong>
+                          <app-status-pill
+                            class="check-pill"
+                            form="receipt"
+                            [status]="
+                              c.passed === true ? 'pass' : c.passed === false ? 'fail' : 'not_yet'
+                            "
+                            [label]="spoken(c.passed)"
+                          />
                           @if (c.portfolio_id) {
                             <span class="muted">{{ c.portfolio_id }}</span>
                           }
@@ -112,7 +119,7 @@ const CHECK_LABEL: Record<string, string> = {
                     </ul>
                   }
                   @if (failed()) {
-                    <label class="override" for="resume-override">
+                    <label class="override check" for="resume-override">
                       <input
                         id="resume-override"
                         type="checkbox"
@@ -168,12 +175,13 @@ const CHECK_LABEL: Record<string, string> = {
   `,
   styles: `
     .checks h3 {
-      margin: 0 0 var(--space-2);
-      font-size: var(--text-md);
+      margin: 0 0 var(--space-1);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--color-ink-2);
     }
     .check-list {
       display: grid;
-      gap: var(--space-2);
       margin: 0;
       padding: 0;
       list-style: none;
@@ -181,30 +189,27 @@ const CHECK_LABEL: Record<string, string> = {
     .check-list li {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-2);
-      align-items: baseline;
+      gap: var(--space-1) var(--space-2);
+      align-items: center;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--color-border);
     }
-    .check-mark {
-      min-width: 2.5rem;
-      font-weight: 600;
+    .check-list li:last-child {
+      border-bottom: 0;
     }
-    .check-list li.ok .check-mark {
-      color: var(--color-gain);
-    }
-    .check-list li.fail .check-mark {
-      color: var(--color-loss);
+    .check-pill {
+      margin-inline-start: auto;
     }
     .check-detail {
       flex-basis: 100%;
       color: var(--color-ink-3);
-      font-size: var(--text-sm);
+      font-size: var(--text-xs);
     }
     .override {
-      display: flex;
-      gap: var(--space-2);
-      align-items: center;
-      min-height: 44px;
+      align-items: flex-start;
+      min-height: var(--touch-min);
       margin-top: var(--space-2);
+      font-size: var(--text-sm);
     }
     textarea.input {
       min-height: 4.5rem;
@@ -254,10 +259,6 @@ export class ResumeSheet {
 
   protected label(name: string): string {
     return CHECK_LABEL[name] ?? name;
-  }
-
-  protected mark(passed: boolean | null | undefined): string {
-    return passed === true ? 'OK' : passed === false ? 'FAIL' : '?';
   }
 
   protected spoken(passed: boolean | null | undefined): string {

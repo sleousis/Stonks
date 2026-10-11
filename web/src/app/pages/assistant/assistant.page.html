@@ -36,7 +36,7 @@
 } @else {
   @let st = status.value();
   @if (frozen()) {
-    <div class="banner warn" role="alert">
+    <div class="banner warn callout" data-tone="warn" role="alert">
       <p>
         <strong>The assistant is frozen until {{ frozenText() }}.</strong>
         It made many changes in a short time, so it only reads until then.
@@ -58,7 +58,7 @@
       </span>
     </div>
   } @else if (st.reason) {
-    <p class="banner" role="status">{{ st.reason }}</p>
+    <p class="banner callout" data-tone="neutral" role="status">{{ st.reason }}</p>
   }
 
   <div class="layout" [class.has-open]="!!currentId()">
@@ -97,7 +97,7 @@
                 </a>
                 <button
                   type="button"
-                  class="btn btn-ghost btn-icon"
+                  class="btn btn-tertiary btn-icon"
                   [attr.aria-label]="'Delete ' + (conv.title || 'Untitled conversation')"
                   (click)="remove(conv)"
                 >
@@ -120,7 +120,7 @@
           <span class="tag">Research only</span>
         }
         @if (currentId()) {
-          <button type="button" class="btn btn-ghost" (click)="openTrace()">Trace</button>
+          <button type="button" class="btn btn-tertiary" (click)="openTrace()">Trace</button>
         }
       </div>
 
@@ -182,7 +182,7 @@
                   </li>
                 }
                 @case ('error') {
-                  <li class="msg error" role="alert">
+                  <li class="msg error callout" data-tone="loss" role="alert">
                     <span class="who">Stopped</span>
                     <p class="text">{{ item.message }}</p>
                   </li>

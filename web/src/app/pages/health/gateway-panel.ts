@@ -68,13 +68,14 @@ export function whenText(at: string | null | undefined): string {
         <app-loading-state label="Loading broker gateways" [rows]="2" />
       } @else if (gateways.value().gateways.length === 0) {
         <app-empty-state
+          compact
           title="No broker gateway"
           message="Trading at Interactive Brokers runs through a gateway. None is set up, so every portfolio trades on paper."
         />
       } @else {
         <ul class="gateways">
           @for (g of gateways.value().gateways; track g.gateway) {
-            <li class="gateway" [attr.data-state]="state(g).status">
+            <li class="gateway well" [attr.data-state]="state(g).status">
               <div class="gateway-head">
                 <h3>{{ g.gateway }}</h3>
                 <app-mode-stamp [live]="g.mode === 'live'" />
@@ -109,7 +110,7 @@ export function whenText(at: string | null | undefined): string {
                 </div>
               </dl>
               @if (!g.connected && g.checked) {
-                <p class="problem" role="note">
+                <p class="problem callout" data-tone="loss" role="note">
                   @if (fault(g.fault); as f) {
                     <strong>{{ f }}.</strong>
                   }
@@ -168,21 +169,20 @@ export function whenText(at: string | null | undefined): string {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
+    // Each gateway is an inset well; the status pill carries the state.
     .gateway {
       display: grid;
       gap: var(--space-3);
       min-width: 0;
       padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 4px solid var(--color-gain);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface);
     }
-    .gateway[data-state='unhealthy'] {
-      border-left-color: var(--color-loss);
-    }
-    .gateway[data-state='queued'] {
-      border-left-color: var(--color-border-strong);
+    @include bp.phone {
+      .gateways {
+        padding: var(--space-3);
+      }
+      .gateway {
+        padding: var(--space-3);
+      }
     }
     .gateway-head {
       display: flex;
@@ -191,11 +191,14 @@ export function whenText(at: string | null | undefined): string {
       gap: var(--space-2) var(--space-3);
     }
     h3 {
-      font-size: var(--text-lg);
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     h4 {
-      font-size: var(--text-md);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--color-ink-2);
     }
     .facts {
       display: grid;
@@ -208,14 +211,11 @@ export function whenText(at: string | null | undefined): string {
       color: var(--color-ink-3);
     }
     dd {
-      margin: 0;
+      margin: 2px 0 0;
+      font-weight: var(--weight-medium);
       overflow-wrap: anywhere;
     }
     .problem {
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-xs);
-      background: var(--color-loss-soft);
-      color: var(--color-ink);
       overflow-wrap: anywhere;
     }
     .paused {

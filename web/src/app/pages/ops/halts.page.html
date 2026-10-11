@@ -23,7 +23,7 @@
       <h2 id="active-title">Active halts <app-help-tip term="Circuit breaker" /></h2>
       @if (halts.hasValue()) {
         @if (killOn()) {
-          <app-status-pill status="error" tone="negative" label="Trading stopped" />
+          <app-status-pill status="halted" label="Trading stopped" />
         } @else if (active().length) {
           <app-status-pill status="warn" tone="warn" [label]="active().length + ' active'" />
         } @else {
@@ -50,7 +50,8 @@
       >
         <ng-template appCell="kind" [appCellOf]="active()" let-h>
           <app-status-pill
-            [status]="h.kind === 'kill' ? 'error' : 'warn'"
+            status="halted"
+            [tone]="h.kind === 'kill' ? 'negative' : 'warn'"
             [label]="kindLabel[h.kind]"
           />
         </ng-template>
@@ -88,7 +89,7 @@
   @if (killHere()) {
     <!-- Already stopped here: Resume above is the one big action (AO-18). -->
     <p class="span-12 kill-more">
-      <button type="button" class="btn btn-ghost" [disabled]="!canKill()" (click)="stop()">
+      <button type="button" class="btn btn-tertiary" [disabled]="!canKill()" (click)="stop()">
         Stop trading…
       </button>
       <span class="muted">Stop another portfolio, or every order.</span>

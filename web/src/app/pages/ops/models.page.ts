@@ -95,7 +95,13 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
       gap: var(--space-4);
       min-width: 0;
     }
+    @media (max-width: 767.98px) {
+      :host {
+        gap: var(--space-3);
+      }
+    }
     .muted {
+      max-width: 70ch;
       color: var(--color-ink-2);
     }
     .panel-body {

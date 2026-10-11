@@ -2,8 +2,8 @@
   title="Profile"
   description="Your account, password, recovery codes, portfolios and API tokens."
 >
-  <a actions class="btn btn-ghost" routerLink="/welcome">Get set up</a>
-  <button actions type="button" class="btn" (click)="signOut()">Sign out</button>
+  <a actions class="btn" routerLink="/welcome">Get set up</a>
+  <button actions type="button" class="btn btn-tertiary" (click)="signOut()">Sign out</button>
 </app-page-header>
 
 <div class="page-grid">
@@ -190,7 +190,7 @@
                 placeholder="My laptop script"
               />
             </div>
-            <fieldset class="scopes">
+            <fieldset class="scopes group">
               <legend>What it may do</legend>
               @for (s of scopes(); track s.value) {
                 <label class="check">
@@ -238,7 +238,7 @@
               </select>
             </div>
             @if (tokenError(); as err) {
-              <p class="error" role="alert">{{ err }}</p>
+              <p class="callout" data-tone="loss" role="alert">{{ err }}</p>
             }
             <div>
               <button
@@ -252,7 +252,7 @@
             </div>
           </form>
         } @else {
-          <p class="note">Sign in with your password to create tokens.</p>
+          <p class="callout">Sign in with your password to create tokens.</p>
         }
       </div>
 

@@ -6,15 +6,20 @@
   min-width: 0;
 }
 
-// "Next run": the time in tabular figures, the countdown under it.
+// "Next run": the time and the countdown on one mono line, the countdown in
+// ink-3. A narrow cell lets the countdown drop under the time, with room to
+// spare, so text never touches the row's rule.
 .next {
-  display: inline-grid;
-  justify-items: start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  padding-block: var(--space-1);
+  line-height: var(--leading-tight);
 }
 
 .until {
-  font-size: var(--text-xs);
-  color: var(--color-ink-2);
+  color: var(--color-ink-3);
 }
 
 // Is a scheduler running: a lamp and a sentence, never colour alone.
@@ -36,12 +41,28 @@
     background: var(--color-gain);
   }
 
+  // No scheduler: a warn callout set in from the panel edge.
   &[data-running='false'] {
-    background: var(--color-warn-soft);
+    margin: var(--space-3) var(--space-4) var(--space-3);
+    border-bottom: 0;
 
     .lamp {
-      border-radius: 1px;
+      border-radius: var(--radius-xs);
       background: var(--color-warn);
+      transform: translateY(-1px);
+    }
+
+    .muted {
+      flex-basis: 100%;
+      color: var(--color-ink-2);
+    }
+  }
+
+  @include bp.phone {
+    padding: var(--space-3);
+
+    &[data-running='false'] {
+      margin: var(--space-3);
     }
   }
 }
@@ -55,12 +76,17 @@
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border);
 
+  @include bp.phone {
+    padding: var(--space-3);
+  }
+
   summary {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     min-height: var(--touch-min);
     cursor: pointer;
+    font-size: var(--text-sm);
     font-weight: var(--weight-medium);
     list-style: none;
 
@@ -71,7 +97,7 @@
     &::before {
       content: '▸';
       color: var(--color-ink-3);
-      transition: transform 0.15s ease;
+      transition: transform var(--dur-fast) var(--ease);
     }
   }
 
@@ -128,24 +154,24 @@
   gap: var(--space-2);
 }
 
-// Verify and restore outcomes: what happened, in words, above the list.
+// Verify and restore outcomes: a gain or loss callout above the list.
 .outcome {
-  margin: 0 0 var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-left: 3px solid var(--color-gain);
-  background: var(--color-gain-soft);
-  color: var(--color-ink);
+  margin: var(--space-3) var(--space-4);
   overflow-wrap: anywhere;
 
-  &[data-ok='false'] {
-    border-left-color: var(--color-loss);
-    background: var(--color-loss-soft);
+  @include bp.phone {
+    margin: var(--space-3);
   }
 
   p,
   ul,
   ol {
-    margin: 0 0 var(--space-2);
+    margin: 0;
+  }
+
+  ul,
+  ol {
+    padding-left: var(--space-5);
   }
 
   code {
