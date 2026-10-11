@@ -160,16 +160,28 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
                 <dd class="num">{{ num(r.overtrading.max_entries_in_a_day) }}</dd>
               </div>
               <div>
-                <dt>Busy days vs the rest</dt>
-                <dd class="num">
-                  {{ money(r.overtrading.busy_day_pnl) }} / {{ money(r.overtrading.other_day_pnl) }}
+                <dt>Busy days</dt>
+                <dd class="num">{{ num(r.overtrading.busy_days) }}</dd>
+              </div>
+              <div>
+                <dt>P&amp;L on busy days</dt>
+                <dd class="num" [class]="tone(r.overtrading.busy_day_pnl)">
+                  {{ money(r.overtrading.busy_day_pnl) }}
+                </dd>
+              </div>
+              <div>
+                <dt>P&amp;L on other days</dt>
+                <dd class="num" [class]="tone(r.overtrading.other_day_pnl)">
+                  {{ money(r.overtrading.other_day_pnl) }}
                 </dd>
               </div>
               <div>
                 <dt>Revenge trades</dt>
-                <dd class="num" [class]="tone(r.revenge.pnl)">
-                  {{ num(r.revenge.trades) }}, {{ money(r.revenge.pnl) }}
-                </dd>
+                <dd class="num">{{ num(r.revenge.trades) }}</dd>
+              </div>
+              <div>
+                <dt>P&amp;L from revenge trades</dt>
+                <dd class="num" [class]="tone(r.revenge.pnl)">{{ money(r.revenge.pnl) }}</dd>
               </div>
             </dl>
           </div>

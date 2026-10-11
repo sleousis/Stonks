@@ -103,6 +103,26 @@ describe('BehaviourPage', () => {
     expect(text).not.toContain('Sat');
   });
 
+  it('lays out each habit as its own labelled figure', async () => {
+    const el = await render(report());
+    const habits = el.querySelector('[aria-labelledby="bh-habits"]')!;
+    const pairs = [...habits.querySelectorAll('dl.stats > div')].map((d) => [
+      d.querySelector('dt')!.textContent!.trim(),
+      d.querySelector('dd')!.textContent!.trim(),
+    ]);
+    expect(pairs).toEqual([
+      ['Days held, winners', '2'],
+      ['Days held, losers', '10'],
+      ['Entries a trading day', '1'],
+      ['Most in a day', '1'],
+      ['Busy days', '0'],
+      ['P&L on busy days', '$0.00'],
+      ['P&L on other days', '-$5.00'],
+      ['Revenge trades', '1'],
+      ['P&L from revenge trades', '-$5.00'],
+    ]);
+  });
+
   it('says so when there are no closed trades', async () => {
     const el = await render(report({ trades: 0 }));
     expect(el.textContent).toContain('No closed trades yet');
