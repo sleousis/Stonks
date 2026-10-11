@@ -110,7 +110,7 @@
           @if (submitted() && errors().spec; as e) {
             <p class="error">{{ e }}</p>
           }
-          <button type="button" class="btn btn-ghost json-toggle" (click)="setSource('fields')">
+          <button type="button" class="btn btn-tertiary json-toggle" (click)="setSource('fields')">
             Back to the form
           </button>
         </div>
@@ -448,7 +448,7 @@
         }
         @if (advanced()) {
           <details class="span-all advanced">
-            <summary>Advanced</summary>
+            <summary><span class="disclosure-chev" aria-hidden="true"></span>Advanced</summary>
             @if (f.kind === 'index') {
               <div class="field">
                 <label for="u-index-file">History file (optional)</label>
@@ -471,7 +471,7 @@
               </div>
             }
             <div>
-              <button type="button" class="btn btn-ghost json-toggle" (click)="editAsJson()">
+              <button type="button" class="btn btn-tertiary json-toggle" (click)="editAsJson()">
                 Edit as JSON
               </button>
               <span class="hint">Every setting the definition takes.</span>
@@ -493,7 +493,7 @@
           {{ saving() ? 'Creating…' : 'Create universe' }}
         }
       </button>
-      <button type="button" class="btn btn-ghost" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-tertiary" (click)="cancelled.emit()">Cancel</button>
     </div>
   </form>
 }

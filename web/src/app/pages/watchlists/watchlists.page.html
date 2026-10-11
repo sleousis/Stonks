@@ -97,7 +97,7 @@
                 <button type="submit" class="btn btn-primary" [disabled]="saving()">
                   Save changes
                 </button>
-                <button type="button" class="btn btn-ghost" (click)="editing.set(null)">
+                <button type="button" class="btn btn-tertiary" (click)="editing.set(null)">
                   Cancel
                 </button>
               </div>
@@ -105,7 +105,7 @@
           } @else {
             <div class="panel-head">
               <h2 [id]="'wl-' + w.id">{{ w.name }}</h2>
-              <span class="muted num">{{ w.tickers.length }} tickers</span>
+              <span class="count muted num">{{ w.tickers.length }} tickers</span>
             </div>
             <div class="panel-body">
               @if (w.tickers.length) {
@@ -129,8 +129,8 @@
                   <a class="btn" routerLink="/lab" [queryParams]="labLink(w)">Open in the lab</a>
                 }
                 @if (canEdit()) {
-                  <button type="button" class="btn btn-ghost" (click)="edit(w)">Edit</button>
-                  <button type="button" class="btn btn-ghost danger" (click)="remove(w)">
+                  <button type="button" class="btn btn-tertiary" (click)="edit(w)">Edit</button>
+                  <button type="button" class="btn btn-tertiary danger" (click)="remove(w)">
                     Delete
                   </button>
                 }

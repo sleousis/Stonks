@@ -39,7 +39,7 @@ export function pointTime(bar: BarView, interval: string): string {
   imports: [TimeSeriesChart, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss', './price-panel.scss'],
   template: `
-    <section class="panel" aria-labelledby="price-title">
+    <section class="panel panel-flush" aria-labelledby="price-title">
       <div class="panel-head">
         <h2 id="price-title">
           Prices
@@ -57,7 +57,7 @@ export function pointTime(bar: BarView, interval: string): string {
           <input
             #tickerInput
             id="price-ticker"
-            class="input"
+            class="input num"
             placeholder="e.g. AAPL.US"
             autocapitalize="characters"
             autocomplete="off"
@@ -85,7 +85,7 @@ export function pointTime(bar: BarView, interval: string): string {
           <label for="price-start">From</label>
           <input
             id="price-start"
-            class="input"
+            class="input num"
             type="date"
             [value]="start()"
             [max]="end() || null"
@@ -96,7 +96,7 @@ export function pointTime(bar: BarView, interval: string): string {
           <label for="price-end">To</label>
           <input
             id="price-end"
-            class="input"
+            class="input num"
             type="date"
             [value]="end()"
             [min]="start() || null"

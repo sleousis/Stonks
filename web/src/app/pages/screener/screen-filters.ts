@@ -76,7 +76,7 @@ import { type FilterRow, MAX_FILTERS, NEEDS_PLAN, filterRow } from './screen-for
           </div>
           <button
             type="button"
-            class="btn btn-ghost remove"
+            class="btn btn-tertiary remove"
             [attr.aria-label]="'Remove filter ' + (i + 1)"
             (click)="remove(f.key)"
           >
@@ -116,9 +116,9 @@ import { type FilterRow, MAX_FILTERS, NEEDS_PLAN, filterRow } from './screen-for
     .filter {
       display: grid;
       gap: var(--space-2) var(--space-3);
+      /* A borderless inset well: a panel never holds a bordered card. */
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       background: var(--color-surface-2);
       grid-template-columns: repeat(2, minmax(0, 1fr));
 

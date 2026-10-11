@@ -29,7 +29,7 @@ const DEBOUNCE_MS = 250;
   imports: [DataTable, TableCell, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss'],
   template: `
-    <section class="panel" aria-labelledby="search-title">
+    <section class="panel panel-flush" aria-labelledby="search-title">
       <div class="panel-head">
         <h2 id="search-title">Instruments</h2>
         @if (page(); as found) {
@@ -141,7 +141,7 @@ export class InstrumentSearch {
 
   protected readonly columns: TableColumn<InstrumentView>[] = [
     { key: 'id', label: 'Ticker', mobile: 'title' },
-    { key: 'name', label: 'Name' },
+    { key: 'name', label: 'Name', wrap: true },
     { key: 'asset_class', label: 'Class', value: (r) => instrumentClassLabel(r) },
     {
       key: 'exchange',

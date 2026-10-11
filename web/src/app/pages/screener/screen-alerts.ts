@@ -56,7 +56,7 @@ export function alertBody(when: string): ScreenAlertSet {
         <h2 id="alerts-title">Screen alerts</h2>
       </div>
       <div class="panel-body body">
-        <p class="hint">
+        <p class="hint intro">
           A saved screen can tell you when new names start to match. It runs after each data
           refresh. The first run only notes today's matches. Choose where alerts go in
           <a routerLink="/settings">Settings</a>.
@@ -85,7 +85,8 @@ export function alertBody(when: string): ScreenAlertSet {
                     @if (a) {
                       {{ label(a) }}{{ a.enabled ? '' : ', off' }}.
                       @if (a.last_as_of) {
-                        Last ran {{ day(a.last_as_of) }}, {{ a.matched }} matched.
+                        Last ran <span class="num">{{ day(a.last_as_of) }}</span
+                        >, {{ a.matched }} matched.
                       } @else {
                         Not run yet.
                       }
@@ -123,7 +124,7 @@ export function alertBody(when: string): ScreenAlertSet {
                   @if (a) {
                     <button
                       type="button"
-                      class="btn btn-ghost"
+                      class="btn btn-tertiary"
                       [attr.aria-label]="'Remove the alert on ' + s.name"
                       [disabled]="!canEdit() || busy() === s.id"
                       (click)="remove(s)"
@@ -155,18 +156,24 @@ export function alertBody(when: string): ScreenAlertSet {
     </section>
   `,
   styles: `
+    @use 'breakpoints' as bp;
+
     .body {
       display: grid;
       gap: var(--space-3);
     }
     .hint {
+      font-size: var(--text-xs);
+      color: var(--color-ink-3);
+    }
+    .intro {
+      max-width: 70ch;
       font-size: var(--text-sm);
       color: var(--color-ink-2);
     }
     .alerts,
     .events {
       display: grid;
-      gap: var(--space-2);
       margin: 0;
       padding: 0;
       list-style: none;
@@ -177,12 +184,15 @@ export function alertBody(when: string): ScreenAlertSet {
       align-items: center;
       justify-content: space-between;
       gap: var(--space-2);
-      padding-bottom: var(--space-2);
+      padding: var(--space-2) 0;
       border-bottom: 1px solid var(--color-border);
+    }
+    .alert:first-child {
+      padding-top: 0;
     }
     .alert-text {
       display: grid;
-      gap: 2px;
+      gap: var(--space-1);
       min-width: 0;
     }
     .alert-name {
@@ -192,22 +202,46 @@ export function alertBody(when: string): ScreenAlertSet {
     .alert-actions {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: var(--space-2);
+      min-width: 0;
     }
-    .alert-actions .input,
-    .alert-actions .btn {
-      min-height: 44px;
+    /* The select fits its longest option, never wider than 16rem. */
+    .alert-actions select.input {
+      width: auto;
+      max-width: 16rem;
+      min-width: 0;
+    }
+    @include bp.phone {
+      .alert-actions {
+        width: 100%;
+      }
+      .alert-actions select.input {
+        flex: 1 1 auto;
+      }
     }
     .error {
-      font-size: var(--text-sm);
+      font-size: var(--text-xs);
       color: var(--color-loss);
     }
     .events-title {
-      font-size: var(--text-md);
       margin: var(--space-2) 0 0;
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
     }
     .events li {
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--color-border);
+      font-size: var(--text-sm);
       overflow-wrap: anywhere;
+    }
+    .events li:last-child {
+      border-bottom: 0;
+    }
+    .events .num {
+      margin-right: var(--space-2);
+      color: var(--color-ink-3);
     }
   `,
 })

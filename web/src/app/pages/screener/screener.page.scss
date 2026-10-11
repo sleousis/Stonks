@@ -28,8 +28,8 @@
 
 .changed,
 .summary {
-  font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  color: var(--color-ink-3);
 }
 
 .form {
@@ -37,18 +37,11 @@
   gap: var(--space-5);
 }
 
+// Each group is a fieldset.group: the legend is the shared overline.
 .group {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-
-  legend {
-    margin-bottom: var(--space-2);
-    font-weight: var(--weight-semibold);
-  }
 }
 
 .grid-2 {
@@ -108,34 +101,16 @@
   &::-webkit-details-marker {
     display: none;
   }
-
-  // A chevron, so the fold reads as one.
-  &::before {
-    content: '';
-    width: 0.45em;
-    height: 0.45em;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    transform: rotate(-45deg);
-    transition: transform var(--dur-fast) var(--ease);
-  }
-}
-
-.columns[open] summary::before {
-  transform: rotate(45deg);
 }
 
 .columns .hint {
   margin-bottom: var(--space-2);
 }
 
+// A .callout list: room on the left for the bullets.
 .errors {
   margin: 0;
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-6);
-  border-left: 3px solid var(--color-loss);
-  border-radius: var(--radius-sm);
-  background: var(--color-loss-soft);
-  font-size: var(--text-sm);
+  padding-left: var(--space-6);
 }
 
 .name {
@@ -167,9 +142,10 @@
     border-bottom: 0;
   }
 
-  &.current .screen-name::before {
-    content: '▸ ';
-    color: var(--color-link);
+  // The open screen: a 2px research-blue bar at its start.
+  &.current {
+    box-shadow: inset 2px 0 0 var(--color-link);
+    padding-left: var(--space-3);
   }
 }
 
@@ -188,28 +164,20 @@
   gap: var(--space-1);
 }
 
+// Notes inside the results panel (.callout): inset from the panel edge.
 .note,
-.warning {
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-warn);
-  border-radius: var(--radius-sm);
-  background: var(--color-warn-soft);
-  font-size: var(--text-sm);
-}
-
-.note {
-  margin: 0 var(--space-4) var(--space-3);
-}
-
-// Over the candidate cap: nothing ran, and this says how to narrow it.
 .cap {
   margin: var(--space-3) var(--space-4);
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-loss);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
-  font-size: var(--text-sm);
   overflow-wrap: anywhere;
+
+  @include bp.phone {
+    margin: var(--space-3);
+  }
+}
+
+// Ticker cells: semibold, the shared table-link look otherwise.
+.ticker {
+  font-weight: var(--weight-semibold);
 }
 
 .job-note {

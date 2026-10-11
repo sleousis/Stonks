@@ -68,12 +68,12 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
                 <li class="article">
                   <p class="article-head">
                     <span class="ticker">{{ a.ticker }}</span>
-                    <span class="when" [title]="date(a.published_at)">{{
-                      ago(a.published_at)
-                    }}</span>
                     @if (a.source_name) {
                       <span class="source">{{ a.source_name }}</span>
                     }
+                    <span class="when num" [title]="date(a.published_at)">{{
+                      ago(a.published_at)
+                    }}</span>
                     @if (a.sentiment !== null && a.sentiment !== undefined) {
                       <span class="tag" [class]="tone(a.sentiment)">
                         <span aria-hidden="true">{{ shape(a.sentiment) }}</span>
@@ -111,12 +111,13 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
       grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
       gap: var(--space-2);
     }
+    /* Each ticker's mood: a borderless inset well, not a card in the panel. */
     .mood-card {
       display: grid;
       gap: var(--space-1);
+      min-width: 0;
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       background: var(--color-surface-2);
     }
     .mood-ticker {
@@ -155,6 +156,10 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
     .article:last-child {
       border-bottom: 0;
     }
+    .article:first-child {
+      padding-top: 0;
+    }
+    /* One article: a 12px meta line, the title under it, a hairline between. */
     .article-head {
       display: flex;
       flex-wrap: wrap;
@@ -162,6 +167,9 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
       gap: var(--space-1) var(--space-3);
       font-size: var(--text-xs);
       color: var(--color-ink-3);
+    }
+    .source {
+      color: var(--color-ink-2);
     }
     .ticker {
       font-family: var(--font-mono);
@@ -177,12 +185,22 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
     }
     .title {
       display: inline-block;
+      max-width: 70ch;
       min-height: var(--touch-min);
       padding: var(--space-1) 0;
+      color: var(--color-ink);
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
+      line-height: var(--leading-tight);
       overflow-wrap: anywhere;
+      text-decoration: none;
       @include bp.from-tablet {
-        min-height: 24px;
+        min-height: 0;
       }
+    }
+    a.title:hover,
+    a.title:focus-visible {
+      text-decoration: underline;
     }
     .gain {
       color: var(--color-gain);

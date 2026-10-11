@@ -119,7 +119,7 @@
             <app-help-tip term="violation_ratio" />
           </p>
           @if (b.ratio_out_of_band) {
-            <p class="warning" role="note">
+            <p class="callout warning" data-tone="warn" role="note">
               The model misses far more or far less often than it should. Treat these numbers with
               care.
             </p>
@@ -129,7 +129,7 @@
     </section>
 
     <!-- Sleeves ------------------------------------------------------------->
-    <section class="panel span-7" aria-labelledby="sleeves-title">
+    <section class="panel panel-flush span-7" aria-labelledby="sleeves-title">
       <div class="panel-head">
         <h2 id="sleeves-title">Each strategy's part <app-help-tip term="strategy_part" /></h2>
       </div>
@@ -194,7 +194,7 @@
     </section>
 
     <!-- History table ------------------------------------------------------->
-    <section class="panel span-12" aria-labelledby="history-title">
+    <section class="panel panel-flush span-12" aria-labelledby="history-title">
       <div class="panel-head">
         <h2 id="history-title">Daily readings</h2>
         @if (historyPage(); as p) {

@@ -67,7 +67,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
     @if (book() === 'none') {
       <app-no-book message="Deposits and withdrawals show here once you have a portfolio." />
     } @else {
-      <section class="tiles" aria-label="Returns without deposits and withdrawals">
+      <section class="tile-grid tiles" aria-label="Returns without deposits and withdrawals">
         <app-stat-tile
           label="Time-weighted return"
           help="twr"
@@ -90,7 +90,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
           detail="Deposits less withdrawals"
         />
       </section>
-      <p class="explain" id="two-returns">
+      <p class="callout explain" data-tone="neutral" id="two-returns">
         Why two returns? Say you start with 10,000, it rises 10%, you add 10,000, then it falls 10%.
         The time-weighted return is about -1%: it judges the investments and ignores when you added
         money. The money-weighted return is worse, because more of your money was in for the fall:
@@ -177,7 +177,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
           </div>
         </section>
 
-        <section class="panel span-7" aria-labelledby="flows-title">
+        <section class="panel panel-flush span-7" aria-labelledby="flows-title">
           <div class="panel-head">
             <h2 id="flows-title">Deposits and withdrawals</h2>
           </div>
@@ -209,15 +209,8 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
     }
   `,
   styles: `
-    @use 'breakpoints' as bp;
     .tiles {
-      display: grid;
-      gap: var(--space-3);
-      grid-template-columns: minmax(0, 1fr);
       margin-bottom: var(--space-4);
-      @include bp.from-tablet {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
     }
     .actions {
       display: flex;
@@ -226,10 +219,9 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
       gap: var(--space-2);
     }
     .explain {
-      max-width: 75ch;
-      margin: 0 0 var(--space-4);
+      max-width: 70ch;
+      margin: 0 0 var(--space-5);
       color: var(--color-ink-2);
-      font-size: var(--text-sm);
     }
   `,
 })

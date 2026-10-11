@@ -43,7 +43,7 @@ export function barTime(timestamp: string, interval: string): string {
   imports: [DataTable, TableCell, StatusPill, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss'],
   template: `
-    <section class="panel" aria-labelledby="coverage-title">
+    <section class="panel panel-flush" aria-labelledby="coverage-title">
       <div class="panel-head">
         <h2 id="coverage-title">
           Coverage
@@ -52,7 +52,7 @@ export function barTime(timestamp: string, interval: string): string {
           }
         </h2>
         @if (ticker()) {
-          <button type="button" class="btn btn-ghost" (click)="cleared.emit()">
+          <button type="button" class="btn btn-tertiary" (click)="cleared.emit()">
             Show all tickers
           </button>
         } @else if (page(); as p) {
@@ -148,10 +148,19 @@ export class CoveragePanel {
     {
       key: 'first_bar',
       label: 'First price',
+      // A date format sets the cell in mono; the text stays the bar time.
+      format: 'date',
       value: (r) => barTime(r.first_bar, r.interval),
+      display: (r) => barTime(r.first_bar, r.interval),
       mobile: 'hide',
     },
-    { key: 'last_bar', label: 'Last price', value: (r) => barTime(r.last_bar, r.interval) },
+    {
+      key: 'last_bar',
+      label: 'Last price',
+      format: 'date',
+      value: (r) => barTime(r.last_bar, r.interval),
+      display: (r) => barTime(r.last_bar, r.interval),
+    },
     { key: 'rows', label: 'Prices', format: 'number' },
     { key: 'freshness', label: 'Freshness', value: (r) => RANK[r.freshness] },
   ];

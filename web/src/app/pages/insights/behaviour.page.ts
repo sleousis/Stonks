@@ -121,7 +121,7 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
           </div>
         </section>
 
-        <section class="panel span-6" aria-labelledby="bh-holding">
+        <section class="panel panel-flush span-6" aria-labelledby="bh-holding">
           <div class="panel-head"><h2 id="bh-holding">By holding time</h2></div>
           <div class="panel-body">
             <ng-container
@@ -130,7 +130,7 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
           </div>
         </section>
 
-        <section class="panel span-6" aria-labelledby="bh-weekday">
+        <section class="panel panel-flush span-6" aria-labelledby="bh-weekday">
           <div class="panel-head"><h2 id="bh-weekday">By weekday of entry</h2></div>
           <div class="panel-body">
             <ng-container
@@ -187,12 +187,12 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
           </div>
         </section>
 
-        <section class="panel span-6" aria-labelledby="bh-strategies">
+        <section class="panel panel-flush span-6" aria-labelledby="bh-strategies">
           <div class="panel-head"><h2 id="bh-strategies">Against the strategies</h2></div>
+          <p class="table-note muted">
+            Each entry next to the active strategies' signals in the week before it.
+          </p>
           <div class="panel-body">
-            <p class="muted">
-              Each entry next to the active strategies' signals in the week before it.
-            </p>
             <ng-container
               *ngTemplateOutlet="table; context: { rows: stances(), caption: 'Versus strategies' }"
             />
@@ -232,42 +232,79 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
   styles: `
     @use 'breakpoints' as bp;
 
+    /* Figures: a small label, the value in mono 4px under it. */
     .stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-      gap: var(--space-3);
+      gap: var(--space-3) var(--space-4);
+      margin: 0;
+    }
+    .stats > div {
+      min-width: 0;
     }
     .stats dt {
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+    }
+    .stats dd {
+      margin: var(--space-1) 0 0;
+      font-size: var(--text-lg);
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+    .findings {
+      display: grid;
+      gap: var(--space-1);
+      max-width: 70ch;
+      margin: var(--space-4) 0 0;
+      padding-left: var(--space-4);
       color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
-    .stats dd {
-      font-size: var(--text-lg);
+    .table-note {
+      margin: 0;
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-sm);
     }
-    .findings {
-      margin-top: var(--space-3);
-      padding-left: var(--space-4);
-      display: grid;
-      gap: var(--space-1);
-    }
+    /* The same look as the shared data table: 34px rows, an inset header. */
     .grid {
       width: 100%;
       border-collapse: collapse;
+      font-size: var(--text-sm);
     }
     .grid th,
     .grid td {
-      padding: var(--space-2);
+      height: var(--row-h);
+      padding: 0 var(--space-3);
       border-bottom: 1px solid var(--color-border);
       text-align: left;
+      vertical-align: middle;
+    }
+    .grid tbody tr:last-child > * {
+      border-bottom: 0;
+    }
+    .grid th:first-child,
+    .grid td:first-child {
+      padding-left: var(--space-4);
+    }
+    .grid th:last-child,
+    .grid td:last-child {
+      padding-right: var(--space-4);
+    }
+    .grid thead th {
+      background: var(--color-surface-2);
+      color: var(--color-ink-2);
+      font-size: var(--text-xs);
+      font-weight: 600;
+    }
+    .grid tbody th {
+      font-weight: var(--weight-medium);
+    }
+    .grid tbody tr:hover {
+      background: var(--color-hover);
     }
     .grid .num {
       text-align: right;
-    }
-    .gain {
-      color: var(--color-gain);
-    }
-    .loss {
-      color: var(--color-loss);
     }
     @include bp.phone {
       .grid thead {
@@ -280,20 +317,37 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
       .grid tr {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        padding: var(--space-2) 0;
+        gap: var(--space-1) var(--space-3);
+        padding: var(--space-3);
         border-bottom: 1px solid var(--color-border);
+      }
+      .grid tbody tr:last-child {
+        border-bottom: 0;
       }
       .grid th[scope='row'] {
         grid-column: 1 / -1;
+        font-weight: var(--weight-semibold);
       }
       .grid th,
-      .grid td {
+      .grid td,
+      .grid th:first-child,
+      .grid td:first-child,
+      .grid th:last-child,
+      .grid td:last-child {
+        height: auto;
         border: 0;
-        padding: var(--space-1) 0;
+        padding: 0;
+      }
+      .grid td {
+        display: grid;
+        gap: var(--space-1);
+        font-family: var(--font-mono);
       }
       .grid td::before {
-        content: attr(data-label) ': ';
-        color: var(--color-ink-2);
+        content: attr(data-label);
+        color: var(--color-ink-3);
+        font-family: var(--font-sans);
+        font-size: var(--text-xs);
       }
       .grid .num {
         text-align: left;
