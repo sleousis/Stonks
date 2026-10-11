@@ -249,4 +249,4 @@ Two more rules keep it point in time (22.10):
 
 Reads need `data.read`. Tear sheets are jobs and need `lab.run`.
 
-In the console, **Lab, Factors** has the library, a page per factor and a formula editor. Each shows values on a date, runs a tear sheet and starts a lab run of the `factor` strategy. See `docs/ui.md`.
+In the console, **Lab, More tools, Factors** has the library, a page per factor and a formula editor. Each shows values on a date, runs a tear sheet and starts a lab run of the `factor` strategy. See `docs/ui.md`.

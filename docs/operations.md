@@ -470,7 +470,7 @@ Commands in a linked private chat: `/status` (halts, last tick, portfolio value)
 
 Run only one poller per bot token. Do not run `stonks telegram poll` while `stonks serve` has the bot enabled.
 
-Telegram needs no broker. [without-a-broker.md](without-a-broker.md) walks through linking it and keeping signal alerts on Telegram only. Without the token Alert settings does not offer Telegram, and a linked chat counts as alerts on in the Welcome guide.
+Telegram needs no broker. [without-a-broker.md](without-a-broker.md) walks through linking it and keeping signal alerts on Telegram only. Without the token Alert settings does not offer Telegram, and a linked chat counts as alerts on in Get set up.
 
 ## AI assistant
 
@@ -503,7 +503,7 @@ A draft is never an order. The person approves it in the web app with a fresh se
 
 ### Research sessions
 
-The assistant can also run a research session (roadmap 22.9). You give a goal and a universe. The model proposes lab trials, each with a hypothesis and a premortem, and the lab runs them. Start one from the chat (it calls `start_research`), from MCP, from **Lab, Research sessions** in the console, or with `POST /api/assistant/research`. Read it with `GET /api/assistant/research/{id}`: every proposal, whether it ran or why not, and its lab run in the trial ledger.
+The assistant can also run a research session (roadmap 22.9). You give a goal and a universe. The model proposes lab trials, each with a hypothesis and a premortem, and the lab runs them. Start one from the chat (it calls `start_research`), from MCP, from **Lab, More tools, Research sessions** in the console, or with `POST /api/assistant/research`. Read it with `GET /api/assistant/research/{id}`: every proposal, whether it ran or why not, and its lab run in the trial ledger (Lab history in the console).
 
 Rules the code enforces, whatever the model says:
 
@@ -766,14 +766,16 @@ In the console: Real-money settings of the portfolio, the Stage card and Order p
 
 The Going live page (`/going-live`, linked from Real-money settings and Broker connections) walks one portfolio through every step to real money, in order, and says for each whether it is done and who acts:
 
-1. **Server gateway set up** (admin): an IB Gateway under `[brokers.ibkr.gateways]` lists the portfolio and is connected. A broker reached over its own web API, such as eToro, needs no gateway, and the step reads Done.
-2. **Broker connected**: the portfolio is linked to a connection that can trade.
+1. **Broker connected**: the portfolio is linked to a connection that can trade. A CSV portfolio such as DEGIRO stays read only.
+2. **Server linked to Interactive Brokers** (admin, IBKR only): an IB Gateway under `[brokers.ibkr.gateways]` lists the portfolio and is connected. A broker reached over its own web API, such as eToro, has no such step.
 3. **Portfolio stage**: done at Real money, small or full. Otherwise it lists the checks the next stage still needs.
 4. **Allocation**: set on Real-money settings with a fresh code.
 5. **Account profile**: saved on the same page, with a fresh code.
 6. **Safeguards** (admin): every safeguard on.
-7. **Preview**: a dry run through the broker's what-if ran on this device.
-8. **Mode switch**: a follow in this portfolio set to Approve each trade or Automatic (on Today).
+7. **Preview the next orders**: a dry run through the broker's what-if ran on this device.
+8. **Switch a follow to Approve each trade or Automatic**: in the follow control on Today or the strategy page.
+
+Before a broker is linked, the steps that need one fold into one line.
 
 The page only reads; each change happens on the linked page with its own ticket and code.
 
@@ -953,7 +955,7 @@ flowchart LR
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
 - A halt on a broker portfolio also stops its paper account.
 - MCP can list halts and turn the kill switch on (with `confirm=true`). It cannot resume.
-- In the console the kill switch is called Stop trading. The session strip, the command palette and the Halts page open the same sheet: it starts on the portfolio on screen, shows the ticket and needs a reason. Resuming stays on the Halts page, behind the typed words and a fresh code.
+- In the console the kill switch is called Stop trading. The session strip, the command palette and the Halts page open the same sheet: it starts on the portfolio on screen, shows the ticket and needs a reason. The strip shows it once a person has something that trades (a broker portfolio, or a follow on Paper, Approve each trade or Automatic), and always to admins. While trading is stopped the strip turns red and offers Resume and Review halts. Resuming real money needs the typed words and a fresh code. A paper resume needs neither, unless the last code is too old.
 
 ### Quit rule
 
@@ -977,7 +979,7 @@ The intraday engine (Phase 21) keeps P&L during the session when `[production.in
 - **P&L.** Per portfolio and per strategy sleeve. The day starts from the last tick's snapshot, priced at the prior close. Fills of the day book at average cost: realised P&L when a fill reduces a position, unrealised from the marks, fees apart. A manual fill counts only in the whole portfolio.
 - **Snapshots.** Every five minutes one `intraday_snapshots` row per book: the P&L split, the day's return, the drawdown from the day's high, gross and net exposure, and how many held names have a stale (older than two minutes) or missing mark. The day's high survives a restart.
 
-`GET /api/risk/intraday` pages one of your portfolios for a day, newest first (`?day=`, `?strategy_id=` for one sleeve, `?all_books=true` for every book). The MCP tool `list_intraday_snapshots` reads the same, and the console's Live page shows each of your portfolios' latest row.
+`GET /api/risk/intraday` pages one of your portfolios for a day, newest first (`?day=`, `?strategy_id=` for one sleeve, `?all_books=true` for every book). The MCP tool `list_intraday_snapshots` reads the same, and the console's Intraday engine page shows each of your portfolios' latest row.
 
 In the lab, the `pool_correlation` survival test refuses a strategy whose validation returns correlate above 0.7 with any active strategy, unless its IR is at least 10% better. It is not in a preset yet; add it with `--tests`.
 
@@ -1204,14 +1206,14 @@ watch_band = 0.01
 
 - `options_live` runs after the tick. It books IBKR's assignments, exercises and expiries into the ledger (from the Flex statement, so set up Flex), plans a close for every option with `close_sessions` sessions or fewer left, or a roll with `action = "roll"`, prices each at the mid from live quotes, runs the option risk rules on the live book and previews the margin with IBKR's what-if. Each leg becomes a ticket held for you (hold `options`). The owner hears when tickets wait.
 - Live books always run the defined-risk rules: `short_option_guard` capped at the approval level, `option_margin`, and `option_max_loss` at the tighter of its own limits and the ones above. Greek limits follow `[production.risk.rules.option_greek_limits]`.
-- Approve the tickets on the Tickets page. `live_submit` sends them before the next open: a single leg as a day limit, a roll or a spread as one combo order at its net limit. A combo waits whole while any leg is not approved.
+- Approve the tickets on the Approvals page. `live_submit` sends them before the next open: a single leg as a day limit, a roll or a spread as one combo order at its net limit. A combo waits whole while any leg is not approved.
 - `options_expiry_watch` runs an hour before the close. A short option that expires today, still held and in or near the money, sends a high urgency alert. It never sends an order. Close it by hand from the ticket, or in TWS.
 - A quote with no bid and ask, or one too wide, makes no order. The job reports it, and the watch still alerts on expiry day.
 - Shares an assignment or exercise delivers are booked at the strike and belong to no strategy. Keep them or sell them with a manual order.
 
 ## Settings in the console
 
-Settings, System shows admins the broker, risk policy, data sources and cost presets, read only. The same column shows the System settings form (see System settings in the console above): each setting grouped as the server groups it, with its default, one change per setting after a fresh second factor, a required reason for the audit log, and the server's error under the field it names. Keys, tokens and passwords are never editable there; they stay in `.env`.
+Settings, System shows admins the broker, data sources and cost presets, read only. The same column shows the System settings form (see System settings in the console above): each setting grouped as the server groups it, with its default, one change per setting after a fresh second factor, a required reason for the audit log, and the server's error under the field it names. Keys, tokens and passwords are never editable there; they stay in `.env`.
 
 ## Without the scheduler
 

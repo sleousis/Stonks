@@ -66,7 +66,7 @@ currency. A leg whose currency has no exchange rate is left out and counted.
 
 ## Where to find it
 
-- Console: Orders, then the Journal tab (`/journal`).
+- Console: Search (Ctrl K), then Journal (`/journal`). The views are Trades, Calendar, Results and Playbooks.
 - CLI: `stonks journal trades | show | review | calendar | breakdown | playbooks`.
 - API: `/api/journal/*`. Reviews and playbooks need `portfolio.manage`.
 - MCP: `list_round_trips`, `get_round_trip`, `get_pnl_calendar`,

@@ -64,6 +64,10 @@ Whether a trade uses real money depends only on the **portfolio stage**. The fol
 | Kill switch (in what people read) | Stop trading |
 | The path to real money for one portfolio | Going live (the checklist page) |
 | Live engine (the intraday engine page) | Intraday engine |
+| Studio (in the menu) | Build a strategy (the page keeps the title Studio) |
+| Welcome, first-run guide | Get set up |
+| Check order, then a second confirm (manual orders) | Review order, one step |
+| Paper days: 4 of 20 | Your paper days: 4 of 20 |
 | ok, succeeded, Good (run and check states) | The status words below |
 
 ## Status words
@@ -78,6 +82,21 @@ One word per state, on every page.
 | A check that passed | Passed |
 | A check that failed | Failed |
 | A check with too little data | Not enough data yet |
+| A job or run in progress | Running |
+| A job or run not started yet | Waiting |
+| A job that was stopped | Cancelled |
+| A job that had nothing to do | Skipped |
+
+## Stamps
+
+Every portfolio carries one stamp next to its name.
+
+| Stamp | Meaning |
+|---|---|
+| PAPER | Pretend money, filled inside Stonks. |
+| BROKER PAPER | The broker's paper account. No real money. |
+| LIVE (brass) | Real money at a broker, at a Real money stage. |
+| READ ONLY (grey) | A real account Stonks only reads, such as a DEGIRO account from CSV files. Stonks never trades it. |
 
 ## Money and alert words
 
@@ -112,8 +131,11 @@ Add a new term here first, then in the console glossary (`web/src/app/core/help/
 |---|---|
 | Survival tests | Robustness tests (24, each named in plain words with what it guards against) |
 | Go-live suite (the `promotion` preset) | Full suite |
-| Verdict (of a lab run) | Robustness verdict: Passed or Failed |
+| Verdict (of a lab run) | Held up or Did not hold up |
 | A trial that ran, a trial that broke | Done, Error (a trial is one setting the search tried, never a test) |
 | Start paper trading if it passes | Put it on trial if it passes |
 | Strategy class, parameters | Strategy, settings |
-| Waiting for a worker | Queued |
+| Waiting for a worker, Queued | Waiting |
+| Trial ledger | Lab history |
+| Signal IC | Signal check |
+| A crashed job's error text | "The test stopped because of a problem on our side." The raw error stays under Details for admins. |

@@ -226,12 +226,12 @@
       @case ('push') {
         <p class="lead">
           Get a message when a strategy has a signal, an order fills or a risk limit trips. Messages
-          carry no amounts. You can change this later in Settings.
+          carry no amounts. You can change this later in Notifications, Alert settings.
         </p>
         @if (push.state() === 'install-first') {
           <p class="note">
             On iPhone and iPad, alerts only reach the installed app. In Safari, tap Share, then Add
-            to Home Screen, and turn alerts on from Settings there.
+            to Home Screen, and turn alerts on from Alert settings there.
           </p>
         }
         @if (push.error(); as err) {
