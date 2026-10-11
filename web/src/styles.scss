@@ -669,7 +669,7 @@ fieldset.group {
   .page-header .actions {
     > .btn-primary,
     > :only-child,
-    > :not(.btn-primary):nth-last-child(2):nth-child(odd):has(+ .btn-primary),
+    > :not(.btn-primary):nth-child(odd):has(+ .btn-primary),
     > .btn-primary:first-child ~ :last-child:nth-child(even) {
       grid-column: 1 / -1;
     }
