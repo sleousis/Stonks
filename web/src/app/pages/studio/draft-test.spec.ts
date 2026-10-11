@@ -219,6 +219,33 @@ describe('DraftTest', () => {
     expect(el.textContent).not.toContain('Preset: ');
   });
 
+  for (const admin of [true, false]) {
+    it(`shows the raw error of a crashed test under Details to ${admin ? 'an admin' : 'nobody but admins'}`, async () => {
+      Object.assign(TestBed.inject(SessionService), { isAdmin: signal(admin) });
+      track.mockImplementation((id: string) => ({
+        ...finishedHandle(id, 'failed'),
+        error: signal('The job stopped because of a problem on our side.'),
+        errorDetail: signal('RuntimeError: kaboom'),
+      }));
+      buttonNamed('Run backtest').click();
+      const req = await nextRequest(
+        controller,
+        '/api/studio/drafts/draft_abc123/backtests',
+        'POST',
+      );
+      req.flush({ ...job('job_bt', null), status: 'queued', progress: 0 });
+      await settle();
+      const failure = el.querySelector('app-job-failure')!;
+      expect(failure.textContent).toContain('problem on our side');
+      if (admin) {
+        expect(failure.querySelector('details code')!.textContent).toContain('kaboom');
+      } else {
+        expect(failure.querySelector('details')).toBeNull();
+        expect(el.textContent).not.toContain('kaboom');
+      }
+    });
+  }
+
   it('says so when the finished result cannot be read', async () => {
     const error = vi.spyOn(TestBed.inject(ToastService), 'error');
     buttonNamed('Run backtest').click();

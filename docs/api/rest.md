@@ -2929,6 +2929,8 @@ Counts of one trading run over every book, for admins only.
 | `best_score` | number \| null | yes | Best finite objective score, null if none. |
 | `budget` | integer \| null | yes |  |
 | `end` | string \| null | no |  |
+| `error` | string \| null | no | Why the run failed, in plain words. Null unless it failed. |
+| `error_detail` | string \| null | no | The raw error of a failed run, for admins only: null for everyone else. |
 | `finished_at` | date-time \| null | yes |  |
 | `hypothesis` | string \| null | yes |  |
 | `id` | string | yes |  |
@@ -2960,6 +2962,8 @@ One recorded lab run: what was tested, why, and how it came out.
 | `best_score` | number \| null | yes | Best finite objective score, null if none. |
 | `budget` | integer \| null | yes |  |
 | `end` | string \| null | no |  |
+| `error` | string \| null | no | Why the run failed, in plain words. Null unless it failed. |
+| `error_detail` | string \| null | no | The raw error of a failed run, for admins only: null for everyone else. |
 | `finished_at` | date-time \| null | yes |  |
 | `hypothesis` | string \| null | yes |  |
 | `id` | string | yes |  |
