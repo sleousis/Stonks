@@ -138,7 +138,7 @@ const MAX_FILE_BYTES = 5_000_000;
       title="Import a CSV statement"
       description="For brokers without a connection: bring trades, dividends and cash flows in from the CSV file your broker exports. DEGIRO files need no mapping."
     >
-      <a actions class="btn btn-ghost" routerLink="/connections">Broker connections</a>
+      <a actions class="btn btn-tertiary" routerLink="/connections">Broker connections</a>
     </app-page-header>
 
     <section class="panel" aria-labelledby="file-title">
@@ -336,7 +336,9 @@ const MAX_FILE_BYTES = 5_000_000;
             </div>
           </details>
           @if (badTypes().length) {
-            <p class="error" role="alert">Not understood: {{ badTypes().join(', ') }}</p>
+            <p class="error callout" data-tone="loss" role="alert">
+              Not understood: {{ badTypes().join(', ') }}
+            </p>
           }
         </div>
       </section>
@@ -366,7 +368,7 @@ const MAX_FILE_BYTES = 5_000_000;
     </div>
     <app-permission-note permission="portfolio.manage" />
     @if (error(); as e) {
-      <p class="error" role="alert">{{ e }}</p>
+      <p class="error callout" data-tone="loss" role="alert">{{ e }}</p>
     }
 
     @if (result(); as r) {
@@ -375,18 +377,24 @@ const MAX_FILE_BYTES = 5_000_000;
           <h2 id="preview-title">3. Preview</h2>
           <span class="hint" role="status">{{ summary(r) }}</span>
         </div>
-        @if (duplicateText(r); as dup) {
-          <p class="panel-body note" role="note">{{ dup }}</p>
-        }
-        @if (r.unmapped.length) {
-          <p class="panel-body note">Not covered, kept by symbol: {{ r.unmapped.join(', ') }}</p>
-        }
-        @if (r.notes?.length) {
-          <ul class="panel-body notes">
-            @for (n of r.notes; track n) {
-              <li class="note">{{ n }}</li>
+        @if (duplicateText(r) || r.unmapped.length || r.notes?.length) {
+          <div class="panel-body preview-notes">
+            @if (duplicateText(r); as dup) {
+              <p class="note callout" data-tone="warn" role="note">{{ dup }}</p>
             }
-          </ul>
+            @if (r.unmapped.length) {
+              <p class="note callout" data-tone="neutral">
+                Not covered, kept by symbol: {{ r.unmapped.join(', ') }}
+              </p>
+            }
+            @if (r.notes?.length) {
+              <ul class="notes callout" data-tone="neutral">
+                @for (n of r.notes; track n) {
+                  <li class="note">{{ n }}</li>
+                }
+              </ul>
+            }
+          </div>
         }
         <app-data-table
           caption="Rows of the statement"
@@ -430,7 +438,7 @@ const MAX_FILE_BYTES = 5_000_000;
               @if (!i.undone_at) {
                 <button
                   type="button"
-                  class="btn btn-ghost"
+                  class="btn btn-tertiary"
                   [attr.aria-label]="'Undo the import of ' + (i.filename || i.id)"
                   [disabled]="!canImport() || !!busy()"
                   (click)="undo(i)"
@@ -450,6 +458,11 @@ const MAX_FILE_BYTES = 5_000_000;
       gap: var(--space-4);
       min-width: 0;
     }
+    @media (max-width: 767.98px) {
+      :host {
+        gap: var(--space-3);
+      }
+    }
     .form {
       display: grid;
       gap: var(--space-4);
@@ -460,14 +473,25 @@ const MAX_FILE_BYTES = 5_000_000;
       gap: var(--space-3);
       grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
     }
-    .hint,
-    .note {
+    .hint {
+      font-size: var(--text-xs);
+      color: var(--color-ink-3);
+    }
+    .panel-head .hint {
       font-size: var(--text-sm);
       color: var(--color-ink-2);
+      font-variant-numeric: tabular-nums slashed-zero;
     }
     .error {
       margin: 0;
-      color: var(--color-loss);
+    }
+    .preview-notes {
+      display: grid;
+      gap: var(--space-2);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .preview-notes p {
+      margin: 0;
     }
     .actions {
       display: flex;
@@ -476,7 +500,12 @@ const MAX_FILE_BYTES = 5_000_000;
     }
     .actions .btn,
     .import .btn {
-      min-height: 44px;
+      min-height: var(--touch-min);
+    }
+    @media (max-width: 767.98px) {
+      .actions .btn {
+        flex: 1 1 100%;
+      }
     }
     .more summary {
       display: inline-flex;
@@ -484,6 +513,8 @@ const MAX_FILE_BYTES = 5_000_000;
       min-height: var(--touch-min);
       cursor: pointer;
       color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
     }
     .more .grid-2 {
       margin-top: var(--space-2);
@@ -492,12 +523,15 @@ const MAX_FILE_BYTES = 5_000_000;
       display: grid;
       gap: var(--space-1);
       margin: 0;
-      padding-left: var(--space-5);
+      padding-left: var(--space-6);
+    }
+    .notes > * + * {
+      margin-top: 0;
     }
     .imports {
       display: grid;
-      gap: var(--space-2);
       margin: 0;
+      padding-block: var(--space-1);
       list-style: none;
     }
     .import {
@@ -506,8 +540,11 @@ const MAX_FILE_BYTES = 5_000_000;
       align-items: center;
       justify-content: space-between;
       gap: var(--space-2);
-      padding-bottom: var(--space-2);
+      padding: var(--space-2) 0;
       border-bottom: 1px solid var(--color-border);
+    }
+    .import:last-child {
+      border-bottom: 0;
     }
     .import.undone .import-name {
       text-decoration: line-through;

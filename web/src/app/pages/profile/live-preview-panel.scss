@@ -10,7 +10,13 @@
 }
 
 h3 {
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-ink-2);
+}
+
+p {
+  max-width: 70ch;
 }
 
 .actions {
@@ -27,16 +33,17 @@ h3 {
 .figures {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-3);
   margin: 0;
 
   dt {
-    font-size: var(--text-sm);
-    color: var(--color-ink-2);
+    font-size: var(--text-xs);
+    color: var(--color-ink-3);
   }
 
   dd {
-    margin: 0;
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-lg);
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
@@ -51,15 +58,7 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.note {
-  color: var(--color-warn);
-}
-
 // The promise of the whole panel, said once more under the result.
 .sent {
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-paper);
-  border-radius: var(--radius-xs);
-  background: var(--color-paper-soft);
   font-weight: var(--weight-medium);
 }

@@ -403,7 +403,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                 }
               </div>
               @if (formError(); as s) {
-                <p class="form-error" role="alert">{{ s }}</p>
+                <p class="form-error callout" data-tone="loss" role="alert">{{ s }}</p>
               }
               <div class="actions">
                 <button
@@ -440,7 +440,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       margin: 0;
       font-size: var(--text-sm);
       color: var(--color-ink-2);
-      max-width: 65ch;
+      max-width: 70ch;
     }
     .saved,
     .changed {
@@ -453,22 +453,41 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       align-items: center;
       gap: var(--space-2);
     }
-    // One fold per group, so the page starts short.
-    .group,
+    // One fold per group, so the page starts short. Folds sit on hairlines,
+    // not in boxes: the panel is the only frame.
+    .group {
+      min-width: 0;
+      border-top: 1px solid var(--color-border);
+      &:last-of-type {
+        border-bottom: 1px solid var(--color-border);
+      }
+      // Folds stack on one rule each, without the form's gap between them.
+      & + .group {
+        margin-top: calc(-1 * var(--space-4));
+      }
+    }
     .advanced {
       min-width: 0;
-      border: 1px solid var(--color-border);
       border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+    }
+    .group,
+    .advanced {
       > summary {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: var(--space-2);
         min-height: var(--touch-min);
-        padding: 0 var(--space-3);
+        padding: 0 var(--space-1);
         cursor: pointer;
+        font-size: var(--text-panel);
         font-weight: var(--weight-semibold);
         list-style: none;
+        transition: background-color var(--dur-fast) var(--ease);
+        &:hover {
+          background: var(--color-hover);
+        }
         &::-webkit-details-marker {
           display: none;
         }
@@ -479,13 +498,14 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
         }
       }
       &[open] > summary {
-        border-bottom: 1px solid var(--color-border);
         &::before {
           transform: rotate(90deg);
         }
       }
     }
     .advanced > summary {
+      padding: 0 var(--space-3);
+      font-size: var(--text-sm);
       font-weight: var(--weight-medium);
     }
     .group-count {
@@ -495,9 +515,12 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
     }
     .group-body {
       display: grid;
-      gap: var(--space-3);
-      padding: var(--space-3);
+      gap: var(--space-4);
+      padding: var(--space-1) var(--space-1) var(--space-4);
       min-width: 0;
+    }
+    .advanced .group-body {
+      padding: var(--space-1) var(--space-3) var(--space-3);
     }
     .multi {
       display: grid;
@@ -536,12 +559,12 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       &.active {
         position: sticky;
         bottom: 0;
-        z-index: 5;
+        z-index: var(--z-sticky);
         margin: 0 calc(-1 * var(--space-4));
         padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
         border-top: 1px solid var(--color-border);
         background: var(--color-surface);
-        box-shadow: var(--shadow-2);
+        box-shadow: var(--shadow-overlay);
       }
     }
     .reason .input {
@@ -549,10 +572,6 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
     }
     .form-error {
       margin: 0;
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-loss);
-      background: var(--color-loss-soft);
-      font-size: var(--text-sm);
     }
     .actions {
       display: flex;

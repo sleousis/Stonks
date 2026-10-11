@@ -12,7 +12,7 @@
     <app-mode-stamp [live]="realMoney()" />
   }
   <ng-container ngProjectAs="[actions]">
-    <a class="btn btn-ghost" routerLink="/going-live" [queryParams]="{ portfolio: id() }"
+    <a class="btn btn-tertiary" routerLink="/going-live" [queryParams]="{ portfolio: id() }"
       >Going live checklist</a
     >
     <a class="btn" routerLink="/profile">Back to your portfolios</a>
@@ -80,7 +80,7 @@
               >{{ allocationText(a) }}</span
             >
             @if (a.amount === null) {
-              <p class="warn-text">
+              <p class="warn-text callout" data-tone="warn">
                 Nothing opens in this account until you set an amount. At the Real money stages this
                 is the most real money Stonks may hold here.
               </p>
@@ -95,7 +95,7 @@
               }
             }
           </div>
-          <p class="no-ramp" role="note">
+          <p class="no-ramp callout" data-tone="neutral" role="note">
             <strong>No automatic steps.</strong> Stonks never raises or lowers this amount by
             itself. A bad week sends you an alert and leaves the amount as it is. Only you change
             it, here.
@@ -209,7 +209,7 @@
           @if (profile.value(); as saved) {
             <p><span class="muted">Saved:</span> {{ profileText(saved) }}.</p>
           } @else {
-            <p class="warn-text">
+            <p class="warn-text callout" data-tone="warn">
               Not set. With the account rules on, nothing opens until you save a profile.
             </p>
           }
@@ -239,8 +239,13 @@
             }
           </ul>
           @if (toMargin()) {
-            <div class="margin-risks" role="group" aria-labelledby="margin-risks-title">
-              <h3 id="margin-risks-title">What margin means</h3>
+            <div
+              class="margin-risks callout"
+              data-tone="loss"
+              role="group"
+              aria-labelledby="margin-risks-title"
+            >
+              <h3 id="margin-risks-title" class="callout-title">What margin means</h3>
               <ul>
                 @for (r of marginRisks; track r) {
                   <li>{{ r }}</li>
@@ -250,7 +255,7 @@
                 Stonks only saves a margin profile when the broker reports a margin account, and
                 your admin has turned margin accounts on.
               </p>
-              <label class="ack">
+              <label class="ack check">
                 <input
                   type="checkbox"
                   data-testid="margin-ack"
@@ -351,7 +356,7 @@
               The account rules are off, so they check nothing yet. Your admin turns them on.
             </p>
           } @else if (!v.profile_set) {
-            <p class="warn-text">
+            <p class="warn-text callout" data-tone="warn">
               The account rules are on but no profile is saved, so nothing opens in this account.
             </p>
           }

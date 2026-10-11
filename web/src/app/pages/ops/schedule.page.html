@@ -22,7 +22,13 @@
       <h2 id="jobs-title">Scheduled jobs</h2>
     </div>
     @if (scheduler(); as s) {
-      <p class="scheduler-state" [attr.data-running]="s.running" role="status">
+      <p
+        class="scheduler-state"
+        [class.callout]="!s.running"
+        [attr.data-tone]="s.running ? null : 'warn'"
+        [attr.data-running]="s.running"
+        role="status"
+      >
         <span class="lamp" aria-hidden="true"></span>
         <span>{{ s.text }}</span>
         @if (!s.running && canRun()) {
@@ -82,7 +88,7 @@
         <ng-template appCell="run" [appCellOf]="jobRows()" let-j>
           <button
             type="button"
-            class="btn btn-ghost btn-run"
+            class="btn btn-tertiary btn-run"
             [disabled]="running() === j.name"
             [attr.aria-busy]="running() === j.name"
             [attr.aria-label]="'Run now: ' + jobName(j)"
@@ -178,7 +184,12 @@
       <app-job-progress label="Restore" [handle]="run" [result]="restored" />
     }
     @if (verified(); as v) {
-      <div class="outcome" role="status" [attr.data-ok]="v.ok">
+      <div
+        class="outcome callout"
+        role="status"
+        [attr.data-ok]="v.ok"
+        [attr.data-tone]="v.ok ? 'gain' : 'loss'"
+      >
         @if (v.ok) {
           <p>
             <strong>The backup from {{ verifiedWhen() }} checks out.</strong> Every file matches its
@@ -198,7 +209,7 @@
       </div>
     }
     @if (restored.value(); as r) {
-      <div class="outcome" role="status" data-ok="true">
+      <div class="outcome callout" role="status" data-ok="true" data-tone="gain">
         <p>
           <strong>Restored the backup from {{ backupWhen(r.backup_id) }} into a new folder.</strong>
           The live data was not touched.
