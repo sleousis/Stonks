@@ -6409,6 +6409,18 @@ export type LedgerRunDetail = {
      */
     end?: string | null;
     /**
+     * Error
+     *
+     * Why the run failed, in plain words. Null unless it failed.
+     */
+    error?: string | null;
+    /**
+     * Error Detail
+     *
+     * The raw error of a failed run, for admins only: null for everyone else.
+     */
+    error_detail?: string | null;
+    /**
      * Finished At
      */
     finished_at: string | null;
@@ -6528,6 +6540,18 @@ export type LedgerRunView = {
      * End
      */
     end?: string | null;
+    /**
+     * Error
+     *
+     * Why the run failed, in plain words. Null unless it failed.
+     */
+    error?: string | null;
+    /**
+     * Error Detail
+     *
+     * The raw error of a failed run, for admins only: null for everyone else.
+     */
+    error_detail?: string | null;
     /**
      * Finished At
      */

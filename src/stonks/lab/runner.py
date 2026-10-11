@@ -29,12 +29,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from stonks.config import Settings, configured_secrets
 from stonks.core.protocols import (
     Objective,
     Strategy,
     SurvivalReport,
     Tuner,
 )
+from stonks.ingest.redact import format_exception
 from stonks.lab.dataset import LabDataset
 from stonks.lab.heatmap import HeatmapOptions, ParameterHeatmap, pick_axes, plateau_overlay
 from stonks.lab.manifest import build_manifest, collect_seeds
@@ -63,6 +65,15 @@ from stonks.logging import get_logger
 from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.runner")
+
+#: What everyone reads in the trial ledger when a run crashed. The exception
+#: itself is kept in ``lab_runs.error_detail`` for admins.
+LAB_RUN_CRASH_MESSAGE = (
+    "The run stopped because of a problem on our side. Try again. "
+    "If it happens again, ask an admin to look at the details."
+)
+#: What the ledger says of a run stopped before it finished (a cancel).
+LAB_RUN_STOPPED_MESSAGE = "The run was stopped before it finished."
 
 
 def costs_are_zero(costs: Any) -> bool:
@@ -280,10 +291,11 @@ class LabRunner:
             result = self._run(
                 strategy_cls, dataset, fixed_params, run_id, class_path, manifest, family
             )
-        except BaseException:
+        except BaseException as exc:
             if self._ledger is not None:
                 try:
-                    self._ledger.finish_run(run_id, "error")
+                    error, detail = self._failure(exc)
+                    self._ledger.finish_run(run_id, "error", error=error, error_detail=detail)
                 except Exception as exc:  # keep the run's own exception
                     _log.warning("lab.ledger.finish_failed", run_id=run_id, error=str(exc))
             raise
@@ -292,6 +304,15 @@ class LabRunner:
         if self._ledger is not None:
             self._ledger.finish_run(run_id, "pass" if result.verdict == "pass" else "fail")
         return result
+
+    def _failure(self, exc: BaseException) -> tuple[str, str | None]:
+        """The plain message and the raw error the ledger keeps for a failed
+        run. A crash keeps its exception with secrets scrubbed (shown to
+        admins only); a run stopped from outside (a cancel) keeps none."""
+        if not isinstance(exc, Exception):
+            return LAB_RUN_STOPPED_MESSAGE, None
+        secrets = configured_secrets(self._settings) if isinstance(self._settings, Settings) else []
+        return LAB_RUN_CRASH_MESSAGE, format_exception(exc, secrets)
 
     def _run(
         self,

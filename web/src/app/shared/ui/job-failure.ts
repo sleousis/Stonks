@@ -13,7 +13,7 @@ import { SessionService } from '../../core/auth/session.service';
   selector: 'app-job-failure',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="job-error" role="alert">
+    <div class="job-error" [attr.role]="live() ? 'alert' : null">
       <p class="error">{{ text() }}</p>
       @if (shownDetail(); as d) {
         <details class="job-error-details">
@@ -61,6 +61,9 @@ export class JobFailure {
   readonly text = input.required<string>();
   /** The raw error, shown to admins only. */
   readonly detail = input<string | null | undefined>(null);
+  /** Announce it as it happens (a job that just failed). False on a page
+   *  that shows a past failure. */
+  readonly live = input(true);
   protected readonly shownDetail = computed(() =>
     this.session.isAdmin() ? this.detail()?.trim() || null : null,
   );

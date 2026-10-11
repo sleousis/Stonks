@@ -25,6 +25,7 @@ import { LabNav } from './lab-nav';
 import { className, scoreText } from './ledger.page';
 import { OBJECTIVES, strategyTitle } from './lab-requests';
 import { FAILED_RUN_TEXT } from '../../shared/lab-results/job-error';
+import { JobFailure } from '../../shared/ui/job-failure';
 
 /** `{lookback_days: 20, threshold: 0}` -> "Lookback days 20, threshold 0". */
 export function paramsText(params: Record<string, unknown>): string {
@@ -61,6 +62,7 @@ export function searchName(tuner: string): string {
     HelpTip,
     StatTile,
     StatusPill,
+    JobFailure,
     EmptyState,
     ErrorState,
     LoadingState,
@@ -96,7 +98,13 @@ export function searchName(tuner: string): string {
         </div>
         <div class="panel-body">
           @if (r.robustness === 'error') {
-            <p class="failed-reason" role="note">{{ failedText }}</p>
+            <app-job-failure
+              class="failed-reason"
+              role="note"
+              [live]="false"
+              [text]="r.error || failedText"
+              [detail]="r.error_detail"
+            />
           }
           <div class="tiles">
             <app-stat-tile label="Settings tried" [value]="count(r.n_trials)" detail="This run" />

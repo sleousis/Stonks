@@ -11,9 +11,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stonks.config import Settings
 from stonks.core.protocols import SurvivalReport, TunerResult
 from stonks.lab.dataset import LabDataset
-from stonks.lab.runner import LabRunner
+from stonks.lab.runner import LAB_RUN_CRASH_MESSAGE, LAB_RUN_STOPPED_MESSAGE, LabRunner
 from stonks.lab.survival.base import SurvivalSuite
 from stonks.lab.trials import LabRunContext, TrialLedger
 from stonks.registry.artifact import ArtifactBundle
@@ -195,6 +196,43 @@ def test_a_crashing_run_is_recorded_as_error(ledger):
     assert run["verdict"] == "error" and run["hypothesis"] == "h"
 
 
+def test_a_crashing_run_keeps_a_plain_message_and_the_raw_error(ledger):
+    with pytest.raises(RuntimeError, match="exploded"):
+        _runner(_Boom(), ledger=ledger).run(BuyAndHold, _ds())
+    (run,) = ledger.runs()
+    assert run["error"] == LAB_RUN_CRASH_MESSAGE
+    assert "RuntimeError" not in run["error"]
+    assert run["error_detail"] == "RuntimeError: tuner exploded"
+
+
+def test_the_raw_error_of_a_crashed_run_hides_configured_secrets(ledger):
+    class _Leaky:
+        def tune(self, *a, **k):
+            raise RuntimeError("vendor said no to key hunter2-secret")
+
+    settings = Settings.model_validate({"sources": {"eodhd": {"api_key": "hunter2-secret"}}})
+    with pytest.raises(RuntimeError):
+        _runner(_Leaky(), ledger=ledger, settings=settings).run(BuyAndHold, _ds())
+    (run,) = ledger.runs()
+    assert "hunter2-secret" not in run["error_detail"]
+    assert "RuntimeError" in run["error_detail"]
+
+
+def test_a_run_stopped_before_it_finished_says_so_without_a_raw_error(ledger):
+    class _Stop(BaseException):
+        pass
+
+    class _Stopped:
+        def tune(self, *a, **k):
+            raise _Stop()
+
+    with pytest.raises(_Stop):
+        _runner(_Stopped(), ledger=ledger).run(BuyAndHold, _ds())
+    (run,) = ledger.runs()
+    assert run["verdict"] == "error"
+    assert run["error"] == LAB_RUN_STOPPED_MESSAGE and run["error_detail"] is None
+
+
 def test_artifact_meta_lands_in_meta_json(ledger, tmp_path):
     result = _runner(_Tuner(n=3), ledger=ledger).run(
         BuyAndHold, _ds(), hypothesis="h1", premortem="p1"
@@ -284,7 +322,7 @@ def test_each_run_gets_a_fresh_dataset_so_nothing_leaks_between_runs():
 
 
 def test_a_ledger_failure_while_recording_an_error_keeps_the_original_exception(ledger):
-    def _broken(run_id, verdict):
+    def _broken(run_id, verdict, **_kw):
         raise OSError("disk full")
 
     ledger.finish_run = _broken

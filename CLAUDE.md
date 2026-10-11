@@ -211,7 +211,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `corporate_filings (accession_number, ticker, issuer_cik, form, filing_date, known_at, period_of_report, items, url, source)`, `institutional_holdings (accession_number, line, filer_cik, report_period, known_at, cusip, ticker, amount, amount_type, value_usd, put_call, investment_discretion, ...)` and `insider_transactions.known_at` (024): SEC filings point in time, `known_at` is the acceptance time in UTC. See `docs/edgar.md`.
 - `macro_indicators_versions` (the `macro_indicators` columns plus `known_at`) and `fund_holdings_versions` (the `fund_holdings` columns plus `removed`, PK adds `known_at`) (025): every vendor revision with the time Stonks first saw it. Macro reads with `as_of` and `PointInTimeLake` pick the version seen by the decision (a first print counts from its publication date). A fund holdings upsert is a whole `(fund, as_of, source)` list, so a holding missing from a re-fetch gets a `removed` version and leaves the list from then on (P12).
 
-**State (SQLite, migrations 001-059):**
+**State (SQLite, migrations 001-060):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -261,6 +261,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 057: `notification_deliveries.claimed_by`: the delivery worker that holds each row, so a worker whose lease ran out mid-batch skips rows another worker claimed.
 - 058: `kill_switch_drills (id, ran_at, ran_by, portfolio_id, broker, passed, report_json)`: every `stonks halts drill` run (the drill itself runs on scratch state). `portfolio_id` NULL is a global drill that counts for every portfolio. The `live_small` and `live_scale` stage gates need a passing drill within `[production.live.stages] drill_max_age_days` (30).
 - 059: `jobs.error_detail`: the raw error of a job that crashed, returned to admins only. Everyone else reads the plain sentence in `jobs.error`.
+- 060: `lab_runs.error` and `lab_runs.error_detail`: why a lab run failed, a plain sentence for everyone and the raw error (secrets scrubbed) returned to admins only, like `jobs.error_detail`.
 
 ## Conventions to match
 

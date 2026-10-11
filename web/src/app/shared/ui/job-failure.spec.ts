@@ -36,6 +36,19 @@ describe('JobFailure', () => {
     expect(el.textContent).not.toContain('pickle');
   });
 
+  it('a past failure is not announced as an alert', () => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: SessionService, useValue: { isAdmin: signal(false) } }],
+    });
+    const fixture = TestBed.createComponent(JobFailure);
+    fixture.componentRef.setInput('text', 'The run stopped.');
+    fixture.componentRef.setInput('live', false);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(el.textContent).toContain('The run stopped.');
+  });
+
   it('an admin sees no Details when there is no raw error', () => {
     const el = render(true, '   ');
     expect(el.querySelector('details')).toBeNull();
