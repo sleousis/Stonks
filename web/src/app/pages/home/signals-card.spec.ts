@@ -9,6 +9,7 @@ import type { TickRun } from '../../api/models';
 import { formatWeekday } from '../../core/format/format';
 import { NotificationFeedService } from '../../core/notify/notification-feed.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
+import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import {
   SignalsCard,
   ownRunCounts,
@@ -175,6 +176,41 @@ describe('SignalsCard', () => {
     expect(el.textContent).toContain('No signals today');
     // The bell takes the reply's count (UX-32).
     expect(counter.unread()).toBe(2);
+  });
+
+  it('keeps the signals of watched tickers when a watchlist is picked', async () => {
+    const watch = TestBed.inject(WatchlistContextService);
+    watch['listSignal'].set([
+      {
+        id: 'wl_1',
+        name: 'Metals',
+        tickers: ['GLD.US'],
+        created_at: '2026-09-27T00:00:00Z',
+        updated_at: '2026-09-27T00:00:00Z',
+      },
+    ]);
+    watch['chosen'].set('wl_1');
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({
+      items: [
+        item({ id: 1, title: 'ETF trend: sell some GLD.US' }),
+        item({ id: 2, title: 'Momentum: buy MSFT.US' }),
+      ],
+      unread_count: 2,
+    });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelectorAll('li')).toHaveLength(1);
+    expect(el.textContent).toContain('sell some GLD.US');
+    expect(el.textContent).not.toContain('MSFT.US');
   });
 
   it('counts down to the next trading run, not the earliest system job (UX-08)', async () => {
