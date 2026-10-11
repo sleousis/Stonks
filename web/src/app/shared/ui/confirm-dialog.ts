@@ -42,7 +42,9 @@ import { SideTag } from './side-tag';
                 @for (line of t.lines; track line.label) {
                   <div>
                     <dt>{{ line.label }}</dt>
-                    <dd class="num">{{ line.value }}</dd>
+                    <dd [class.num]="!line.text" [class.ticket-text]="line.text">
+                      {{ line.value }}
+                    </dd>
                   </div>
                 }
               </dl>

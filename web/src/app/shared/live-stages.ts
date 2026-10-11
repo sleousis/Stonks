@@ -87,6 +87,7 @@ const CHECK_LABELS: Record<string, string> = {
   allocation_set: 'Allocation set',
   account_profile_set: 'Account profile saved',
   kill_switch_drill: 'Stop trading tested',
+  recent_replay: 'Recent sessions replay cleanly',
   tracking_error: "Trades like the strategy's test book",
   filled_orders: 'Real-money orders filled',
   tca_gap: 'Costs close to what was expected',

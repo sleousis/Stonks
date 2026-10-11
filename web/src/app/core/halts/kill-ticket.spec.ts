@@ -14,7 +14,7 @@ describe('killTicket', () => {
       { label: 'Scope', value: 'Portfolio Main' },
       { label: 'Stops', value: 'New buys' },
       { label: 'Still goes out', value: 'Sells and exits' },
-      { label: 'Reason', value: 'Market is wild' },
+      { label: 'Reason', value: 'Market is wild', text: true },
     ]);
   });
 

@@ -4,6 +4,8 @@ import { Injectable, signal } from '@angular/core';
 export interface TicketLine {
   label: string;
   value: string;
+  /** Free text someone typed (a reason): wraps in plain type instead of one mono line. */
+  text?: boolean;
 }
 
 /**

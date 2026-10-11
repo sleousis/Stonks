@@ -122,7 +122,7 @@ export class LiveOptionsCard {
           { label: 'Portfolio', value: this.portfolioName() },
           { label: 'Now', value: levelLabel(before.level) },
           { label: 'New', value: levelLabel(to) },
-          { label: 'Reason', value: this.reason().trim() },
+          { label: 'Reason', value: this.reason().trim(), text: true },
         ],
       },
     });
