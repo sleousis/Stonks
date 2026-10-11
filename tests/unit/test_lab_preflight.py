@@ -58,6 +58,14 @@ def test_clean_run_only_warns_about_the_static_universe(lake):
     assert report.errors == []
 
 
+def test_static_universe_warning_is_in_plain_words(lake):
+    _bars(lake, "A.US", "2023-06-01", 280)
+    (issue,) = run_preflight(_ds(lake)).issues
+    assert "delisted" in issue.message and "looks better" in issue.message
+    for internal in ("P14", "universe_membership", "universe id", ";"):
+        assert internal not in issue.message
+
+
 def test_empty_universe_is_fatal(lake):
     report = run_preflight(_ds(lake, universe=()))
     assert "empty_universe" in _codes(report)
