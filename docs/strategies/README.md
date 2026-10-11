@@ -148,7 +148,7 @@ uv run stonks options backtest covered_call --underlyings AAPL.US --start 2025-0
 
 ## Not in the catalog
 
-- **`RuleStrategy`** (`strategies/rule_based.py`): a strategy defined by a JSON spec (indicators including efficiency ratio and KAMA, entry and exit rules, sizing, percentage stops and vol or ATR trailing stops). Built, backtested and registered from the Strategy Studio page in the console.
+- **`RuleStrategy`** (`strategies/rule_based.py`): a strategy defined by a JSON spec (indicators including efficiency ratio and KAMA, entry and exit rules, sizing, percentage stops and vol or ATR trailing stops). Built, backtested and put on trial from **Build a strategy** (the Studio) in the console.
 
 ## Portfolio constructors
 

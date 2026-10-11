@@ -62,7 +62,7 @@ After each refresh, every active person gets one notification per upcoming event
 | `ex_dividend_upcoming` | `dividends` | 1 day |
 | `economic_release` | `economic` | 1 day |
 
-Alerts use their own `event_alert` category, so you can turn them off for a channel and keep strategy signals. Quiet hours apply as for any alert. Each kind also follows one of your switches in Settings, Alert settings, Upcoming events: `earnings`, `dividends` or `economic`. All are on until you turn one off, and off means none of that kind, not even in the app. The switches are in `GET /api/notifications/preferences` (`event_alerts`), changed with `PUT` on the same route or the MCP tool `set_event_alerts`. `GET /api/calendars/alert-kinds` names each kind's switch (`topic`).
+Alerts use their own `event_alert` category, so you can turn them off for a channel and keep strategy signals. Quiet hours apply as for any alert. Each kind also follows one of your switches in Notifications, Alert settings, Upcoming events: `earnings`, `dividends` or `economic`. All are on until you turn one off, and off means none of that kind, not even in the app. The switches are in `GET /api/notifications/preferences` (`event_alerts`), changed with `PUT` on the same route or the MCP tool `set_event_alerts`. `GET /api/calendars/alert-kinds` names each kind's switch (`topic`).
 
 The dedupe key holds the kind, ticker and date, so a second refresh the same day sends nothing new. A new kind is one module in `calendars/alert_kinds/` that names its `topic`. A kind that is not about tickers overrides `hits_for`, which gets the person's whole `AlertAudience`.
 
@@ -87,7 +87,7 @@ A release the vendor lists twice (month on month and year on year) is one alert.
 
 State migration 036 adds `economic_alert_prefs (user_id, countries_json, min_importance)`. No row, or `countries_json` NULL, means the defaults. The switch stays in `event_alert_prefs`.
 
-Change them in Settings, Alert settings, Economic releases, with `PUT /api/notifications/preferences`:
+Change them in Notifications, Alert settings, Upcoming events (the Economic releases choices), with `PUT /api/notifications/preferences`:
 
 ```json
 {"economic_alerts": {"countries": ["US", "DE"], "min_importance": "medium"}}

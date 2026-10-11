@@ -221,7 +221,7 @@ flowchart LR
 - **Backtest.** The job runs `OptionsBacktester` and, unless `validation` is false, the checks in `options/validation.py`. The verdict is `passed` only when every check passes. A request is checked before it queues: a known strategy, valid parameters, and stored chains in the window.
 - **Synthetic chains.** Every view says `synthetic: true` when all quotes came from the synthetic source. The console then warns that the result is never evidence.
 - **MCP.** `list_option_underlyings`, `get_option_chain`, `list_option_strategies`, `list_option_structures`, `get_option_payoff` and `run_options_backtest`. The job tool follows the other research jobs: no confirm, and `wait_for_job` returns the typed result.
-- **Console.** The Options page under Research (`/options`). See `docs/ui.md`.
+- **Console.** The Options page in the Advanced menu, once option chains are stored (`/options`). See `docs/ui.md`.
 
 ## 11. Live options at IBKR (17.8)
 

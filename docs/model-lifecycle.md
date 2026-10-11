@@ -136,4 +136,4 @@ The assistant never gets the swap or reject tools.
 
 ## Console
 
-Each strategy page has a Model versions tab: the versions, the candidate's model book against the live model, the swap check, the forecast calibration of the live and candidate models, Swap in (a reason, then a fresh code), Reject, a retrain of that strategy, and the log. Admins see every candidate and Retrain all on `/ops/models`. See `docs/ui.md`.
+Each strategy page has a Model versions tab: the versions, the candidate's test book against the model in use, the swap check, the forecast calibration of the model in use and the candidate, Swap in (a reason, then a fresh code), Reject, a retrain of that strategy, and the log. Admins see every candidate and Retrain all on Model versions (`/ops/models`, in the System menu while a new version waits). See `docs/ui.md`.

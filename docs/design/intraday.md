@@ -406,7 +406,7 @@ flowchart LR
   RUN[StreamRunner health] --> MON
   MON -->|every publish_seconds| ROW[(engine_status<br/>SQLite 044)]
   ROW --> MET[GET /metrics<br/>stream and engine families]
-  ROW --> API[GET /api/stream/status<br/>console Live engine, MCP]
+  ROW --> API[GET /api/stream/status<br/>console Intraday engine, MCP]
   ROW --> DOG[scheduler watchdog<br/>engine dead-man]
   DOG -->|silent in market hours| NOT[Notifier<br/>one alert per stretch]
 ```
@@ -416,7 +416,7 @@ flowchart LR
 - **`engine_status`** (`engine/status.py`): one row per engine with its calendar, state, start, last update, stop, last dispatch and a JSON snapshot (stream health, driver counters, histograms). A row not updated for `stale_after_seconds` belongs to an engine that is not live, so its stream reports down too.
 - **Metrics**: `engine_metric_families` renders the stream families of 21.1 plus the last event age, and the engine families (up, last dispatch age, bar closes, late bars, handler errors, both histograms), merged so each name appears once. `GET /metrics` appends them.
 - **Dead-man** (`engine/deadman.py`): no bar close for `deadman_minutes` while the engine's market is open alerts the operator. It runs inside the scheduler's `DeadlineWatchdog` as an extra check and deduplicates in `scheduler_deadline_alerts`, like a missed deadline.
-- **Status route**: `GET /api/stream/status` (`data.read`) adds live or not, market open, the dead-man state and scrubbed stream errors. Its `intraday_pnl` part says whether intraday P&L rows are kept (21.3.3). The console's Live page then reads each of your portfolios' latest row from `GET /api/risk/intraday`.
+- **Status route**: `GET /api/stream/status` (`data.read`) adds live or not, market open, the dead-man state and scrubbed stream errors. Its `intraday_pnl` part says whether intraday P&L rows are kept (21.3.3). The console's Intraday engine page then reads each of your portfolios' latest row from `GET /api/risk/intraday`.
 - **Settings**: `[streaming.monitor]` with `deadman_minutes` (5), `stale_after_seconds` (120) and `publish_seconds` (15).
 
 ## 16. Intraday TCA (21.3.5)
@@ -470,7 +470,7 @@ flowchart LR
 - **The backfill fills the lake.** The engine computes signals from the lake, not from the bars of the event. So the stream runner notes the minutes it keeps out as a `delayed` gap, and the REST backfill fills them with vendor bars every `delayed_backfill_seconds` (300). The newest `backfill_delay_seconds` wait for the next round, so the vendor has finished them. Signals therefore lag by up to about `delayed_backfill_seconds` plus `backfill_delay_seconds`. With `backfill = false`, or no REST source, nothing fills those minutes and intraday signals run on old history all day. Only the marks and exits move.
 - **The stale-price guard.** The decision step counts a delayed bar as `delayed_lag_seconds` (900) older than its close. With the default `[engine] stale_after_seconds` of 180, a delayed price never opens a position in a live engine. Exits and the flatten window still work. To paper trade on delayed data, raise `stale_after_seconds` above the lag on purpose. Orders decided on a delayed price carry `delayed_price` in their decision context, so TCA and reviews can tell them apart.
 - **Marks.** `MarkBook` ignores delayed bars as it ignores delayed quotes. Intraday P&L keeps the prior close until a live price arrives.
-- **Health.** `StreamHealth` counts delayed and live events. `delayed_only` is true while a source has sent delayed data and nothing live. The runner logs `stream.delayed_only` once. `/metrics` has `stonks_stream_delayed_only` and `stonks_stream_delayed_events_total`, `/api/stream/status` has `delayed_only` and `delayed_events`, and the console's Live page shows a note.
+- **Health.** `StreamHealth` counts delayed and live events. `delayed_only` is true while a source has sent delayed data and nothing live. The runner logs `stream.delayed_only` once. `/metrics` has `stonks_stream_delayed_only` and `stonks_stream_delayed_events_total`, `/api/stream/status` has `delayed_only` and `delayed_events`, and the console's Intraday engine page shows a note.
 
 The trade-off for paper accounts:
 
