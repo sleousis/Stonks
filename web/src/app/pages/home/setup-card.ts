@@ -43,7 +43,7 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
             >. Next: {{ next() }}.
           </p>
           <ol class="ticks" aria-hidden="true">
-            @for (s of v.steps; track s.id) {
+            @for (s of counted(); track s.id) {
               <li [attr.data-state]="s.state"></li>
             }
           </ol>
@@ -176,6 +176,8 @@ export class SetupCard {
     const v = this.guide.hasValue() ? this.guide.value() : null;
     return v && showSetup(v) ? v : null;
   });
+  /** The steps that matter: the ticks count the same ones as the text. */
+  protected readonly counted = computed(() => this.view()?.steps.filter((s) => !s.optional) ?? []);
   protected readonly progress = computed(() => {
     const v = this.view();
     return v ? progressText(v.steps) : '';

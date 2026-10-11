@@ -102,8 +102,8 @@ export interface SegmentOption<T extends string = string> {
     }
     /* Strong: the picked option is a solid block, like the B side tag (M13). */
     .segmented[data-emphasis='strong'] .segment[aria-checked='true'] {
-      background: var(--color-ink);
-      color: var(--color-surface);
+      background: var(--color-slab);
+      color: var(--color-slab-ink);
       box-shadow: none;
       font-weight: var(--weight-bold);
     }

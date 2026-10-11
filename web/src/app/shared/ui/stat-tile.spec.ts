@@ -22,6 +22,13 @@ describe('StatTile', () => {
     expect(render('$12,400').classList).not.toContain('text');
   });
 
+  it('keeps a money figure with a currency code in the display face', () => {
+    expect(render('US$10,000.00').classList).not.toContain('text');
+    expect(render('-US$1,204.50').classList).not.toContain('text');
+    expect(render('CHF 3,400').classList).not.toContain('text');
+    expect(render('€2,100').classList).not.toContain('text');
+  });
+
   it('drops its box when bare, for a divided strip inside a panel', () => {
     const fixture = TestBed.createComponent(StatTile);
     fixture.componentRef.setInput('label', 'Cash');

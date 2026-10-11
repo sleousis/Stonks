@@ -253,8 +253,11 @@ textarea {
     border-color: var(--color-loss);
     color: var(--color-surface);
 
-    &:hover:not(:disabled) {
+    // Its own press state: the generic pressed tint would clear the red fill.
+    &:hover:not(:disabled),
+    &:active:not(:disabled) {
       background: color-mix(in srgb, var(--color-loss) 88%, var(--color-ink));
+      border-color: color-mix(in srgb, var(--color-loss) 88%, var(--color-ink));
     }
   }
 
@@ -662,16 +665,25 @@ fieldset.group {
 
   // Page header actions: PageHeader makes them a two-column grid on phones.
   // The actions are projected, so the rules for them live here: a primary
-  // button or a lone action takes the whole row.
+  // button or an action left alone on its row takes the whole row.
   .page-header .actions {
     > .btn-primary,
-    > :only-child {
+    > :only-child,
+    > :not(.btn-primary):nth-last-child(2):nth-child(odd):has(+ .btn-primary),
+    > .btn-primary:first-child ~ :last-child:nth-child(even) {
       grid-column: 1 / -1;
     }
 
     > .btn,
     > * > .btn {
       width: 100%;
+    }
+
+    // In the grid a tertiary action needs an outline to read as a button,
+    // and a long label wraps instead of running to the edge.
+    > .btn-tertiary {
+      border-color: var(--color-border);
+      white-space: normal;
     }
   }
 

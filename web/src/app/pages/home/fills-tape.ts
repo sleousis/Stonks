@@ -137,7 +137,7 @@ interface TapeItem {
       display: block;
       min-width: 0;
     }
-    /* One hairline bar: the rail slab names it, the window runs the fills. */
+    /* One hairline bar: a dark slab names it, the window runs the fills. */
     .tape {
       display: flex;
       align-items: stretch;
@@ -148,13 +148,14 @@ interface TapeItem {
       background: var(--color-surface);
       font-size: var(--text-sm);
     }
-    /* The slab is the rail's slate in both themes, never an inverted light block. */
+    /* A dark slab in both themes, never an inverted light block. In dark it
+       is a raised slate so it still stands off the surface. */
     .label {
       display: flex;
       align-items: center;
       padding: 0 var(--space-3);
-      background: var(--color-rail);
-      color: var(--color-rail-ink);
+      background: var(--color-slab);
+      color: var(--color-slab-ink);
       font-family: var(--font-display);
       font-stretch: var(--display-stretch);
       font-weight: var(--weight-bold);
@@ -162,7 +163,7 @@ interface TapeItem {
     }
     .day {
       margin-left: var(--space-1);
-      color: var(--color-rail-ink-2);
+      color: var(--color-slab-ink);
       font-weight: var(--weight-regular);
     }
     .window {

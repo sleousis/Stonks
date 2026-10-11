@@ -131,11 +131,12 @@ export class LoadingState {
       min-height: 7rem;
       padding: var(--space-4);
     }
+    /* A quiet solid square, not a dashed frame that reads as a missing image. */
     .mark {
       padding: var(--space-2);
-      border: 1px dashed var(--color-border-strong);
       border-radius: var(--radius-sm);
-      color: var(--color-paper);
+      background: var(--color-surface-2);
+      color: var(--color-ink-3);
     }
     .body {
       display: grid;

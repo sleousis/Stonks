@@ -186,8 +186,12 @@ export class StatTile {
     return fmt && n !== null ? fmt(n) : this.finalText();
   });
 
-  /** Words, not a figure: two letters in a row ("Momentum 3fa9", "Sep 2"). */
-  protected readonly isText = computed(() => /\p{L}{2}/u.test(this.finalText() ?? ''));
+  /** Words, not a figure: two letters in a row ("Momentum 3fa9", "Sep 2").
+   *  A leading currency code ("US$10,000", "CHF 3,400") is part of a figure. */
+  protected readonly isText = computed(() => {
+    const text = (this.finalText() ?? '').replace(/^[+\-−]?\s*[A-Z]{1,3}(?:\$|\s)(?=[\d.,])/u, '');
+    return /\p{L}{2}/u.test(text);
+  });
 
   protected readonly helpTerm = computed(() => {
     const help = this.help();

@@ -19,6 +19,8 @@
 .wide {
   @include bp.from-desktop {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    // Each panel keeps its own height, so a short one never stretches.
+    align-items: start;
 
     .group-note,
     .full {

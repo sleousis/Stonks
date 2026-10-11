@@ -420,8 +420,8 @@ function runTime(iso: string, now: number): string {
       min-width: 6.5ch;
       padding: 1px var(--space-2);
       border-radius: var(--radius-xs);
-      background: var(--color-ink);
-      color: var(--color-surface);
+      background: var(--color-slab);
+      color: var(--color-slab-ink);
       text-align: center;
       font-weight: var(--weight-semibold);
     }
@@ -504,7 +504,7 @@ function runTime(iso: string, now: number): string {
       }
       .phase {
         order: 1;
-        flex: 1 1 0;
+        flex: 1 1 9rem;
         flex-wrap: nowrap;
         min-width: 0;
         overflow: hidden;
@@ -528,7 +528,8 @@ function runTime(iso: string, now: number): string {
       }
       .pick {
         order: 3;
-        flex: 1 1 0;
+        flex: 1 1 auto;
+        min-width: 8rem;
       }
       .next {
         order: 4;

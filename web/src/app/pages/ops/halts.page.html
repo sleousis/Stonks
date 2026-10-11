@@ -37,6 +37,7 @@
       <app-loading-state label="Loading halts" [rows]="2" />
     } @else if (active().length === 0) {
       <app-empty-state
+        compact
         title="Trading is not halted"
         message="Halts appear here when someone uses Stop trading, a circuit breaker trips, or health finds stale data."
       />
@@ -134,6 +135,7 @@
       <app-loading-state label="Loading past halts" [rows]="3" />
     } @else if (past().length === 0) {
       <app-empty-state
+        compact
         title="No past halts"
         message="Halts that were resumed, cleared or expired are listed here."
       />

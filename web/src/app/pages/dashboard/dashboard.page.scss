@@ -16,6 +16,12 @@
       grid-column: auto;
     }
   }
+
+  // Wide screens: five tiles with the value spanning two fill six columns,
+  // so no tile is left alone on a second row.
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 
 // Panels keep their own height, so a short chart never stretches to match the

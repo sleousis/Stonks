@@ -48,6 +48,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
         <app-loading-state label="Loading alerts" [rows]="4" />
       } @else if (page.items.length === 0) {
         <app-empty-state
+          compact
           title="No system alerts"
           message="Problems the server notices, like missing data, a failed run or a broker it cannot reach, show here."
         />

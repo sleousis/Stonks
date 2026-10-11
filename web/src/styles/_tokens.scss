@@ -156,6 +156,10 @@
   --color-rail-ink: #e6ecf2;
   --color-rail-ink-2: #a9b6c3;
   --color-rail-accent: #8db4ea;
+  // A solid slab for a picked option or the countdown chip: ink in light,
+  // a raised slate in dark (never an inverted light block).
+  --color-slab: var(--color-ink);
+  --color-slab-ink: var(--color-surface);
   // Kept for older names: brass is the live colour.
   --color-brass: var(--color-live);
   --color-brass-soft: var(--color-live-soft);
@@ -223,6 +227,8 @@
   --color-rail-ink: #e4eaf0;
   --color-rail-ink-2: #9aa7b4;
   --color-rail-accent: #8db4ea;
+  --color-slab: #2f3f50; // rail ink on it 8.6
+  --color-slab-ink: #e4eaf0;
   --shadow-overlay: 0 16px 40px -12px rgb(0 4 8 / 70%), 0 2px 6px rgb(0 4 8 / 40%);
   --shadow-ticket: 0 1px 0 rgb(0 0 0 / 35%), 0 10px 24px -12px rgb(0 0 0 / 70%);
   --chart-grid: #1a242e;

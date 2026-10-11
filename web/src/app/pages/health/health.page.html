@@ -184,6 +184,7 @@
       <app-loading-state label="Loading system checks" [rows]="3" />
     } @else if (runChecks().length === 0) {
       <app-empty-state
+        compact
         title="No system checks"
         message="The server sent no checks besides data freshness. Run the checks again, or look at the server's log."
       />
@@ -234,6 +235,7 @@
       <app-loading-state label="Loading data update failures" [rows]="4" />
     } @else if (failedIngest.value().items.length === 0) {
       <app-empty-state
+        compact
         title="No failed data updates"
         message="Updates that end in error show here with the data provider's message."
       />
@@ -270,6 +272,7 @@
       <app-loading-state label="Loading trading run failures" [rows]="4" />
     } @else if (failedTicks.value().items.length === 0) {
       <app-empty-state
+        compact
         title="No failed trading runs"
         message="Trading runs that fail show here with the reason."
       />
