@@ -1,11 +1,11 @@
 # Trader console (web UI)
 
-The Angular app in `web/` is the trader console: sign-in, a simple home,
-profile, the first-run guide, watchlists, charts, the calendar, strategies, orders and
-trade costs, insights, notifications, the research pages (trial results,
-leaderboard and tear sheets, screener, options, studio, lab, strategy review) and the admin pages
-(overview, health, schedule and backups, data, data quality, universes,
-halts, users). It talks only to the
+The Angular app in `web/` is the trader console: sign-in, Today,
+profile, the first-run guide (Get set up), watchlists, charts, the calendar, strategies, orders,
+approvals and trade costs, insights, notifications and alert settings, the research pages
+(Build a strategy, the Lab, trial results, leaderboard and tear sheets, screener,
+options, strategy review) and the admin pages (dashboard, health, schedule and
+backups, data, data quality, universes, model versions, halts, users). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
 contract `web/openapi.json`.
 
@@ -32,9 +32,10 @@ serves both. The dev server origin (`http://localhost:4200`) is the API's
 `[api].ui_origin` for CORS in the dev profile only (`STONKS_PROFILE=dev`),
 although the proxy makes CORS unnecessary in dev.
 
-Every call needs a credential. Sign in, or paste an API token (in the
-closed "For scripts" section of the sign-in page, open only in dev, or of
-**Settings**; kept in `sessionStorage` for that tab only). For local UI work, start the API with
+Every call needs a credential. Sign in, or paste an API token in the
+closed "For scripts" section of the sign-in page, open only in dev (kept in
+`sessionStorage` for that tab only). Tokens are made on **Profile**, under
+API tokens. For local UI work, start the API with
 `STONKS_PROFILE=dev` so reads from 127.0.0.1 work without signing in. See
 `docs/security.md` and [Sign-in and the trader home](#sign-in-and-the-trader-home).
 
@@ -392,14 +393,14 @@ one line on what it guards against. The custom suite lists them all, slow
 ones marked, and Signal ranking (IC) says it never fails a run.
 `production/golive.py` names them the same way for the approval check.
 
-A lab run's result opens with the **Robustness verdict** tile and one
-sentence (`verdictSentence`): "It held up: it passed all 7 robustness
+A lab run's result opens with one plain line: **Held up** or **Did not
+hold up**, then one sentence (`verdictSentence`): "It held up: it passed all 7 robustness
 tests..." or "It did not hold up: it failed 2 of 7 robustness tests
 (Higher costs, Nearby settings)...". A second line says why a run can fail
 with every trial done: trials are the settings the search tried, and a
-trial only says a setting ran. The trial ledger uses the same split:
-trials read **Done** or **Error**, the run reads Passed or Failed under
-"Robustness verdict". Each test card repeats what it guards against, and
+trial only says a setting ran. The Lab history uses the same split:
+trials read **Done** or **Error**, the run reads **Held up** or **Did not
+hold up** (`shared/lab-results/robustness.ts`). Each test card repeats what it guards against, and
 quant words (deflated Sharpe, PBO, CPCV, MCPT, IC, walk-forward, purged
 folds) carry a tip from the glossary's Research words.
 
@@ -420,14 +421,22 @@ that wrap onto two lines on phones: Test a strategy (`/lab`) and Lab history
 (`/lab/signal-ic`), Factors (`/lab/factors`) and Research sessions
 (`/lab/research`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
-universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
+universe, and `<app-sweep-result>` ranks the rows best first. Signal check
 shows how well a strategy's scores ranked the moves that followed, per
-look-ahead (`<app-signal-ic-result>`). Both follow the job with
+look-ahead (`<app-signal-ic-result>`). It needs at least 10 tickers, and the
+field says so before anything is sent. Both follow the job with
 `<app-job-progress>` and show a failed result load inline with Retry
 (`pages/lab/job-follower.ts`). The Lab history lists and opens them too,
 by the strategy's plain name.
 
-The trial ledger lists every recorded lab run from `GET /api/lab/ledger`
+A lab job that stopped on the server's side reads in plain words
+(`jobErrorText()`, `shared/lab-results/job-error.ts`): "The test stopped
+because of a problem on our side. Try again, or run it with the Quick
+tests." The raw error (`error_detail`, sent to admins only) sits under a
+Details fold. An error the server wrote for people, such as a missing
+ticker, shows as it is.
+
+The Lab history lists every recorded lab run from `GET /api/lab/ledger`
 (server-paged, filtered by `?strategy=`): strategy, hypothesis, trials run
 and errors, best score and robustness verdict. `/lab/ledger/:runId` shows
 one run from `GET /api/lab/ledger/{run_id}`: the hypothesis and premortem,
@@ -469,7 +478,7 @@ Research sessions (`pages/lab/research/`, `api/research.service.ts`):
 - `/lab/research/:id` shows the goal, model and cutoff, meters for trials,
   proposals and compute, and one card per proposal. A card shows its
   status, hypothesis and premortem, validation start, trials, best score,
-  verdict, why it was rejected, and a link to its run in the trial ledger.
+  verdict, why it was rejected, and a link to its run in the Lab history.
   It reloads every minute while the session runs.
 
 ### Formatting and copy
@@ -501,7 +510,7 @@ from it. Tips close when the page scrolls.
 - New metric: add a key to `METRIC_KEYS`, an entry (the compiler insists) and
   its labels or API keys as `aliases`, and add the label to `LABELS_SHOWN` in
   `glossary.spec.ts`. Keep `short` to one sentence a trader understands.
-- Research words (backtest, lab run, robustness tests, verdict, trial ledger,
+- Research words (backtest, lab run, robustness tests, verdict, Lab history,
   CPCV, factor, tear sheet, point in time, survivorship bias, EPS, the
   Greeks...) live in `core/help/research-glossary.ts` and show under their
   own heading on the glossary page.
@@ -522,7 +531,9 @@ inject(CommandRegistry).register(
 
 Actions that change something confirm first, exactly like buttons do.
 Searches go through `api/search.service.ts` (silent: no error toasts).
-Tickers open `/data?instrument=<id>`.
+Tickers open their chart (`/charts/<ticker>`). Pages below the top level
+that people jump to (Trading runs, Fills, Notifications, Alert settings,
+Journal) are palette entries too, and Notifications keeps `g n`.
 
 ## Operations pages
 
@@ -533,12 +544,18 @@ Tickers open `/data?instrument=<id>`.
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Model versions | `/ops/models` | Candidates across strategies and Retrain all (see Model versions below) |
 | Users | `/admin/users` | People, roles, sign-in app and password resets. Alone, the admin reads how to add the next person |
-| Settings, System | `/settings` | Broker, risk policy, data sources and cost presets, and the System settings form (`/api/settings/system`) |
+| Settings, System | `/settings?tab=system` | Broker, data sources and cost presets, read only, and the System settings form (`/api/settings/system`) |
 | Universes | `/universes`, `/universes/:id` | List, create and edit each kind, index history import, members on a date, membership history, Refresh, Fetch missing data and Delete (see Universes below) |
 
 - `<app-session-strip>` sits above every page: the next trading run with
-  a live countdown (`GET /api/schedule`), Stop trading, and the halt state. It turns red
+  a live countdown (`GET /api/schedule`), the portfolio picker with its
+  stamp, Stop trading, and the halt state. It turns red
   while a kill switch is on and amber for a breaker or operational halt.
+  Stop trading shows once the person has something to stop
+  (`StopTradingVisibility`, `shell/stop-visibility.ts`): a broker
+  portfolio, or a follow on Paper, Approve each trade or Automatic. Admins
+  always see it. A trader who only follows on Alerts only does not. Once
+  shown it stays on that device.
   `HaltStateService` (`core/halts/`) reads active halts every minute and
   right after any halt action.
 - **One Stop trading pattern (M7).** The kill switch is called "Stop
@@ -552,13 +569,17 @@ Tickers open `/data?instrument=<id>`.
 - Server-paged tables pass the API page's offset: `[total]="p.total"
   [offset]="p.offset"`. The table is re-created after each load, and the
   offset keeps the pager on the right page.
-- Resume needs the typed words `RESUME TRADING` and a fresh second factor.
-  Its confirm button is red only when a covered portfolio trades real
-  money. On paper it is the primary button.
+- Resume (`<app-resume-sheet>`, `pages/ops/resume-sheet.ts`) is a ticket
+  with the scope, what starts again, since when and why it stopped. For
+  real money it shows the checks before resuming (gateway, reconcile,
+  account, equity cover), and needs a reason, the typed words
+  `RESUME TRADING` and a fresh second factor. Paper resumes in one tap: the
+  reason is filled in, there is no phrase, and a code is asked only when the
+  server says the last one is too old. Its confirm button is red only when
+  a covered portfolio trades real money. On paper it is the primary button.
   The page calls `StepUpService.ensure()` (`core/auth/step-up.service.ts`)
-  first, and again with `force` when the API answers 403
-  `step_up_required`. The default service never prompts. The sign-in work
-  provides the real one.
+  for real money, and the session interceptor asks when the API answers 403
+  `step_up_required`.
 - Refresh, Fetch missing data, Update data, a trading run and Back up now
   return a job. Pages follow it with `JobsService.track()` and show
   `<app-job-progress [result]="r">` with a `jobActions` slot for Cancel.
@@ -653,10 +674,10 @@ top of Settings, System. It reads `GET /api/settings/system` through
 |---|---|---|
 | Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
 | Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards (reads only, or reads and trades when you allow it), "When Stonks trades", connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
-| Trade costs | `/trades`, `/trades/orders/:clientId` | A tab of Orders (the page keeps the Orders title): totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
-| Journal | `/journal`, `/journal/trades/:tradeId` | Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
-| Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
-| Help | `/help/glossary` | How Stonks works in five sentences, then every term the help tips explain |
+| Trade costs | `/trades`, `/trades/orders/:clientId` | In the Advanced menu, under the Orders title and tabs: totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
+| Journal | `/journal`, `/journal/trades/:tradeId` | Found with Search (Ctrl K). Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
+| Sweep, Signal check | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
+| Help | `/help/glossary` | How Stonks works in five short steps, then every term the help tips explain, with a Find a term box |
 
 ## Approvals (19.8, F9)
 
@@ -664,10 +685,12 @@ top of Settings, System. It reads `GET /api/settings/system` through
 |---|---|---|
 | Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
 
-- **Approve each trade** is the optional mode between Paper trading and
-  Auto on Today's mode switch. Turning it on asks for a fresh code, then a
-  ticket (no typed name, since each order still waits for you). The two live
-  modes stay locked, with the reason, until the auto checklist passes.
+- **Approve each trade** is the optional mode between Paper and
+  Automatic in the follow control (Today and the strategy page). Turning it
+  on asks for a fresh code, then a ticket (no typed name, since each order
+  still waits for you). While they are locked, both modes stay hidden
+  behind one line that says what unlocks them (`lockedModesLine()`), such
+  as "More modes unlock with a broker portfolio after 20 paper days."
 - **A ticket** shows the side, ticker, quantity, the price (a limit, or at
   the open), the price the book decided at, the notional, the strategy and
   its signal score, the broker's commission estimate when it gave one, why
@@ -678,8 +701,9 @@ top of Settings, System. It reads `GET /api/settings/system` through
   (orders, notional, send by) before the code. Reject opens a sheet that
   asks for a reason, kept in the audit log.
 - The push that tickets wait is high urgency and names only the count and
-  the portfolio. It opens `/tickets`. Approvals sits in the main menu for
-  traders. It has no `g` shortcut because every letter is taken.
+  the portfolio. It opens `/tickets`. Approvals sits in the More group of
+  the menu, for people who may trade. It has no `g` shortcut because every
+  letter is taken.
 - The Approvals item shows a badge with everything that waits: strategy
   tickets plus suggested orders (`TicketCountService` in `core/tickets/`,
   read quietly from `/api/tickets/summary` and
@@ -697,8 +721,8 @@ top of Settings, System. It reads `GET /api/settings/system` through
   unread count, read quietly every minute while the tab is visible and after
   any mark-read. `<app-notification-bell>` sits in the top bar and sidebar.
   `<app-alerts-panel>` shows recent system alerts on Health. Alert settings
-  in Settings also take a webhook address (write-only, shown as scheme and
-  host after saving).
+  (`/notifications/settings`) also take a webhook address under More
+  channels (write-only, shown as scheme and host after saving).
 - **Connections.** Each provider card says what Stonks may do there:
   "Reads only. It never places an order there." or "Reads, and places
   orders when you allow it." (`providerReach()`, from the provider's
@@ -793,6 +817,37 @@ top of Settings, System. It reads `GET /api/settings/system` through
   candidate, skipped, or a failed fit. "Refit even when fitted in the last
   few days" sends `force`.
 
+## Build a strategy (Studio)
+
+The menu calls it Build a strategy. The code and the page title keep the
+name Studio (`pages/studio/`).
+
+| Page | Route | What it does |
+|---|---|---|
+| Build a strategy | `/studio` | New draft: pick a starting point (Blank rules or a template such as SMA trend following or RSI mean reversion), a draft name, then Create draft. Your drafts are listed below |
+| Draft | `/studio/:id` | Three tabs: Build (each candle is, asset classes, indicators said in words, Buy when and Sell when, Check on sample data), Test (tickers, dates, More options with the cost model, Run backtest, and the lab run) and Ship |
+
+```mermaid
+flowchart LR
+  N[New draft: starting point, name] --> B[Build: rules]
+  B --> T[Test: backtest, lab run]
+  T --> S[Ship: Put on trial]
+  S --> F[Follow it on Alerts only]
+  S --> R[See its trial results]
+```
+
+- **Saves on its own.** Edits to a draft save as you go. Rename changes the
+  name.
+- **No trades.** A backtest whose buy rule was never true says so in one
+  line and what to try: more tickers, a longer window or a looser rule.
+- **Ship.** The owner of a draft puts it on trial (`strategy.trial`, paper
+  only), after a confirm that says later edits do not change the strategy.
+  The tab then says it is on trial, that an admin approves it after the
+  go-live check, and offers Follow it and See its trial results. Approving
+  and stepping back need `strategy.promote`, and for an admin the buttons
+  there follow the strategy page (a reason, the go-live check, a hold to
+  confirm).
+
 ## Judging a strategy (release polish)
 
 One strategy page judges a strategy, and the Leaderboard compares them.
@@ -829,9 +884,11 @@ flowchart LR
   strategy shows the record it earned on trial. Without one, it says so and
   suggests following it on Paper.
 - **One follow control.** `<app-follow-control>` (`shared/follow/`) is the
-  switch and the four follow modes (Alerts only, Paper, Approve each trade,
-  Automatic) in one row, with the current mode's line and why the gated
-  modes are closed. The strategy page's Follow panel uses it once you
+  Following or Paused switch and the follow modes in one row, with the
+  current mode's line ("You get its signals. Nothing trades.") and your paper
+  days. While Approve each trade and Automatic are locked, only Alerts only
+  and Paper show, with one line on what unlocks the rest. A help tip next
+  to each mode explains it. The strategy page's Follow panel uses it once you
   follow, and Today uses it for each row. Automatic asks you to type the
   strategy's display name, never its id, and the ticket's words and button
   follow the portfolio's PAPER or LIVE stamp.
@@ -857,8 +914,9 @@ flowchart LR
 
 - Both screens read the portfolio picked in the session strip (a synced
   broker account too) through `api/insights.service.ts` and
-  `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows and Tax screens,
-  as underline tabs like the Notifications tabs (sections of one page).
+  `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows, Tax and
+  Behaviour screens (Overview, Risk, Cash flows, Tax, Behaviour), as
+  underline tabs like the Notifications tabs (sections of one page).
 - **Every number is explained where it shows.** Beta, gross exposure,
   net exposure and the largest holding have help tips, and "What these
   figures mean" under the tiles says each in one line with an example.
@@ -921,14 +979,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  G[Going live checklist] --> S1[1 Server gateway]
-  S1 --> S2[2 Broker connected]
-  S2 --> S3[3 Portfolio stage]
-  S3 --> S4[4 Allocation]
-  S4 --> S5[5 Account profile]
-  S5 --> S6[6 Safeguards]
-  S6 --> S7[7 Preview]
-  S7 --> S8[8 Approve each trade or Automatic]
+  G[Going live checklist] --> S1[Broker connected]
+  S1 --> S2[Server linked to Interactive Brokers, IBKR only]
+  S2 --> S3[Portfolio stage]
+  S3 --> S4[Allocation]
+  S4 --> S5[Account profile]
+  S5 --> S6[Safeguards]
+  S6 --> S7[Preview the next orders]
+  S7 --> S8[Switch a follow to Approve each trade or Automatic]
   P[Profile: your portfolios] -->|broker portfolios| L[Real-money settings]
   L --> A[Allocation: set by hand, reason, fresh code]
   L --> C[Account profile: US, EU or UK, cash or margin, retail or professional]
@@ -937,14 +995,17 @@ flowchart LR
 
 - **Going live checklist** (`pages/going-live/`). One page walks the whole
   path for the portfolio on screen, or `?portfolio=`, with a picker when
-  there are several: (1) the server's IB Gateway lists and connects this
-  portfolio (`GET /api/brokers/gateways`), done at once for a broker whose
-  provider has `needs_gateway` false (eToro), (2) the portfolio is linked to a
-  broker connection that can trade, (3) its stage (done at a Real money
-  stage; otherwise the checks still missing for the next stage), (4) the
-  allocation, (5) the account profile, (6) every safeguard on, (7) a dry-run
-  preview ran on this device, (8) a follow here set to Approve each trade or
-  Automatic. Each step reads Done, Not yet, Waiting for your admin or Needs
+  there are several: Broker connected (the portfolio is linked to a broker
+  connection that can trade), Server linked to Interactive Brokers (only
+  for a provider with `needs_gateway`: the server's IB Gateway lists and
+  connects this portfolio, `GET /api/brokers/gateways`), Portfolio stage
+  (done at a Real money stage, otherwise the checks still missing for the
+  next stage), Allocation, Account profile, Safeguards (every safeguard
+  on), Preview the next orders (a dry-run preview ran on this device), and
+  Switch a follow to Approve each trade or Automatic. Before a broker is
+  linked, the steps that need one fold into one muted line ("Steps 2 to 6
+  open once a broker is linked."). A CSV portfolio such as DEGIRO stays
+  read only. Each step reads Done, Not yet, Waiting for your admin or Needs
   an earlier step, with one sentence and a link to where it is done; the
   first step still yours is the primary button. The page only reads. Brass
   and LIVE show only once the portfolio is at a Real money stage. The logic
@@ -968,7 +1029,12 @@ flowchart LR
   cards and linked accounts show brass and LIVE only for real money. Pass
   the stage to the stamp (`<app-mode-stamp [live]="..." [stage]="p.live_stage">`)
   and Broker paper reads BROKER PAPER in the paper style; the picker writes
-  "(broker paper)" after the name (`portfolioModeNote()`).
+  "(broker paper)" after the name (`portfolioModeNote()`). A broker
+  portfolio Stonks only reads (a read-only connection or CSV imports, such
+  as DEGIRO) gets a grey READ ONLY stamp (`[readOnly]`, `isReadOnly()` in
+  `shared/ui/portfolio-picker.ts`) and "(read only)" in the picker. A
+  manual order on an imported portfolio is refused in plain words: it is
+  read only and has no trading account at a broker.
 - **Allocation.** The page's one brass figure at a Real money stage, in a
   `.live-frame` panel. Unset reads "Not set" and "Nothing opens". A note says there are no
   automatic steps: Stonks never raises or lowers the amount, and a bad week
@@ -1212,14 +1278,14 @@ flowchart LR
   `ExportsService.download()`, which asks the generated client for a blob
   (`responseType: 'blob'`) over the session, then saves it through a
   temporary link. Orders and fills (Orders page), the journal (Trade costs),
-  P&L and snapshots (Insights) and lab trials (trial ledger, and one run).
+  P&L and snapshots (Insights) and lab trials (Lab history, and one run).
   A failure toasts the API's reason.
 
 ## Trader screens added in Phase 20
 
 | Page | Route | What it does |
 |---|---|---|
-| New order | `/orders/new` | The order ticket: check an order, place it, and change or cancel your working orders by hand |
+| New order | `/orders/new` | The order ticket: Review order, place it, and change or cancel your working orders by hand |
 | Suggested orders | `/tickets` (the old `/orders/drafts` redirects) | Orders the assistant proposed, in the Approvals inbox, each a ticket to approve (fresh code) or reject |
 | Price alerts | `/notifications/price-alerts` | Make, switch off, change and delete price alerts, and see when they fired |
 | Alert settings | `/notifications/settings` | Every alert setting in one place: what reaches you and when, and where it reaches you |
@@ -1243,7 +1309,7 @@ flowchart LR
 - **Suggested orders.** The Approvals page reads `GET /api/orders/drafts` once: pending ones under Waiting for you, the rest under History. `pages/tickets/suggested-orders.ts` shows them. **Approve** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the card, and the order turns rejected. **Reject** takes an optional note.
 - **Price alerts.** `<app-notifications-tabs>` links the Feed, Price alerts and Alert settings. The page says alerts check each day's closing price after the evening data update, not live prices. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
 - **Telegram.** `<app-telegram-link>` (`pages/notifications/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing, and an admin also gets the next step (the operations guide's Telegram section).
-- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is the one home of every alert setting. Two groups, in this order: "Where alerts reach you" (`<app-notification-settings title="Push on this device">`, `<app-push-devices>`, `<app-telegram-link>`, and the webhook through `[only]="['webhook']"`), first so turning push on leads on a phone, then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: the alert and channel grid with a one-line hint per alert on wider screens and the test button, upcoming events and economic releases with the countries folded, quiet hours, and a Price alerts panel that links to the tab). The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings keeps one Alerts panel that links here, and the Feed no longer carries the devices list.
+- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is its own page and the one home of every alert setting, the third tab of Notifications. Two groups, in this order: "Where alerts reach you" (`<app-telegram-link>` first, the main channel without a broker, then `<app-notification-settings>` (Push on this device), `<app-push-devices>` (Your devices), and More channels: Email and the webhook through `[only]="['webhook']"`), then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: Which alerts go where with a one-line hint per alert on wider screens and Send a test notification, upcoming events and economic releases with the countries folded, quiet hours, Briefings while the server has them on, and a Price alerts panel that links to the tab). The grid shows a column only for a channel that is set up: Push, Telegram once linked, Email and Webhook once added under More channels. The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings has no alerts section, and the Feed no longer carries the devices list.
 - `<app-notification-prefs>` shows one titled panel per part (`[only]` picks some; all by default). The alert settings table scrolls inside its own box on phones.
 
 ## Calendar, news and the screener (20.7, 20.8)
@@ -1282,7 +1348,7 @@ flowchart LR
 | Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, or read a DEGIRO export with its preset, preview, import and undo |
 
 - **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. The eye button in the top bar and the sidebar, the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
-- **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. The welcome page and the setup card link to it.
+- **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. Get set up (Open the demo portfolio) and the setup card on Today (See a demo) link to it.
 - **Screen alerts.** `<app-screen-alerts>` (`pages/screener/screen-alerts.ts`) sits under Your screens. A When select per screen turns an alert on (Daily, or Weekly on a weekday), Remove asks first, and the newest finds list below. The Screen alerts row in the notification settings decides where alerts reach you.
 - **CSV import.** `pages/connections/statement-import.page.ts`, linked from Broker connections. The first Preview sends no mapping and fills the column selects from the server's guess. Preview and import are silent calls, and a refusal shows under the buttons. Pure helpers live in `statement-mapping.ts`.
 - **Broker exports (DEGIRO).** What file is it? on the import page picks a broker export (`GET /api/statement-imports/presets`), Find out from the headers (the default), or Another broker: I map the columns (`preset: none`). A preset reads the columns itself, so the mapping panel stays hidden, and the preview says Read as DEGIRO Transactions, Dutch, with notes on what it left out. A holdings export (DEGIRO Portfolio) asks the day of the export. `?preset=degiro_transactions` opens the page with that export chosen (router input binding). Broker connections shows `<app-broker-exports-panel>` (`broker-exports-panel.ts`): each broker read from its exports, marked Reads only, with a link per export and where to find it. DEGIRO is never offered as a connection. See [DEGIRO](design/degiro.md).
@@ -1311,8 +1377,9 @@ flowchart LR
 
 ## Universes (20.10)
 
-The Universes page sits under Data: the Data page links to it, and so do
-the screener and the lab forms. Anyone signed in can read it. Creating,
+Admins find Universes in the System group of the menu. The Data page links
+to it, and so do the screener and the lab forms. Anyone signed in can open
+and read it from those links. Creating,
 editing, refreshing and fetching data need `lab.run`. Delete is for
 admins.
 
@@ -1380,7 +1447,7 @@ flowchart LR
 | `FeatureFlagsService` | `core/features/` | Hide a page whose feature is off (the assistant) |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
-| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, New order, Fills, Trading runs, Trade costs and Journal, one tap apart. On phones a cut tab fades at the edge |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Three tabs that fit a phone: Orders, New order and Fills. Rebalance is a header button, See trading runs a link above the list, Trade costs sits in the Advanced menu and Journal is found with Search |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few. `emphasis="strong"` fills the picked option solid, for Buy or Sell and the order type on the manual ticket |
 | `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
 | `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |
@@ -1482,7 +1549,7 @@ about the same thing.
 | Alerts only, Paper, Approve each trade, Automatic (follow modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
 | Approvals, order tickets | `/api/tickets` | `stonks tickets` | `list_tickets`, `get_ticket` |
 | Model versions, candidate, Swap in, Retrain | `/api/strategies/{id}/versions`, `/api/model-versions` | `registry versions`, `swap`, `reject`, `retrain` | `list_model_versions`, `swap_model_version`, `retrain_models` |
-| Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
+| Signal check | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
 | Lab history | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
 | Alerts (Health page) | `/api/alerts` | none | `list_alerts` |
@@ -1608,14 +1675,16 @@ label. `<app-empty-state>` shows the mark, a title in the display face, one
 line on what fills the space, and one action in its content slot.
 `<app-error-state>` shows the broken mark, the API's message and Try again.
 
-**Stop trading** (UX-01) is one tap from any page, on phones too: the
+**Stop trading** (UX-01) is one tap from any page, on phones too, once the
+person has something that trades (see the session strip above): the
 strip's red-outlined button (with the brass ring when the book is live)
 opens `<app-kill-sheet>`, a full-screen sheet on phones that is its own
 ticket: scope preset to the portfolio on screen ("All your portfolios"
 always, "Every portfolio" with `killswitch.global`), All new orders or
 Stop new buys only, a reason filled in and editable, and the stamp. After
-it the strip is red at once and the button becomes Resume, which leads to
-the halts page (Resume keeps the typed RESUME TRADING and a fresh code).
+it the strip is red at once and the button becomes Resume, with Review
+halts next to it (real money keeps the typed RESUME TRADING and a fresh
+code).
 The palette's "Stop trading" and the Halts page's "Stop trading…" open
 the same sheet (`StopTradingService`). Viewers never see it.
 
@@ -1733,14 +1802,15 @@ automate it.
   Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
   focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
   returns focus); `?` lists every shortcut; `g` then a key jumps between
-  pages (`g m` Today, `g s` strategies, `g o` orders, `g t` trade costs,
-  `g z` charts, `g x` watchlists, `g e` insights, `g n` notifications,
-  `g w` paper trading, `g b` leaderboard, `g f` screener, `g u` studio, `g l` lab, `g g`
-  go live, `g y` assistant, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
-  glossary, and for admins
-  `g d` overview, `g h` health, `g j` schedule, `g a` data, `g q` data
-  quality, `g v` universes, `g k` halts, `g r` users); `n b` new
-  backtest, `n t` dry-run trading run. Pages and actions a user may not
+  pages (`g m` Today, `g s` Strategies, `g u` Build a strategy, `g l` Lab,
+  `g o` Orders, `g e` Insights, `g z` Charts, `g x` Watchlists,
+  `g f` Screener, `g w` Trial results, `g b` Leaderboard, `g y` Assistant,
+  `g g` Strategy review, `g t` Trade costs, `g k` Halts, `g n`
+  Notifications, `g p` Profile, `g ,` Settings, `g c` Broker connections,
+  `g i` Help, and for admins `g d` Dashboard, `g h` Health, `g j` Schedule,
+  `g a` Data, `g q` Data quality, `g v` Universes, `g r` Users), and `n b` new
+  backtest, `n t` a dry-run trading run. The menu shows each page's key
+  next to its name. Pages and actions a user may not
   use are hidden from the palette, the shortcuts and the cheat sheet. Single-key shortcuts can
   be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.
   Escape closes dialogs and the drawer.
@@ -1834,16 +1904,21 @@ flowchart LR
 - **Nav** (M1, `shell/nav-items.ts`): seven pages on top, the rest in
   folding groups. Each group is a disclosure that remembers whether it is
   open (`localStorage`, `stonks.nav.groups`), and the group that holds the
-  current page opens by itself. More starts open, Advanced and System start
-  folded, so the rail fits a laptop screen.
+  current page opens by itself. On day one a trader sees only the main
+  pages: More and Advanced start folded. Admins start with System open
+  (`defaultOpenGroups()`), so the rail fits a laptop screen.
 
   | Group | Pages | Who |
   |---|---|---|
-  | (top) | Today, Strategies, Orders, Approvals, Insights, Charts, Notifications | everyone signed in (Approvals needs `portfolio.trade`) |
-  | More | Going live (`/going-live`), Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Trade costs (`/trades`), Assistant | everyone; the Assistant only while it is on |
-  | Advanced | Studio, Lab, Options, Strategy review (`/go-live`), Halts (traders: their own halts) | Studio and Lab need `lab.run`, Halts `killswitch.user` |
-  | System | Dashboard (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins |
+  | (top) | Today, Strategies, Build a strategy (`/studio`), Lab, Orders, Insights, Charts | everyone signed in (Build a strategy and Lab need `lab.run`) |
+  | More | Approvals (`/tickets`), Going live (`/going-live`), Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Assistant | everyone. Approvals needs `portfolio.trade`, the Assistant shows only while it is on |
+  | Advanced | Strategy review (`/go-live`), Options, Trade costs (`/trades`), Halts (traders: their own halts) | Options only while it is on, Halts `killswitch.user` |
+  | System | Dashboard (`/dashboard`), Health, Intraday engine (`/live`), Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins. Intraday engine and Model versions only while their feature is on |
   | Account menu (pinned below the nav) | Profile, Settings, Broker connections, Get set up, Help, Sign out | everyone signed in |
+
+  Notifications has no menu item: the bell next to the Stonks name (and in
+  the phone top bar) opens it, with the unread count. Journal, Trading runs,
+  Fills and Alert settings are found with Search too.
 
   The nav scrolls between the search box and the account menu, with a
   shadow at an edge while there is more to scroll to, so the account menu
@@ -1853,7 +1928,8 @@ flowchart LR
   strip (`<app-strip-halt-actions>`), with the same ticket, typed words and
   code as the Halts page. A halt only an admin may end says so. The palette
   opens a ticker on its chart. Features that are off leave the nav
-  (`FeatureFlagsService`, today the assistant): Settings, System tells
+  (`FeatureFlagsService`: the assistant, options, the intraday engine and
+  model versions): Settings, System tells
   admins how to turn it on. With open reads and nobody signed in (dev)
   everything shows.
 - **Signing out** (and a different user signing in on the same tab) loads
@@ -1896,20 +1972,25 @@ flowchart LR
   `signal` items and the runs from the last 24 hours). A run line counts
   only the orders and fills in the reader's own portfolios, as the API
   scopes them (`ownRunCounts()`). When the counts are null it says only
-  "Trading run finished". Its status reads Done, Partly done or Failed
+  "Trading run finished". Runs that traded nothing in your portfolios fold
+  into one line, such as "8 trading runs finished, nothing for you"
+  (`pages/home/signals-card.ts`). A signal row says what to do and when,
+  and a signal you follow on Alerts only says nothing traded. Its status reads Done, Partly done or Failed
   (`shared/status-words.ts`). My strategies: one `<app-follow-control>` per
-  follow (the on/off switch and Alerts only, Paper, Approve each trade,
-  Automatic), the same control as the strategy page, the portfolio it trades when
-  there are several, and "Paper days: 4 of 20". The unlock rule is said
-  once above the list. Approve each trade and Automatic stay locked until the
-  paper days and the server's other checks pass, then ask for the step-up
+  follow (the Following or Paused switch and the modes), the same control as the strategy page, the portfolio it trades when
+  there are several, and "Your paper days: 4 of 20." The unlock rule is said
+  once above the list. Approve each trade and Automatic stay hidden until the
+  broker portfolio, the paper days and the server's other checks pass, then ask for the step-up
   and a ticket. Automatic asks for the strategy's name as shown, never its
   id. The left column flows on its own (the last grid row is
   flexible), so a tall strategies list never leaves a gap beside it.
 - **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
   strategy on trial or approved has a Follow panel. Pick "Alerts only"
-  (notify) or "Paper" in one of your portfolios, then
-  `POST /api/subscriptions` (`portfolio.trade`). Approve each trade and
+  (notify, which needs no portfolio and reads "No portfolio" once you
+  follow) or "Paper" in one of your portfolios, then
+  `POST /api/subscriptions` (`portfolio.trade`). A strategy on trial can be
+  followed on Alerts only. Switching from Paper back to Alerts only asks
+  first, since the paper days start again from 0. Approve each trade and
   Automatic are never starting modes. Once you follow it, the panel shows
   `<app-follow-control>` for each portfolio, the same control Today uses,
   to switch it on or off and change the mode.
@@ -1925,13 +2006,15 @@ flowchart LR
   The default portfolio at Alpaca or an IB Gateway is LIVE only when its
   orders really go to a live account (`broker` is `alpaca` or `ibkr`), the
   same answer the order paths use.
-- **Profile** (`pages/profile/`): password, new recovery codes, your
-  portfolios and API tokens (a new token is shown once). "Your portfolios"
+- **Profile** (`pages/profile/`): account, password, new recovery codes, your
+  portfolios and API tokens (a new token is shown once). Sign-in and
+  security live here, not in Settings. "Your portfolios"
   lists each with its PAPER or LIVE stamp, renames one
   (`PATCH /api/portfolios/{id}`) and opens a new paper portfolio with an
   optional starting cash (`POST /api/portfolios`, both `portfolio.manage`).
-  The portfolio picker reloads after each change. **Settings** adds alert settings per
-  type and channel and quiet hours next to the push opt-in.
+  The portfolio picker reloads after each change. **Alert settings**
+  (`/notifications/settings`) holds the alerts per type and channel and quiet
+  hours next to the push opt-in.
   `GET /api/notifications/preferences` has `channel_defaults`: whether each
   channel is on when you never set it, and whether it stands in for push.
   It also has `event_alerts`, one switch per upcoming-event kind (`earnings`,
