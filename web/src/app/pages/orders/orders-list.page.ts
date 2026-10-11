@@ -35,7 +35,7 @@ const PAGE_SIZE = 50;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, OrdersTable, LoadingState, EmptyState, ErrorState],
   template: `
-    <section class="panel" aria-labelledby="orders-title">
+    <section class="panel panel-flush" aria-labelledby="orders-title">
       <div class="panel-head">
         <h2 id="orders-title">Orders</h2>
         @if (page(); as p) {

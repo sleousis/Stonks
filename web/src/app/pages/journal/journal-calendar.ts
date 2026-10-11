@@ -66,7 +66,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         />
       } @else {
         @let cal = calendar.value();
-        <div class="tiles" aria-label="Calendar totals">
+        <div class="tiles stat-strip" aria-label="Calendar totals">
           <app-stat-tile
             label="Realised"
             [value]="money(cal.total)"

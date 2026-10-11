@@ -112,10 +112,14 @@ import {
       gap: var(--space-4);
       min-width: 0;
     }
+    /* The four figures: one inset well, label over value. */
     .figures {
       display: grid;
       gap: var(--space-3);
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: var(--space-3);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
       @include bp.from-tablet {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
@@ -126,12 +130,14 @@ import {
       min-width: 0;
     }
     .label {
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
     }
     .value {
       font-family: var(--font-mono);
       font-size: var(--text-lg);
+      font-variant-numeric: tabular-nums slashed-zero;
+      font-weight: var(--weight-medium);
       overflow-wrap: anywhere;
     }
     .gain {
@@ -155,7 +161,7 @@ import {
     }
     .tick {
       fill: var(--chart-text);
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-family: var(--font-mono);
     }
     .zero {
@@ -185,7 +191,9 @@ import {
     }
     h3 {
       margin: 0 0 var(--space-2);
-      font-size: var(--text-md);
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
     }
     ul {
       display: grid;

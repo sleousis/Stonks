@@ -78,7 +78,7 @@ import { latestRealRunDay } from './tick-mode';
         </p>
 
         @if (!dryRun()) {
-          <div class="alert" role="note" [class.live]="live()">
+          <div class="alert callout" data-tone="info" role="note" [class.live]="live()">
             @if (broker.error()) {
               Could not read the broker. A run is blocked until it loads.
             } @else if (broker.hasValue()) {
@@ -225,17 +225,12 @@ import { latestRealRunDay } from './tick-mode';
       color: var(--color-loss);
     }
     .alert {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
-      border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
-      font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
     /* Brass only where real money moves. */
     .alert.live {
-      border-left-color: var(--color-live);
-      background: var(--color-live-soft);
+      --callout-tone: var(--color-live);
+      --callout-soft: var(--color-live-soft);
     }
     .actions {
       display: flex;
@@ -249,15 +244,22 @@ import { latestRealRunDay } from './tick-mode';
     }
     .result {
       display: grid;
-      gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
+      gap: var(--space-3);
+      padding: var(--space-4);
       border-top: 1px solid var(--color-border);
+    }
+    @include bp.phone {
+      .result {
+        padding: var(--space-3);
+      }
     }
     h3 {
       display: flex;
       align-items: center;
       gap: var(--space-2);
-      font-size: var(--text-md);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--color-ink-2);
     }
     dl {
       display: grid;
@@ -273,7 +275,7 @@ import { latestRealRunDay } from './tick-mode';
       color: var(--color-ink-3);
     }
     dd {
-      margin: 0;
+      margin: var(--space-1) 0 0;
       font-weight: var(--weight-medium);
       overflow-wrap: anywhere;
     }

@@ -107,7 +107,7 @@ export function draftSource(source: OrderDraftView['source']): string {
               </span>
             </p>
             @if (problems()[d.id]; as p) {
-              <p class="failure" role="alert">{{ p }}</p>
+              <p class="failure callout" data-tone="loss" role="alert">{{ p }}</p>
             }
             @if (d.client_id) {
               <a class="btn btn-ghost" [routerLink]="['/trades/orders', d.client_id]"
@@ -151,14 +151,27 @@ export function draftSource(source: OrderDraftView['source']): string {
     .tickets {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: var(--space-3);
+      gap: var(--space-4);
       margin: 0;
       padding: 0;
       list-style: none;
 
+      @include bp.phone {
+        gap: var(--space-3);
+      }
+
       @include bp.from-tablet {
         grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
       }
+    }
+    .tickets > li {
+      display: grid;
+    }
+    /* A column, so the Reject and Approve row sits at the foot of every
+       ticket in a grid row. */
+    .tickets .ticket {
+      display: flex;
+      flex-direction: column;
     }
     .ticket-kind {
       display: inline-flex;
@@ -185,6 +198,7 @@ export function draftSource(source: OrderDraftView['source']): string {
       font-weight: var(--weight-medium);
     }
     .why {
+      font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
     .meta {
@@ -198,17 +212,18 @@ export function draftSource(source: OrderDraftView['source']): string {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: var(--space-2);
-      padding-top: var(--space-2);
+      margin-top: auto;
+      padding-top: var(--space-3);
       border-top: 1px dashed var(--color-border-strong);
+    }
+    .ticket > .btn-ghost {
+      align-self: flex-start;
     }
     .actions .btn {
       min-height: var(--touch-min);
       justify-content: center;
     }
     .failure {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-loss);
-      background: var(--color-loss-soft);
       overflow-wrap: anywhere;
     }
   `,

@@ -162,11 +162,13 @@ export function orderReason(order: OrderView): string | null {
       gap: 2px;
       min-width: 0;
     }
+    /* A second line under the pill: 12px, wrapping inside the column. */
     .reason,
     .note {
-      max-width: 32ch;
+      max-width: 44ch;
       font-size: var(--text-xs);
-      line-height: var(--leading-tight);
+      font-weight: var(--weight-regular);
+      line-height: 1.35;
       overflow-wrap: anywhere;
       white-space: normal;
     }
@@ -174,7 +176,7 @@ export function orderReason(order: OrderView): string | null {
       color: var(--color-loss);
     }
     .note {
-      color: var(--color-ink-2);
+      color: var(--color-ink-3);
     }
   `,
 })

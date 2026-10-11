@@ -40,7 +40,7 @@ import { OrderStatus, orderReason, stopWords } from './order-status';
     >
       <ng-template appCell="ticker" [appCellOf]="rows()" let-o>
         <a
-          class="cell-link"
+          class="cell-link ticker"
           [routerLink]="['/trades/orders', o.client_id]"
           [attr.aria-label]="'Order details: ' + o.side + ' ' + o.quantity + ' ' + o.ticker"
           >{{ o.ticker }}</a
@@ -98,7 +98,8 @@ export class OrdersTable {
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
     { key: 'limit_price', label: 'Limit or stop', mobile: 'hide', help: false },
-    { key: 'status', label: 'Status' },
+    // Wraps: a Working or refused order explains itself on a second line.
+    { key: 'status', label: 'Status', wrap: true },
     {
       key: 'strategy_id',
       label: 'Strategy',

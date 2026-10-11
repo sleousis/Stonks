@@ -31,7 +31,7 @@
       </p>
     </details>
     @if (e.status_reason) {
-      <p class="reason">{{ e.status_reason }}</p>
+      <p class="reason callout" data-tone="neutral">{{ e.status_reason }}</p>
     }
 
     <dl class="prices">
@@ -57,7 +57,7 @@
 
     <section class="costs" aria-labelledby="costs-title">
       <h3 id="costs-title">Shortfall</h3>
-      <p class="muted small">
+      <p class="muted small prose">
         The gap between the price when the order was decided and the price actually paid, fees
         included. Positive figures are costs.
       </p>

@@ -43,7 +43,7 @@ const KEY_LABELS: Record<Grouping, string> = {
   imports: [DataTable, Segmented, StatTile, EmptyState, ErrorState, LoadingState],
   styleUrl: './trades.scss',
   template: `
-    <section class="panel" aria-labelledby="costs-title">
+    <section class="panel panel-flush" aria-labelledby="costs-title">
       <div class="panel-head">
         <h2 id="costs-title">What trading cost</h2>
       </div>
@@ -62,7 +62,7 @@ const KEY_LABELS: Record<Grouping, string> = {
       } @else if (!totals.hasValue()) {
         <app-loading-state label="Loading trade costs" [rows]="3" />
       } @else if (headline(); as g) {
-        <div class="tiles" aria-label="Trade cost totals">
+        <div class="tiles stat-strip" aria-label="Trade cost totals">
           <app-stat-tile
             label="Total cost"
             [value]="totalCost(g)"
@@ -105,7 +105,7 @@ const KEY_LABELS: Record<Grouping, string> = {
 
     <!-- With no trades yet the totals already say so: no second empty panel. -->
     @if (!noTrades()) {
-      <section class="panel breakdown" aria-labelledby="breakdown-title">
+      <section class="panel panel-flush breakdown" aria-labelledby="breakdown-title">
         <div class="panel-head">
           <h2 id="breakdown-title">Breakdown</h2>
           <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />

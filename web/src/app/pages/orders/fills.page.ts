@@ -39,7 +39,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, DataTable, TableCell, LoadingState, EmptyState, ErrorState, SideTag],
   template: `
-    <section class="panel" aria-labelledby="fills-title">
+    <section class="panel panel-flush" aria-labelledby="fills-title">
       <div class="panel-head">
         <h2 id="fills-title">Fills</h2>
         @if (page(); as p) {

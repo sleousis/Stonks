@@ -196,7 +196,7 @@ import {
             }
           </div>
           @if (r.synthetic) {
-            <p class="warn" role="note">
+            <p class="warn callout" data-tone="warn" role="note">
               These chains are generated, not market quotes. The result shows the tools work and is
               never evidence for the strategy.
             </p>
@@ -301,31 +301,32 @@ import {
     h4 {
       margin: 0;
       font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     .warn {
       margin: 0;
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
-      font-size: var(--text-sm);
     }
     .figures {
       display: grid;
       gap: var(--space-3);
       grid-template-columns: repeat(2, minmax(0, 1fr));
       margin: 0;
+      padding: var(--space-3);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
       @include bp.from-tablet {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
       dt {
-        color: var(--color-ink-2);
-        font-size: var(--text-sm);
+        color: var(--color-ink-3);
+        font-size: var(--text-xs);
       }
       dd {
-        margin: 0;
+        margin: var(--space-1) 0 0;
         font-family: var(--font-mono);
         font-size: var(--text-lg);
+        font-variant-numeric: tabular-nums slashed-zero;
       }
     }
     .checks {
