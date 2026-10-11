@@ -188,9 +188,9 @@ describe('LabRunResultView', () => {
     // One plain verdict, naming what failed. No Status tile repeats it.
     const plain = el.querySelector('.plain')!.textContent!;
     expect(plain).toContain('Did not hold up.');
-    expect(plain).toContain(
-      'It did not hold up: it failed 1 of 3 robustness tests (Rolling retest)',
-    );
+    expect(plain).toContain('It failed 1 of 3 robustness tests (Rolling retest)');
+    // The bold lead says it once: the sentence does not repeat it.
+    expect(plain).not.toContain('It did not hold up');
     expect(el.textContent).not.toContain('trial');
     const params = [...el.querySelectorAll('.params div')].map((d) =>
       [d.querySelector('dt')!.textContent!.trim(), d.querySelector('dd')!.textContent!.trim()].join(
@@ -254,7 +254,7 @@ describe('LabRunResultView', () => {
 
   it('links a registered strategy', () => {
     const el = render({ ...LAB_RUN_VIEW, verdict: 'pass', registered_strategy_id: 'momentum-7' });
-    expect(el.querySelector('.plain')!.textContent).toContain('It held up');
+    expect(el.querySelector('.plain')!.textContent).toContain('Held up.');
     const link = el.querySelector<HTMLAnchorElement>('.registered a')!;
     expect(el.querySelector('.registered')!.textContent).toContain('Put on trial as');
     expect(link.textContent).toBe('momentum-7');

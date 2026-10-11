@@ -248,7 +248,7 @@ describe('LabPage', () => {
     expect(body['register_strategy']).toBeUndefined();
     // A plain verdict under the result.
     expect(el.querySelector('app-lab-run-result .plain')!.textContent).toContain(
-      'It did not hold up',
+      'Did not hold up.',
     );
   });
 

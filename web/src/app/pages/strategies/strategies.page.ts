@@ -130,7 +130,7 @@ export class StrategiesPage {
   });
 
   protected readonly columns: TableColumn<StrategyRow>[] = [
-    { key: 'id', label: 'Strategy', mobile: 'title', value: (s) => s.name },
+    { key: 'id', label: 'Strategy', mobile: 'title', wrap: true, value: (s) => s.name },
     { key: 'status', label: 'Status' },
     { key: 'paper_return', label: 'Trial return', format: 'signedPercent', tone: true },
     { key: 'max_drawdown', label: 'Worst drop', format: 'percent' },

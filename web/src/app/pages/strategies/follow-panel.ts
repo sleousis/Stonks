@@ -126,7 +126,7 @@ export const FOLLOW_MODES = MODES.filter(
           </fieldset>
           @if (mode() === 'paper') {
             @if (portfolios().length === 0) {
-              <p class="note">
+              <p class="note callout">
                 You have no portfolio yet.
                 <a routerLink="/welcome" [queryParams]="{ step: 'portfolio' }"
                   >Open a paper portfolio</a
@@ -174,21 +174,23 @@ export const FOLLOW_MODES = MODES.filter(
     </section>
   `,
   styles: `
+    @use 'breakpoints' as bp;
     :host {
       display: block;
     }
     .following,
     .follow {
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-4);
     }
     .follow {
       justify-items: start;
     }
-    .lead {
-      color: var(--color-ink-2);
-    }
+    /* Helper lines: 13px, second ink, a readable measure. */
+    .lead,
     .days {
+      max-width: 70ch;
+      color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
     .follows {
@@ -202,13 +204,16 @@ export const FOLLOW_MODES = MODES.filter(
       padding-top: var(--space-3);
       border-top: 1px solid var(--color-border);
     }
+    /* The modes: one inset well, a hairline between rows, the picked row a
+       surface chip with an accent rule. No box round each option. */
     .modes {
       display: grid;
-      gap: var(--space-2);
       width: 100%;
       margin: 0;
-      padding: 0;
+      padding: var(--space-1);
       border: 0;
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
     }
     .mode {
       display: flex;
@@ -216,12 +221,26 @@ export const FOLLOW_MODES = MODES.filter(
       gap: var(--space-2);
       min-height: var(--touch-min);
       padding: var(--space-2) var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-xs);
+      box-shadow: inset 2px 0 0 transparent;
       cursor: pointer;
+      transition:
+        background-color var(--dur-fast) var(--ease),
+        box-shadow var(--dur-fast) var(--ease);
+    }
+    .mode + .mode {
+      border-top: 1px solid var(--color-border);
+    }
+    .mode:hover {
+      background: var(--color-hover);
     }
     .mode.picked {
-      border-color: var(--color-primary);
+      background: var(--color-surface);
+      box-shadow: inset 2px 0 0 var(--color-accent);
+    }
+    .mode.picked,
+    .mode.picked + .mode {
+      border-top-color: transparent;
     }
     .mode-pick {
       display: flex;
@@ -232,11 +251,23 @@ export const FOLLOW_MODES = MODES.filter(
       cursor: pointer;
     }
     .mode input {
-      margin-top: 3px;
+      flex: none;
+      width: 16px;
+      height: 16px;
+      margin: 2px 0 0;
+      accent-color: var(--color-accent);
     }
     .mode-text {
       display: grid;
-      gap: 2px;
+      gap: var(--space-1);
+    }
+    .mode-text strong {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+    }
+    .mode-text .muted {
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
     }
     .field {
       width: 100%;
@@ -250,18 +281,17 @@ export const FOLLOW_MODES = MODES.filter(
       min-width: 0;
       flex: 1;
     }
-    .note {
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
-      border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
-      font-size: var(--text-sm);
-    }
     .actions {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: var(--space-2);
+    }
+    @include bp.coarse {
+      .mode input {
+        width: 18px;
+        height: 18px;
+      }
     }
   `,
 })

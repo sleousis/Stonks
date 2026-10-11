@@ -37,7 +37,7 @@
     <button
       actions
       type="button"
-      class="btn"
+      class="btn save-btn"
       [class.btn-primary]="dirty()"
       [disabled]="!dirty() || saving() || !canLab()"
       [attr.aria-busy]="saving()"
@@ -116,7 +116,7 @@
     }
     @if (isCode()) {
       @if (d.source_code === null) {
-        <div class="callout" role="note">
+        <div class="callout" data-tone="warn" role="note">
           <p class="callout-title">Code strategies are turned off</p>
           <p>Code strategies are turned off on this server. Ask your admin.</p>
         </div>
@@ -200,10 +200,10 @@
             </div>
           </div>
           @if (validationHint(); as h) {
-            <p class="notice">{{ h }}</p>
+            <p class="notice callout" data-tone="warn">{{ h }}</p>
           }
           @if (issues().length) {
-            <div class="issues" role="region" aria-label="Problems to fix">
+            <div class="issues callout" data-tone="loss" role="region" aria-label="Problems to fix">
               <p class="issues-title">Fix these before testing:</p>
               <ul>
                 @for (issue of issues(); track $index) {
@@ -264,13 +264,13 @@
   <!-- Test ------------------------------------------------------------------->
   <div role="tabpanel" id="panel-test" aria-labelledby="tab-test" [hidden]="activeTab() !== 'test'">
     @if (isCode() && d.source_code === null) {
-      <div class="callout" role="note">
+      <div class="callout" data-tone="warn" role="note">
         <p class="callout-title">Code strategies are turned off</p>
         <p>Code strategies are turned off on this server. Ask your admin.</p>
       </div>
     } @else {
       @if (!isCode() && issues().length) {
-        <p class="notice">
+        <p class="notice callout" data-tone="warn">
           The rules have {{ issues().length === 1 ? 'a problem' : issues().length + ' problems' }}.
           Fix them on the Build tab before testing.
         </p>

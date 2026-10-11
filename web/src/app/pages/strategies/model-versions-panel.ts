@@ -343,18 +343,19 @@ import { StatusPill } from '../../shared/ui/status-pill';
     .muted {
       font-size: var(--text-sm);
     }
+    /* A candidate is an inset well in the panel, not a bordered card. */
     .candidate {
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-4);
       margin: 0 var(--space-4) var(--space-4);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border-strong);
-      border-left: 3px solid var(--color-info);
+      padding: var(--space-4);
       border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
       min-width: 0;
 
       @include bp.phone {
-        margin: 0 var(--space-2) var(--space-3);
+        gap: var(--space-3);
+        margin: 0 var(--space-3) var(--space-3);
         padding: var(--space-3);
       }
     }
@@ -365,9 +366,15 @@ import { StatusPill } from '../../shared/ui/status-pill';
       align-items: center;
       gap: var(--space-2) var(--space-3);
     }
-    .candidate-head h3,
-    .books h4 {
-      font-size: var(--text-md);
+    .candidate-head h3 {
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
+    }
+    .books h4,
+    .calibration h4 {
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
     }
     .books {
       display: grid;
@@ -401,7 +408,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
       height: 0.75rem;
       min-width: 2px;
       max-width: calc(100% - 5rem);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-xs);
       background: var(--color-info);
     }
     .bar.live {
@@ -467,12 +474,10 @@ import { StatusPill } from '../../shared/ui/status-pill';
       flex-wrap: wrap;
       justify-content: flex-end;
       gap: var(--space-2);
-      padding-top: var(--space-2);
-      border-top: 1px dashed var(--color-border-strong);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-border);
     }
     .actions .btn {
-      min-height: var(--touch-min);
-
       @include bp.phone {
         flex: 1 1 100%;
         justify-content: center;
@@ -483,6 +488,10 @@ import { StatusPill } from '../../shared/ui/status-pill';
       gap: var(--space-2);
       padding: var(--space-3) var(--space-4) var(--space-4);
       border-top: 1px solid var(--color-border);
+
+      @include bp.phone {
+        padding: var(--space-3);
+      }
     }
     .retrain-box summary {
       display: flex;
@@ -502,7 +511,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
       display: grid;
       gap: var(--space-1);
       padding-left: var(--space-3);
-      border-left: 2px solid var(--color-border-strong);
+      border-left: 2px solid var(--color-border);
       overflow-wrap: anywhere;
     }
     .timeline li.override {

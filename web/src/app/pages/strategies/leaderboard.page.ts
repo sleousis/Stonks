@@ -80,15 +80,15 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
       title="Leaderboard"
       description="Every strategy side by side, ranked by its trial result. Open one to judge it in full."
     >
-      <a actions class="related-link" routerLink="/strategies">All strategies</a>
+      <a actions class="btn btn-tertiary" routerLink="/strategies">All strategies</a>
     </app-page-header>
 
     <section class="panel" aria-labelledby="board-title">
       <div class="panel-head head">
         <h2 id="board-title">Ranking</h2>
         <div class="filters">
-          <label class="field-inline">
-            <span>Rank by</span>
+          <label class="field-inline rank-by">
+            <span class="field-label">Rank by</span>
             <select class="input" (change)="sort.set($any($event.target).value)">
               @for (s of sorts; track s.id) {
                 <option [value]="s.id" [selected]="sort() === s.id">{{ s.label }}</option>
@@ -146,13 +146,16 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
             <app-status-pill [status]="r.status" />
           </ng-template>
           <ng-template appCell="verdict" [appCellOf]="board.value().rows" let-r>
-            <app-strategy-verdict compact [verdict]="verdict(r)" />
+            <span class="verdict-cell" [title]="verdict(r).label">
+              <app-strategy-verdict compact [verdict]="verdict(r)" />
+            </span>
           </ng-template>
         </app-data-table>
       }
     </section>
   `,
   styles: `
+    @use 'breakpoints' as bp;
     .head {
       flex-wrap: wrap;
       gap: var(--space-2) var(--space-4);
@@ -163,25 +166,26 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
       align-items: center;
       gap: var(--space-2) var(--space-4);
     }
+    /* Label and control on one line: the label never wraps. */
     .field-inline {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
-      min-height: var(--touch-min);
+      min-height: var(--control-h);
       font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      white-space: nowrap;
+    }
+    .field-label {
+      flex: none;
     }
     .field-inline select {
+      width: auto;
       max-width: 16rem;
     }
-    .related-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: var(--touch-min);
-      font-size: var(--text-sm);
-    }
     .as-of {
-      padding: var(--space-2) var(--space-4) 0;
-      font-size: var(--text-sm);
+      padding: var(--space-3) var(--space-4) var(--space-1);
+      font-size: var(--text-xs);
     }
     .name {
       display: inline-grid;
@@ -189,8 +193,13 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
       column-gap: var(--space-2);
       align-items: baseline;
       align-content: center;
-      min-height: var(--touch-min);
+      color: var(--color-ink);
       text-decoration: none;
+    }
+    .name:hover .id,
+    .name:focus-visible .id {
+      text-decoration: underline;
+      text-underline-offset: 3px;
     }
     .rank {
       grid-row: span 2;
@@ -198,12 +207,47 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
     }
     .id {
       font-weight: var(--weight-semibold);
-      text-decoration: underline;
-      text-underline-offset: 2px;
       overflow-wrap: anywhere;
     }
     .cls {
       font-size: var(--text-xs);
+    }
+    /* A verdict stays on one line inside a fixed width, so every row keeps
+       one baseline. The full words sit in the title. */
+    .verdict-cell {
+      display: block;
+      max-width: 14rem;
+    }
+    :host ::ng-deep .verdict-cell app-strategy-verdict app-status-pill {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    :host ::ng-deep .verdict-cell app-strategy-verdict app-status-pill .mark {
+      display: inline-block;
+      margin-inline-end: 6px;
+      vertical-align: -1px;
+    }
+    @include bp.phone {
+      .field-inline,
+      .name {
+        min-height: var(--touch-min);
+      }
+      .field-inline.rank-by {
+        flex: 1 1 100%;
+      }
+      .field-inline.rank-by select {
+        flex: 1;
+        max-width: none;
+      }
+    }
+    @include bp.coarse {
+      .field-inline,
+      .name {
+        min-height: var(--touch-min);
+      }
     }
   `,
 })

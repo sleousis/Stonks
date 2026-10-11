@@ -394,9 +394,9 @@ ones marked, and Signal ranking (IC) says it never fails a run.
 `production/golive.py` names them the same way for the approval check.
 
 A lab run's result opens with one plain line: **Held up** or **Did not
-hold up**, then one sentence (`verdictSentence`): "It held up: it passed all 7 robustness
-tests..." or "It did not hold up: it failed 2 of 7 robustness tests
-(Higher costs, Nearby settings)...". A second line says why a run can fail
+hold up**, then one sentence (`verdictSentence`) that does not repeat it:
+"It passed all 7 robustness tests..." or "It failed 2 of 7 robustness
+tests (Higher costs, Nearby settings)...". A second line says why a run can fail
 with every trial done: trials are the settings the search tried, and a
 trial only says a setting ran. The Lab history uses the same split:
 trials read **Done** or **Error**, the run reads **Held up** or **Did not

@@ -110,7 +110,7 @@ interface NextStep {
     }
     .stage-bar {
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-4);
       padding: var(--space-4);
     }
     :host(.compact) .stage-bar {
@@ -119,7 +119,7 @@ interface NextStep {
     .stages {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: var(--space-2);
+      gap: var(--space-4);
       margin: 0;
       padding: 0;
       list-style: none;
@@ -129,8 +129,8 @@ interface NextStep {
       gap: var(--space-2);
       align-items: flex-start;
       min-width: 0;
-      padding-top: var(--space-2);
-      border-top: 3px solid var(--color-border);
+      padding-top: var(--space-3);
+      border-top: 2px solid var(--color-border);
     }
     .stages li[data-state='done'] {
       border-top-color: var(--color-ink-3);
@@ -158,12 +158,14 @@ interface NextStep {
       min-width: 0;
     }
     .stage-label {
+      font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }
     li[data-state='todo'] .stage-label {
       color: var(--color-ink-2);
     }
     .stage-detail {
+      margin-top: 2px;
       font-size: var(--text-xs);
       color: var(--color-ink-3);
     }
@@ -176,11 +178,12 @@ interface NextStep {
     .next-text {
       flex: 1 1 16rem;
       min-width: 0;
+      max-width: 70ch;
       color: var(--color-ink-2);
     }
     .checks {
       border-top: 1px solid var(--color-border);
-      padding-top: var(--space-2);
+      padding-top: var(--space-1);
     }
     .checks summary {
       display: flex;
@@ -193,8 +196,8 @@ interface NextStep {
     }
     .check-list {
       display: grid;
-      gap: var(--space-2);
-      margin: var(--space-2) 0 0;
+      gap: var(--space-3);
+      margin: var(--space-2) 0 var(--space-1);
       padding: 0;
       list-style: none;
       font-size: var(--text-sm);
@@ -214,8 +217,13 @@ interface NextStep {
       min-height: var(--touch-min);
     }
     @include bp.phone {
+      .stage-bar {
+        gap: var(--space-3);
+        padding: var(--space-3);
+      }
       .stages {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
       }
       .next .btn {
         width: 100%;

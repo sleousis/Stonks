@@ -125,7 +125,7 @@ export function scoreText(score: number | null | undefined): string {
                 (pageChange)="offset.set($event.offset)"
               >
                 <ng-template appCell="started_at" [appCellOf]="p.items" let-r>
-                  <a class="cell-link" [routerLink]="['/lab/ledger', r.id]">{{
+                  <a class="cell-link num" [routerLink]="['/lab/ledger', r.id]">{{
                     when(r.started_at)
                   }}</a>
                 </ng-template>
@@ -199,6 +199,8 @@ export class LedgerPage {
       label: 'Idea',
       sortable: false,
       value: (r) => r.hypothesis || this.ideas().get(r.strategy_class ?? '') || '',
+      // Long ideas wrap, so the Errors and Status columns stay in view at 1440px.
+      wrap: true,
       mobile: 'hide',
     },
     { key: 'n_trials', label: 'Settings tried', format: 'number', sortable: false, help: false },

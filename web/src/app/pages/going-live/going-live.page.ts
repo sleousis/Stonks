@@ -18,6 +18,7 @@ import { stageWords } from '../../shared/live-stages';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
+import { StatusPill } from '../../shared/ui/status-pill';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { STATE_WORDS, type StepState, atBroker, goingLiveSteps } from './going-live-steps';
 import { lastPreview } from './preview-memory';
@@ -38,7 +39,16 @@ import { lastPreview } from './preview-memory';
 @Component({
   selector: 'app-going-live-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeader, ModeStamp, HelpTip, EmptyState, ErrorState, LoadingState],
+  imports: [
+    RouterLink,
+    PageHeader,
+    ModeStamp,
+    HelpTip,
+    StatusPill,
+    EmptyState,
+    ErrorState,
+    LoadingState,
+  ],
   template: `
     <app-page-header
       title="Going live"
@@ -128,7 +138,12 @@ import { lastPreview } from './preview-memory';
                 </h2>
                 <p class="detail">{{ s.detail }}</p>
               </div>
-              <span class="state" [attr.data-state]="s.state">{{ stateWords[s.state] }}</span>
+              <app-status-pill
+                class="state"
+                [attr.data-state]="s.state"
+                [status]="pillKeys[s.state]"
+                [label]="stateWords[s.state]"
+              />
               @if (s.link; as l) {
                 <a
                   class="btn"
@@ -155,12 +170,12 @@ import { lastPreview } from './preview-memory';
 
     :host {
       display: grid;
-      gap: var(--space-4);
+      gap: var(--space-5);
       min-width: 0;
     }
     .top {
       display: grid;
-      gap: var(--space-2);
+      gap: var(--space-3);
       max-width: 48rem;
     }
     .picker {
@@ -172,99 +187,95 @@ import { lastPreview } from './preview-memory';
     }
     .bar {
       height: 6px;
-      border-radius: 3px;
-      background: var(--color-surface-2);
+      border-radius: var(--radius-xs);
+      background: var(--color-surface-3);
       overflow: hidden;
     }
     .bar span {
       display: block;
       height: 100%;
       background: var(--color-gain);
-      transition: width var(--dur-fast) var(--ease);
+      transition: width var(--dur) var(--ease-out);
     }
+    /* The steps: one panel, a hairline between rows. */
     .steps {
       display: grid;
-      gap: var(--space-2);
       max-width: 60rem;
       margin: 0;
       padding: 0;
       list-style: none;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      overflow: hidden;
+    }
+    .steps > li + li {
+      border-top: 1px solid var(--color-border);
     }
     .step {
       display: grid;
       grid-template-columns: 2rem minmax(0, 1fr) auto auto;
       align-items: center;
       gap: var(--space-2) var(--space-3);
-      padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
+      padding: var(--space-4);
 
       @include bp.phone {
         grid-template-columns: 2rem minmax(0, 1fr);
         padding: var(--space-3);
       }
     }
-    .step[data-state='done'] {
-      background: var(--color-surface-2);
-    }
     .later {
-      padding: var(--space-2) var(--space-4);
-      border: 1px dashed var(--color-border);
-      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-surface-2);
       font-size: var(--text-sm);
+
+      @include bp.phone {
+        padding: var(--space-3);
+      }
     }
+    /* The step number: a small square mark; a tick once done. */
     .mark {
       display: inline-grid;
       place-items: center;
       width: 2rem;
       height: 2rem;
-      border: 1.5px solid var(--color-border-strong);
-      border-radius: 50%;
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-xs);
+      color: var(--color-ink-2);
       font-family: var(--font-mono);
       font-size: var(--text-sm);
-      font-weight: var(--weight-bold);
+      font-weight: var(--weight-semibold);
+      font-variant-numeric: tabular-nums slashed-zero;
     }
     .step[data-state='done'] .mark {
       border-color: var(--color-gain);
       background: var(--color-gain);
       color: var(--color-surface);
     }
+    .body {
+      display: grid;
+      gap: var(--space-1);
+      min-width: 0;
+    }
     .title {
-      font-size: var(--text-md);
+      font-size: var(--text-panel);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     .detail {
+      max-width: 70ch;
       color: var(--color-ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
     .state {
       justify-self: start;
-      padding: 0 var(--space-2);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-xs);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-medium);
-      white-space: nowrap;
 
       @include bp.phone {
         grid-column: 2;
       }
     }
-    .state[data-state='done'] {
-      border-color: var(--color-gain);
-      color: var(--color-gain);
-    }
-    .state[data-state='admin'] {
-      border-style: dashed;
-    }
-    .state[data-state='blocked'],
-    .state[data-state='checking'] {
-      color: var(--color-ink-3);
-    }
     .step .btn {
-      min-height: var(--touch-min);
       justify-content: center;
       white-space: nowrap;
 
@@ -273,12 +284,12 @@ import { lastPreview } from './preview-memory';
         justify-self: stretch;
       }
     }
-    /* Brass only where real money moves: the steps of a Real money portfolio. */
+    /* Brass only where real money moves: the done steps of a Real money portfolio. */
     .steps.live .step[data-state='done'] {
-      border-left: var(--border-live) solid var(--color-live);
+      box-shadow: inset var(--border-live) 0 0 var(--color-live);
     }
     .foot {
-      max-width: 60rem;
+      max-width: 70ch;
       font-size: var(--text-sm);
     }
   `,
@@ -295,6 +306,14 @@ export class GoingLivePage {
   readonly portfolio = input<string>();
 
   protected readonly stateWords = STATE_WORDS;
+  /** Each step state as a status pill: Done a positive receipt, the rest neutral. */
+  protected readonly pillKeys: Record<StepState, string> = {
+    done: 'done',
+    todo: 'not_yet',
+    admin: 'waiting_admin',
+    blocked: 'waiting',
+    checking: 'running',
+  };
 
   private readonly chosen = linkedSignal(() => this.portfolio() ?? null);
   protected readonly picked = computed(() => {
