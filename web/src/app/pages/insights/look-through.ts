@@ -137,7 +137,8 @@ export function lookThroughRows(
           @for (f of funds(); track f.fund) {
             <p class="hint">
               {{ f.fund }}: {{ share(f.covered) }} of its holdings are listed, as of
-              {{ day(f.as_of) }}.
+              <span class="num">{{ day(f.as_of) }}</span
+              >.
             </p>
           }
           @for (note of notes(); track note) {
@@ -171,6 +172,7 @@ export function lookThroughRows(
       align-items: baseline;
       padding: var(--space-2) 0;
       border-top: 1px solid var(--color-border);
+      font-size: var(--text-sm);
     }
     .key {
       overflow-wrap: anywhere;
@@ -185,6 +187,7 @@ export function lookThroughRows(
       color: var(--color-ink-3);
     }
     .hint {
+      max-width: 70ch;
       margin: 0;
       font-size: var(--text-xs);
       color: var(--color-ink-3);

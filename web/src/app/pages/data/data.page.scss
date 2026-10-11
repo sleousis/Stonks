@@ -2,3 +2,11 @@
   display: block;
   min-width: 0;
 }
+
+// Instruments and Coverage are wide tables: side by side only on very wide
+// screens. Below 1600px each takes the full row, so no column clips.
+@media (max-width: 1599.98px) {
+  .page-grid > .browse {
+    grid-column: 1 / -1;
+  }
+}

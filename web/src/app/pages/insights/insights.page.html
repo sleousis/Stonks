@@ -14,9 +14,9 @@
   @if (insights.error(); as err) {
     <app-error-state title="Could not load insights" [error]="err" (retry)="insights.reload()" />
   }
-  <section class="tiles" aria-label="Portfolio summary">
+  <section class="tile-grid tiles" aria-label="Portfolio summary">
     <app-stat-tile
-      class="tile-value"
+      class="tile-value featured"
       label="Portfolio value"
       featured
       [live]="live()"
@@ -50,7 +50,9 @@
   </section>
   <p class="as-of">{{ asOf() }}</p>
   <details class="explain">
-    <summary>What these figures mean</summary>
+    <summary>
+      <span class="disclosure-chev" aria-hidden="true"></span>What these figures mean
+    </summary>
     <dl class="explain-list">
       <div>
         <dt>Beta <app-help-tip term="beta" /></dt>

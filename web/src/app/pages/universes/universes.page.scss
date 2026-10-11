@@ -43,7 +43,7 @@ fieldset.source {
     padding: 0;
     margin-bottom: var(--space-1);
     font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
+    font-weight: 520;
   }
 }
 
@@ -83,8 +83,11 @@ label.check.field {
   color: var(--color-warn);
 }
 
-// Index history is an admin tool, folded away under Advanced.
+// Index history is an admin tool, folded away under Advanced. The summary
+// reads left to right like every other: the shared chevron, the title, a
+// quiet note. Closed, it has no rule under it.
 details.advanced > summary {
+  justify-content: flex-start;
   min-height: var(--touch-min);
   cursor: pointer;
   list-style: none;
@@ -93,13 +96,19 @@ details.advanced > summary {
     display: none;
   }
 
-  &::before {
-    content: '▸';
-    margin-right: var(--space-2);
-    color: var(--color-ink-3);
+  .muted {
+    font-size: var(--text-xs);
   }
 }
 
-details.advanced[open] > summary::before {
-  content: '▾';
+details.advanced:not([open]) > summary {
+  border-bottom: 0;
+}
+
+.count {
+  font-size: var(--text-xs);
+}
+
+.name-link {
+  font-weight: var(--weight-semibold);
 }

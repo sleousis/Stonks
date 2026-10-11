@@ -151,7 +151,7 @@ function economicFigure(
             <label for="cal-start">From</label>
             <input
               id="cal-start"
-              class="input"
+              class="input num"
               type="date"
               [value]="start()"
               (change)="setRange({ start: $any($event.target).value })"
@@ -161,7 +161,7 @@ function economicFigure(
             <label for="cal-end">To</label>
             <input
               id="cal-end"
-              class="input"
+              class="input num"
               type="date"
               [value]="end()"
               (change)="setRange({ end: $any($event.target).value })"
@@ -191,7 +191,7 @@ function economicFigure(
     @if (tab() === 'news') {
       <app-news-panel [query]="newsQuery()" />
     } @else {
-      <section class="panel" aria-labelledby="cal-events-title">
+      <section class="panel panel-flush" aria-labelledby="cal-events-title">
         <div class="panel-head">
           <h2 id="cal-events-title">{{ tabTitle() }}</h2>
         </div>
@@ -236,7 +236,7 @@ function economicFigure(
         } @else {
           @let v = shown().value()!;
           @if (v.truncated) {
-            <p class="note" role="status">
+            <p class="callout note" data-tone="warn" role="status">
               Only the first events show. Pick fewer days or fewer tickers to see them all.
             </p>
           }
@@ -346,11 +346,22 @@ function economicFigure(
       display: grid;
       gap: var(--space-3);
     }
+    /* From and To share the row. A date input has a wide intrinsic size,
+       so the fields and inputs may shrink below it and never push the panel. */
     .dates {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: var(--space-3);
       max-width: 26rem;
+      min-width: 0;
+    }
+    .dates .field,
+    .dates .input {
+      min-width: 0;
+    }
+    .dates .input {
+      width: 100%;
+      padding-inline: var(--space-2);
     }
     .field select {
       max-width: 20rem;
@@ -360,7 +371,7 @@ function economicFigure(
       color: var(--color-ink-3);
     }
     .error {
-      font-size: var(--text-sm);
+      font-size: var(--text-xs);
       color: var(--color-loss);
     }
     .actions {
@@ -368,11 +379,18 @@ function economicFigure(
       flex-wrap: wrap;
       gap: var(--space-2);
     }
-    .countries {
+    /* The events panel is flush for its table: the countries form keeps
+       the panel padding. */
+    .panel-body.countries {
       max-width: 26rem;
+      padding: var(--space-4);
+      @include bp.phone {
+        padding: var(--space-3);
+      }
     }
     /* 44px targets on phones, like every link in a row card. */
     .ticker-link {
+      font-weight: var(--weight-semibold);
       display: inline-flex;
       align-items: center;
       min-height: var(--touch-min);
@@ -394,12 +412,10 @@ function economicFigure(
       color: var(--color-ink-3);
     }
     .note {
-      margin: 0 var(--space-4) var(--space-3);
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
-      font-size: var(--text-sm);
+      margin: var(--space-3) var(--space-4);
+      @include bp.phone {
+        margin: var(--space-3);
+      }
     }
   `,
 })

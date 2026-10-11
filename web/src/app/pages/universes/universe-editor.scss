@@ -47,22 +47,32 @@ fieldset.source {
     padding: 0;
     margin-bottom: var(--space-1);
     font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
+    font-weight: 520;
   }
 }
 
+// A form section: a borderless inset well under a 13px semibold title.
+// The legend floats, so it sits inside the well as the first grid row.
 fieldset.group {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
   margin: 0;
-  padding: var(--space-3) 0 0;
+  padding: var(--space-3);
   border: 0;
-  border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
 
   legend {
+    float: left;
+    width: 100%;
+    margin: 0;
     padding: 0;
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
+    letter-spacing: normal;
+    text-transform: none;
   }
 }
 
@@ -89,10 +99,16 @@ fieldset.group {
   > summary {
     display: flex;
     align-items: center;
+    gap: var(--space-2);
     min-height: var(--touch-min);
     cursor: pointer;
     color: var(--color-ink-2);
     font-weight: var(--weight-medium);
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
   }
 }
 

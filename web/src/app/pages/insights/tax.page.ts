@@ -107,8 +107,8 @@ const CURRENCY = /^[A-Z]{3}$/;
             } @else {
               <form class="form-grid" (submit)="$event.preventDefault(); save()" novalidate>
                 @if (locked()) {
-                  <div class="locked" role="note" id="tax-locked">
-                    <p class="locked-title">
+                  <div class="callout locked" data-tone="warn" role="note" id="tax-locked">
+                    <p class="callout-title">
                       Base currency and where you file are locked while this portfolio trades real
                       money.
                     </p>
@@ -326,6 +326,11 @@ const CURRENCY = /^[A-Z]{3}$/;
       display: grid;
       gap: var(--space-3);
     }
+    .files .hint {
+      max-width: 70ch;
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+    }
     .field select {
       max-width: 10rem;
     }
@@ -341,18 +346,6 @@ const CURRENCY = /^[A-Z]{3}$/;
     .fixed {
       margin: 0;
       color: var(--color-ink-2);
-    }
-    .locked {
-      display: grid;
-      gap: var(--space-1);
-      padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
-      font-size: var(--text-sm);
-    }
-    .locked-title {
-      font-weight: var(--weight-semibold);
     }
   `,
 })

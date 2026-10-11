@@ -118,15 +118,15 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
         }
         <div class="field">
           <label for="ingest-since">Since</label>
-          <input id="ingest-since" class="input" type="date" formControlName="since" />
+          <input id="ingest-since" class="input num" type="date" formControlName="since" />
         </div>
         <div class="field">
           <label for="ingest-until">Until</label>
-          <input id="ingest-until" class="input" type="date" formControlName="until" />
+          <input id="ingest-until" class="input num" type="date" formControlName="until" />
         </div>
 
         @if (problems().length) {
-          <ul class="problems wide" role="alert">
+          <ul class="callout problems wide" data-tone="loss" role="alert">
             @for (p of problems(); track p) {
               <li>{{ p }}</li>
             }
@@ -152,7 +152,7 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
             <button
               jobActions
               type="button"
-              class="btn btn-ghost"
+              class="btn btn-tertiary"
               [disabled]="cancelling()"
               (click)="cancel(j)"
             >
