@@ -8,14 +8,14 @@ import {
   viewChild,
 } from '@angular/core';
 
-import { HaltsService, RESUME_CONFIRMATION } from '../../api/halts.service';
+import { HaltsService } from '../../api/halts.service';
 import { UsersService } from '../../api/users.service';
 import type { HaltView, KillSwitchRequest } from '../../api/models';
 import type { Permission } from '../../core/auth/permissions';
 import { SessionService } from '../../core/auth/session.service';
-import { StepUpService } from '../../core/auth/step-up.service';
 import { formatDateTime } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { KillResumeService } from '../../core/halts/kill-resume.service';
 import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -95,7 +95,7 @@ export class HaltsPage {
   private readonly state = inject(HaltStateService);
   private readonly stopTrading = inject(StopTradingService);
   private readonly toasts = inject(ToastService);
-  private readonly stepUp = inject(StepUpService);
+  private readonly resumer = inject(KillResumeService);
   private readonly dialog = viewChild.required(StatusChangeDialog);
   private readonly resumeSheet = viewChild.required(ResumeSheet);
   protected readonly session = inject(SessionService);
@@ -261,18 +261,10 @@ export class HaltsPage {
     );
     const answer = await opened;
     if (answer === null) return;
-    // A fresh code first for real money. Paper asks only when the server
-    // says the last code is too old (the session interceptor prompts).
-    if (live && !(await this.stepUp.ensure('Resume trading'))) return;
     this.busyId.set(h.id);
     try {
-      // A stale second factor comes back as 403 step_up_required: the session
-      // interceptor prompts for a code and retries once.
-      await this.api.resume(h.id, {
-        confirmation: RESUME_CONFIRMATION,
-        reason: answer.reason,
-        ...(answer.overrideChecks ? { override_checks: true } : {}),
-      });
+      // The code comes first, paper or real money: the server always wants one.
+      if (!(await this.resumer.resume([h], answer))) return;
       this.toasts.success('Resumed trading.');
       await this.reload();
     } catch {

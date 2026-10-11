@@ -7,12 +7,12 @@ import {
   viewChild,
 } from '@angular/core';
 
-import { HaltsService, RESUME_CONFIRMATION } from '../../api/halts.service';
+import { HaltsService } from '../../api/halts.service';
 import type { HaltView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
-import { StepUpService } from '../../core/auth/step-up.service';
 import { formatDateTime } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { KillResumeService } from '../../core/halts/kill-resume.service';
 import { killStopsText } from '../../core/halts/kill-ticket';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -107,7 +107,7 @@ export class StripHaltActions {
   private readonly state = inject(HaltStateService);
   private readonly api = inject(HaltsService);
   private readonly session = inject(SessionService);
-  private readonly stepUp = inject(StepUpService);
+  private readonly resumer = inject(KillResumeService);
   private readonly toasts = inject(ToastService);
   private readonly portfolios = inject(PortfolioContextService);
   private readonly sheet = viewChild.required(ResumeSheet);
@@ -149,16 +149,9 @@ export class StripHaltActions {
     );
     const answer = await opened;
     if (answer === null) return;
-    if (!(await this.stepUp.ensure('Resume trading'))) return;
+    // The same path as the Halts page: the code first, then one request each.
     await this.run(async () => {
-      for (const h of halts) {
-        await this.api.resume(h.id, {
-          confirmation: RESUME_CONFIRMATION,
-          reason: answer.reason,
-          ...(answer.overrideChecks ? { override_checks: true } : {}),
-        });
-      }
-      this.toasts.success('Resumed trading.');
+      if (await this.resumer.resume(halts, answer)) this.toasts.success('Resumed trading.');
     });
   }
 
