@@ -277,7 +277,7 @@ export class LoginPage implements OnInit {
   }
 }
 
-const LATER = 'You can turn them on later in Settings.';
+const LATER = 'You can turn them on later in Notifications, Alert settings.';
 const FORGOT = 'Forgot your password? Ask your admin to reset it.';
 
 /** Why alerts are still off after the trader asked for them, in one line. */
