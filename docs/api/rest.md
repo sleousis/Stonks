@@ -2670,6 +2670,7 @@ One book at one moment of a session. ``strategy_id`` is null for the whole portf
 |-------|------|----------|-------------|
 | `created_at` | date-time | yes |  |
 | `error` | string \| null | no |  |
+| `error_detail` | string \| null | no |  |
 | `finished_at` | date-time \| null | no |  |
 | `id` | string | yes |  |
 | `kind` | string | yes |  |
@@ -7325,6 +7326,7 @@ The server's ``[lab.offload]`` timing, which the worker follows.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `error` | string \| null | no |  |
+| `error_detail` | string \| null | no |  |
 | `research` | [ResearchRows](#researchrows) | no |  |
 | `result` | any | no |  |
 | `status` | "succeeded" \| "failed" \| "cancelled" | yes |  |

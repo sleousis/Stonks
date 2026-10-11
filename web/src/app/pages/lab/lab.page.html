@@ -183,7 +183,7 @@
                 </div>
               }
               @if (f.handle.error(); as e) {
-                @let failure = jobError(e);
+                @let failure = jobError(e, f.handle.errorDetail());
                 <div class="job-error" role="alert">
                   <p>{{ failure.text }}</p>
                   @if (failure.details) {

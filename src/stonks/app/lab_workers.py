@@ -116,6 +116,8 @@ class WorkerOutcome(BaseModel):
     #: The job's result (``succeeded``), as the handler returned it.
     result: Any = None
     error: str | None = Field(default=None, max_length=20_000)
+    #: The raw error of a crash, kept for admins (``Job.error_detail``).
+    error_detail: str | None = Field(default=None, max_length=20_000)
     #: Ledger rows, trial matrices and registered strategies the job wrote.
     research: ResearchRows = Field(default_factory=ResearchRows)
 
@@ -233,12 +235,14 @@ class LabWorkerService:
             raise ConflictError(f"job {job_id} is not running on worker {outcome.worker_id}")
         with self._ctx.state() as state:
             applied = apply_rows(state, self._ctx.settings.registry.artifacts_dir, outcome.research)
-        error = outcome.error
-        if error is not None:
-            error = redact_secrets(error, self._runner.secrets())
+        secrets = self._runner.secrets()
+        error, detail = (
+            None if text is None else redact_secrets(text, secrets)
+            for text in (outcome.error, outcome.error_detail)
+        )
         status = outcome.status
         result = outcome.result if status == "succeeded" else None
-        self._runner.store.finish(job_id, status, result=result, error=error)
+        self._runner.store.finish(job_id, status, result=result, error=error, error_detail=detail)
         queue.worker_done(outcome.worker_id, status)
         _log.info(
             "lab_worker.remote_finished",

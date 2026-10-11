@@ -78,6 +78,7 @@ function finishedHandle(jobId: string, status: 'succeeded' | 'failed' = 'succeed
     progress: signal(1),
     message: signal('done'),
     error: signal(null),
+    errorDetail: signal(null),
     done: signal(true),
     finished: Promise.resolve(event),
     stop: () => undefined,

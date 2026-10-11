@@ -5600,6 +5600,10 @@ export type Job = {
      */
     error?: string | null;
     /**
+     * Error Detail
+     */
+    error_detail?: string | null;
+    /**
      * Finished At
      */
     finished_at?: string | null;
@@ -18406,6 +18410,10 @@ export type WorkerOutcome = {
      * Error
      */
     error?: string | null;
+    /**
+     * Error Detail
+     */
+    error_detail?: string | null;
     research?: ResearchRows;
     /**
      * Result

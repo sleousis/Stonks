@@ -344,6 +344,7 @@ class RemoteLabWorker:
             "status": job.status if job.is_terminal else status,
             "result": job.result,
             "error": job.error,
+            "error_detail": job.error_detail,
             "research": research.model_dump(mode="json"),
         }
 

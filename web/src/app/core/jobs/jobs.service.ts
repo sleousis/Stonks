@@ -12,6 +12,7 @@ import { Observable, type Subscriber } from 'rxjs';
 import { JobsApiService } from '../../api/jobs-api.service';
 import { type Job, type JobEvent, type JobStatus, TERMINAL_JOB_STATUSES } from '../../api/models';
 import { AuthTokenService } from '../auth/auth-token.service';
+import { SessionService } from '../auth/session.service';
 import { SseParser } from './sse-parser';
 
 /** Minimal fetch surface the job stream needs (swapped for a fake in tests). */
@@ -48,6 +49,8 @@ export interface JobHandle {
   readonly progress: Signal<number>;
   readonly message: Signal<string | null>;
   readonly error: Signal<string | null>;
+  /** The raw error of a crashed job. Loaded for admins only, else null. */
+  readonly errorDetail: Signal<string | null>;
   readonly done: Signal<boolean>;
   /** Resolves with the last event once the job ends (or the stream gives up). */
   readonly finished: Promise<JobEvent | null>;
@@ -81,6 +84,7 @@ export class JobsService {
   private readonly auth = inject(AuthTokenService);
   private readonly fetchFn = inject(JOB_FETCH);
   private readonly pollMs = inject(JOB_POLL_MS);
+  private readonly session = inject(SessionService);
 
   /** Events for a job until it reaches a terminal status; then completes. */
   watch(jobId: string): Observable<JobEvent> {
@@ -100,6 +104,7 @@ export class JobsService {
   track(jobId: string, destroyRef?: DestroyRef): JobHandle {
     const event = signal<JobEvent | null>(null);
     const failure = signal<string | null>(null);
+    const detail = signal<string | null>(null);
     const ended = signal(false);
     let resolveFinished!: (e: JobEvent | null) => void;
     const finished = new Promise<JobEvent | null>((r) => (resolveFinished = r));
@@ -117,6 +122,13 @@ export class JobsService {
         const last = event();
         if (last && !isTerminal(last.status)) {
           failure.set('The server lost track of this job. Run it again.');
+        }
+        if (last?.status === 'failed' && this.session.isAdmin()) {
+          // The server only sends the raw error to admins.
+          this.api.get(jobId, true).then(
+            (job) => detail.set(job.error_detail ?? null),
+            () => undefined,
+          );
         }
         ended.set(true);
         resolveFinished(last);
@@ -137,6 +149,7 @@ export class JobsService {
       progress: computed(() => event()?.progress ?? 0),
       message: computed(() => event()?.message ?? null),
       error: computed(() => failure() ?? event()?.error ?? null),
+      errorDetail: detail.asReadonly(),
       done: ended.asReadonly(),
       finished,
       stop,

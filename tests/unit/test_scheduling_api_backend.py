@@ -36,10 +36,17 @@ class Recorder(Notifier):
 class FakeApi:
     """Routes the scheduler uses, with scripted job progress."""
 
-    def __init__(self, job_statuses=("queued", "running", "succeeded"), error=None, result=None):
+    def __init__(
+        self,
+        job_statuses=("queued", "running", "succeeded"),
+        error=None,
+        result=None,
+        error_detail=None,
+    ):
         self.requests: list[tuple[str, str, dict | None]] = []
         self._statuses = list(job_statuses)
         self._error = error
+        self._error_detail = error_detail
         self._result = result or {}
         self.health = {"healthy": True, "checked_at": "2026-09-25T21:00:00+00:00", "checks": []}
 
@@ -53,7 +60,13 @@ class FakeApi:
         if path == "/api/jobs/job_1":
             status = self._statuses.pop(0) if len(self._statuses) > 1 else self._statuses[0]
             return httpx2.Response(
-                200, json={"id": "job_1", "status": status, "error": self._error}
+                200,
+                json={
+                    "id": "job_1",
+                    "status": status,
+                    "error": self._error,
+                    "error_detail": self._error_detail,
+                },
             )
         if path.endswith("/jobs/job_1/result"):
             return httpx2.Response(200, json=self._result)
@@ -289,6 +302,20 @@ def test_failed_tick_job_was_alerted_by_the_tick():
     ex, _ = _executor(api)
     out = ex.execute(_ctx(ex, "tick", FRIDAY)[0])
     assert out.status == "failed" and out.alerted
+
+
+def test_a_crashed_tick_job_is_classified_by_its_raw_error():
+    """The plain job error hides the exception; the scheduler, an admin
+    caller, reads the raw detail (a PreTickError never alerted)."""
+    api = FakeApi(
+        job_statuses=("failed",),
+        error="The job stopped because of a problem on our side.",
+        error_detail="PreTickError: database is locked",
+    )
+    ex, _ = _executor(api)
+    out = ex.execute(_ctx(ex, "tick", FRIDAY)[0])
+    assert out.status == "failed" and not out.alerted
+    assert out.detail["error"] == "PreTickError: database is locked"
 
 
 def test_tick_outcome_classification():

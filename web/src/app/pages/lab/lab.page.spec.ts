@@ -252,7 +252,7 @@ describe('LabPage', () => {
     );
   });
 
-  it('a crashed run reads as one plain sentence, the exception under Details (R02)', async () => {
+  it('a crashed run reads as one plain sentence, with no raw details for a trader (R02)', async () => {
     await settle();
     const simple = el.querySelector('#lab-simple')!;
     simple.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
@@ -269,12 +269,35 @@ describe('LabPage', () => {
     expect(failure.querySelector('p')!.textContent).toContain(
       'The test stopped because of a problem on our side.',
     );
-    expect(failure.querySelector('details summary')!.textContent!.trim()).toBe('Details');
-    expect(failure.querySelector('details code')!.textContent).toContain('cannot pickle');
+    expect(failure.querySelector('details')).toBeNull();
+    expect(failure.textContent).not.toContain('pickle');
     // The simple test records the strategy's idea as its hypothesis.
     expect((posted[0].body as Record<string, unknown>)['hypothesis']).toBe(
       'Buys the strongest trailing returns.',
     );
+  });
+
+  it('an admin sees the raw error of a crashed run under Details (R02)', async () => {
+    await create({ ...TRADER, role: 'admin' });
+    await settle();
+    const simple = el.querySelector('#lab-simple')!;
+    simple.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
+    input('#st-tickers', 'spy.us');
+    jobStatus['new-lr'] = job({
+      id: 'new-lr',
+      kind: 'lab_run',
+      status: 'failed',
+      error: 'The job stopped because of a problem on our side.',
+      error_detail: "TypeError: cannot pickle '_thread.lock' object",
+    });
+    simple.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    await settle(12);
+    const failure = el.querySelector('.job-error')!;
+    expect(failure.querySelector('p')!.textContent).toContain(
+      'The job stopped because of a problem on our side.',
+    );
+    expect(failure.querySelector('details summary')!.textContent!.trim()).toBe('Details');
+    expect(failure.querySelector('details code')!.textContent).toContain('cannot pickle');
   });
 
   it('remembers Advanced in this browser', async () => {

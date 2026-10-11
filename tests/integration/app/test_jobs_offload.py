@@ -195,7 +195,7 @@ def test_run_claimed_reports_failures_and_cancellation(path):
         failing = store.create("boom", {}, executor="worker")
         queue.claim_next("w1", ["boom"])
         assert runner.run_claimed(failing.id) == "failed"
-        assert "kaput" in (store.get(failing.id).error or "")
+        assert "kaput" in (store.get(failing.id).error_detail or "")
         cancelled = store.create("stop", {}, executor="worker")
         queue.claim_next("w1", ["stop"])
         ctx = JobContext(job_id=cancelled.id, _store=store)
