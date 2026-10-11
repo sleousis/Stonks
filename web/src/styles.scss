@@ -366,6 +366,14 @@ textarea {
       font-size: var(--mono-scale);
       text-align: right;
       overflow-wrap: anywhere;
+      min-width: 0;
+    }
+
+    // Free text someone typed (a reason) wraps inside the ticket.
+    dd.ticket-text {
+      font-family: inherit;
+      font-size: inherit;
+      white-space: normal;
     }
   }
 }

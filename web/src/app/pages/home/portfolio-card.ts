@@ -14,6 +14,7 @@ import { baseCurrencyLine } from '../../shared/base-currency';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { autoRefresh } from '../../shared/auto-refresh';
 import { NoBook } from '../../shared/ui/no-book';
+import { isReadOnly } from '../../shared/ui/portfolio-picker';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
@@ -41,7 +42,7 @@ export { sessionLabel } from '../../core/format/day-change';
         <h2 id="home-portfolio">My portfolio</h2>
         <span class="head-end">
           @if (mode(); as m) {
-            <app-mode-stamp [live]="m === 'live'" />
+            <app-mode-stamp [live]="m === 'live'" [stage]="stage()" [readOnly]="readOnly()" />
           }
           @if (hasBook()) {
             <a routerLink="/insights" class="more">Details</a>
@@ -228,13 +229,21 @@ export class PortfolioCard {
     const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
     return book?.currency ?? undefined;
   });
-  protected readonly value = computed(() => {
-    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
-    return book ? formatMoney(book.total_value, { currency: this.currency() }) : '';
-  });
+  /**
+   * The headline figure. A book that reports in its base currency shows the
+   * base total: holdings in other currencies are converted into it.
+   */
   protected readonly total = computed(() => {
     const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
-    return book ? book.total_value : null;
+    if (!book) return null;
+    const base = book.base_currency ?? this.portfolioCtx.current()?.base_currency;
+    return base && book.currency === base && book.total_value_base != null
+      ? book.total_value_base
+      : book.total_value;
+  });
+  protected readonly value = computed(() => {
+    const total = this.total();
+    return total == null ? '' : formatMoney(total, { currency: this.currency() });
   });
   protected readonly money = (n: number) => formatMoney(n, { currency: this.currency() });
   /** The value in the base currency when it differs, or why it is missing. */
@@ -268,6 +277,12 @@ export class PortfolioCard {
   /** Paper or live, when the portfolio list is known. Brass means live. */
   protected readonly mode = computed(() => this.portfolioCtx.current()?.trading ?? null);
   protected readonly live = computed(() => this.mode() === 'live');
+  protected readonly stage = computed(() => this.portfolioCtx.current()?.live_stage ?? null);
+  /** A broker account Stonks only reads (a read-only connection or CSV imports): never paper. */
+  protected readonly readOnly = computed(() => {
+    const p = this.portfolioCtx.current();
+    return !!p && isReadOnly(p);
+  });
   /** The API's one headline change (`day_change`), the same as Dashboard and Insights (M2). */
   private readonly day = computed(() =>
     dayChangeFrom(this.pnl.hasValue() ? this.pnl.value()?.day_change : null, this.latest()),

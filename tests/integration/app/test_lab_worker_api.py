@@ -363,3 +363,23 @@ def test_the_worker_config_names_only_the_kinds_a_remote_worker_takes(http, work
     ).json()
     assert sorted(cfg["kinds"]) == ["lab_run", "lab_sweep"]
     assert cfg["lease_seconds"] == 120.0 and cfg["executor"] == "worker"
+
+
+def test_a_remote_crash_keeps_its_raw_error_for_admins(api, http, worker_token):
+    headers = _auth(worker_token)
+    job = api.lab.submit_lab_run(_request())
+    http.post("/api/lab/worker/claim", json={"worker_id": "w1"}, headers=headers)
+    done = http.post(
+        f"/api/lab/worker/jobs/{job.id}/complete",
+        json={
+            "worker_id": "w1",
+            "status": "failed",
+            "error": "The job stopped because of a problem on our side.",
+            "error_detail": "TypeError: cannot pickle '_thread.lock' object",
+        },
+        headers=headers,
+    )
+    assert done.status_code == 200, done.text
+    stored = api.jobs.get(job.id)
+    assert stored.error == "The job stopped because of a problem on our side."
+    assert stored.error_detail == "TypeError: cannot pickle '_thread.lock' object"

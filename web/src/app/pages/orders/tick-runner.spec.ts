@@ -297,6 +297,13 @@ describe('TickRunner', () => {
       error: 'broker down',
     });
     await settle();
+    // An admin's handle then loads the raw error once.
+    (await nextRequest(controller, '/api/jobs/job-1')).flush({
+      ...job('failed', 1),
+      error: 'broker down',
+      error_detail: null,
+    });
+    await settle();
     expect(el.querySelectorAll('app-job-progress').length).toBe(1);
     expect(el.textContent!.match(/broker down/g)?.length).toBe(1);
   });

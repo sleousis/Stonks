@@ -163,7 +163,7 @@ export class LiveStageCard {
           { label: 'Now', value: stageWords(report.from_stage).label },
           { label: 'Next', value: to.label },
           { label: 'Checks', value: `${report.checks.filter((c) => c.passed).length} met` },
-          { label: 'Reason', value: this.upReason().trim() },
+          { label: 'Reason', value: this.upReason().trim(), text: true },
         ],
       },
     });
@@ -227,7 +227,7 @@ export class LiveStageCard {
           { label: 'Portfolio', value: this.portfolioName() },
           { label: 'Now', value: stageWords(this.current() ?? '').label },
           { label: 'Next', value: to.label },
-          { label: 'Reason', value: this.downReason().trim() },
+          { label: 'Reason', value: this.downReason().trim(), text: true },
         ],
       },
     });

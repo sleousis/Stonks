@@ -85,6 +85,29 @@ describe('ConfirmDialog', () => {
     await expect(answer).resolves.toBe(true);
   });
 
+  it('wraps a free text line instead of keeping it on one line', async () => {
+    const { fixture, confirm, el } = await setup();
+    const reason = 'The paper soak ran clean for a month and the costs matched the test book.';
+    void confirm.confirm({
+      title: 't',
+      message: 'm',
+      confirmLabel: 'Go',
+      ticket: {
+        live: false,
+        lines: [
+          { label: 'Next', value: 'Broker paper' },
+          { label: 'Reason', value: reason, text: true },
+        ],
+      },
+    });
+    await fixture.whenStable();
+    const [next, why] = [...el.querySelectorAll('.ticket dd')];
+    expect(next.classList).toContain('num');
+    expect(why.classList).not.toContain('num');
+    expect(why.classList).toContain('ticket-text');
+    expect(why.textContent?.trim()).toBe(reason);
+  });
+
   it('shows a paper ticket without a side', async () => {
     const { fixture, confirm, el } = await setup();
     void confirm.confirm({

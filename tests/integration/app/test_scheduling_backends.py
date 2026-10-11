@@ -210,3 +210,16 @@ def test_the_hosted_scheduler_runs_jobs_with_the_current_overrides(settings, ser
         assert current.production.universe == ["NEW.US"]
     finally:
         handle.stop(timeout=10)
+
+
+def test_the_in_process_backend_reads_a_crashed_jobs_raw_error(services):
+    """A crash stores a plain sentence for people; the scheduler classifies
+    the outcome (a PreTickError never alerted) from the raw error."""
+
+    def boom(params, ctx):
+        raise RuntimeError("kaput")
+
+    services.runner.register("sched_boom", boom)
+    job = services.runner.submit("sched_boom", {})
+    status, error, result, _ = InProcessExecutor(services).run_job(job, "sched_boom", None)
+    assert (status, error, result) == ("failed", "RuntimeError: kaput", None)

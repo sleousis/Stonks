@@ -11,7 +11,7 @@ import pytest
 from pydantic import BaseModel
 
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
-from stonks.app.jobs import JobContext, JobRunner, JobStore
+from stonks.app.jobs import JOB_CRASH_MESSAGE, JobContext, JobRunner, JobStore
 from stonks.store.state import SqliteState
 
 
@@ -81,7 +81,9 @@ def test_runner_marks_crashed_job_failed(runner):
     runner.register("boom", boom)
     done = runner.wait(runner.submit("boom", {}).id, timeout=10)
     assert done.status == "failed"
-    assert "kaboom" in (done.error or "")
+    # the trader reads a plain sentence; the raw exception is for admins
+    assert done.error == JOB_CRASH_MESSAGE
+    assert done.error_detail == "RuntimeError: kaboom"
     assert done.finished_at is not None
 
     # the runner survives and runs the next job
@@ -294,9 +296,9 @@ def test_job_errors_are_scrubbed_of_credentials(store):
     finally:
         runner.shutdown()
     assert done.status == "failed"
-    assert "abc123" not in done.error
-    assert "hunter2" not in done.error
-    assert "RuntimeError" in done.error
+    assert "abc123" not in done.error_detail
+    assert "hunter2" not in done.error_detail
+    assert "RuntimeError" in done.error_detail
 
 
 def test_job_waiting_on_lock_at_shutdown_is_cancelled_not_run(store):

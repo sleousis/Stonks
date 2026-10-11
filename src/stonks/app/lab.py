@@ -11,6 +11,7 @@ registers the result (with its lab provenance in ``meta.json``) when asked.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -1252,6 +1253,13 @@ class _CancellableObjective:
     @property
     def worker_objective(self) -> Objective:
         return self._inner
+
+    def __reduce__(self) -> tuple[Any, tuple[Objective]]:
+        # The job context holds locks and cannot cross a process boundary.
+        # Any pool payload that carries this wrapper (a re-tuning survival
+        # test's setup: CPCV, MCPT, walk-forward MCPT) gets the inner
+        # objective; cancellation stays with this process.
+        return copy.copy, (self._inner,)
 
     def checkpoint(self) -> None:
         self._ctx.check_cancelled()

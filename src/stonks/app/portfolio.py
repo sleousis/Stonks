@@ -90,9 +90,9 @@ class PortfolioView(BaseModel):
     snapshot_total_value: float | None
     currency: str = Field(
         default=DEFAULT_CURRENCY,
-        description="Reporting currency: the currency every held instrument shares, else "
-        f"{DEFAULT_CURRENCY!r} (also for an empty book or unknown currencies). Amounts are not "
-        "FX-converted.",
+        description="Reporting currency: the currency every held instrument shares, else the "
+        "portfolio's base currency (also for an empty book; an instrument with an unknown "
+        "currency counts as the base currency). Amounts are not FX-converted.",
     )
     cost_basis: float = Field(
         default=0.0, description="Sum of the positions' cost_basis (positions with a known cost)."
@@ -547,6 +547,9 @@ class PortfolioService:
 
         base = self.base_currency(portfolio_id)
         view.base_currency = base
+        # Report in the base currency unless every holding shares another
+        # one: an empty book, unknown or mixed currencies never read as USD.
+        view.currency = _single({p.currency or base for p in view.positions}) or base
         needed = {p.currency for p in view.positions if p.currency and p.currency != base}
         fx = None
         if needed:

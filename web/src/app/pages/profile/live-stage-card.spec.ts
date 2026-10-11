@@ -6,7 +6,13 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
-import { checkState, dirtyReasons, lowerStages, stageWords } from '../../shared/live-stages';
+import {
+  checkLabel,
+  checkState,
+  dirtyReasons,
+  lowerStages,
+  stageWords,
+} from '../../shared/live-stages';
 import { nextRequest, tick } from '../../../testing/http';
 import { LiveStageCard, gateFigures } from './live-stage-card';
 
@@ -79,6 +85,11 @@ describe('live stage words', () => {
       'fail',
       'none',
     ]);
+  });
+
+  it('names every gate check in plain words, the replay check too', () => {
+    expect(checkLabel('recent_replay')).toBe('Recent sessions replay cleanly');
+    expect(checkLabel('kill_switch_drill')).toBe('Stop trading tested');
   });
 
   it('says why a session was not clean', () => {
@@ -157,9 +168,15 @@ describe('LiveStageCard', () => {
     const options = confirm.mock.calls[0][0] as {
       typedConfirmation: string;
       tone: string;
-      ticket: { live: boolean };
+      ticket: { live: boolean; lines: { label: string; value: string; text?: boolean }[] };
     };
     expect(options.typedConfirmation).toBe('Real money, small');
+    // the typed reason wraps in the ticket instead of running past it
+    expect(options.ticket.lines.find((l) => l.label === 'Reason')).toEqual({
+      label: 'Reason',
+      value: 'soak went well',
+      text: true,
+    });
     expect(options.tone).toBe('danger');
     expect(options.ticket.live).toBe(true);
     expect(ensure).toHaveBeenCalledTimes(1);

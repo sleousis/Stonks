@@ -61,4 +61,11 @@ describe('WatchlistContextService', () => {
     expect(signalTicker('aapl.us: entry signal')).toBe('AAPL.US');
     expect(signalTicker('Trading run finished')).toBeNull();
   });
+
+  it('reads the ticker at the end of a signal title after the strategy name', () => {
+    expect(signalTicker('ETF trend: sell some GLD.US')).toBe('GLD.US');
+    expect(signalTicker('Momentum: buy brk-b.us')).toBe('BRK-B.US');
+    expect(signalTicker('Crypto trend: buy BTC-USD.CC.')).toBe('BTC-USD.CC');
+    expect(signalTicker('Quiet day: nothing to do')).toBeNull();
+  });
 });

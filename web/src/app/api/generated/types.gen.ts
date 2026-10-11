@@ -5600,6 +5600,10 @@ export type Job = {
      */
     error?: string | null;
     /**
+     * Error Detail
+     */
+    error_detail?: string | null;
+    /**
      * Finished At
      */
     finished_at?: string | null;
@@ -11319,7 +11323,7 @@ export type PortfolioView = {
     /**
      * Currency
      *
-     * Reporting currency: the currency every held instrument shares, else 'USD' (also for an empty book or unknown currencies). Amounts are not FX-converted.
+     * Reporting currency: the currency every held instrument shares, else the portfolio's base currency (also for an empty book; an instrument with an unknown currency counts as the base currency). Amounts are not FX-converted.
      */
     currency?: string;
     /**
@@ -18406,6 +18410,10 @@ export type WorkerOutcome = {
      * Error
      */
     error?: string | null;
+    /**
+     * Error Detail
+     */
+    error_detail?: string | null;
     research?: ResearchRows;
     /**
      * Result

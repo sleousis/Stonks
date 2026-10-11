@@ -27,7 +27,7 @@ export function killTicket(k: KillTicketInput): ConfirmTicket {
       { label: 'Scope', value: k.scopeText },
       { label: 'Stops', value: killStopsText(k.buysOnly) },
       { label: 'Still goes out', value: k.buysOnly ? 'Sells and exits' : 'Nothing new' },
-      { label: 'Reason', value: k.reason.trim() || 'None given' },
+      { label: 'Reason', value: k.reason.trim() || 'None given', text: true },
     ],
   };
 }

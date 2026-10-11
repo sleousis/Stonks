@@ -179,3 +179,33 @@ def test_a_standard_lab_job_with_walk_forward_runs_on_a_pool(services, settings,
     assert "walk_forward" in tests
     (wf,) = [r for r in done.result["survival_reports"] if r["test_id"] == "walk_forward"]
     assert wf["metrics"]["n_folds"] > 0, wf["notes"]
+
+
+def test_the_job_objective_itself_pickles_as_its_inner_objective():
+    """R01: any pool payload that holds the job objective (a re-tuning
+    survival test's setup) ships the inner objective, never the job."""
+    ctx = JobContext(job_id="j3", _store=_Store())
+    wrapped = _CancellableObjective(SharpeObjective(), ctx)
+    assert isinstance(pickle.loads(pickle.dumps(wrapped)), SharpeObjective)
+
+
+@pytest.mark.parametrize(
+    ("test_id", "options"),
+    [
+        ("cpcv", {"n_groups": 4, "n_test_groups": 1, "retune": "auto"}),
+        ("mcpt", {"n_permutations": 2, "retune": True}),
+    ],
+)
+def test_a_retuning_survival_test_runs_on_a_pool_in_a_lab_job(
+    services, settings, monkeypatch, test_id, options
+):
+    """R01: re-tuning tests ship the tuning setup to their pool. A lab job
+    started the way the console does it must not hit a pickle error."""
+    monkeypatch.setattr("stonks.lab.parallel.default_max_workers", lambda: 2)
+    settings.lab.parallel = ParallelSettings(max_workers=2)
+    request = _request(survival_tests=[test_id], test_options={test_id: options})
+    job = services.lab.submit_lab_run(request)
+    done = services.jobs.wait(job.id, timeout=600)
+    assert done.status == "succeeded", done.error
+    (report,) = done.result["survival_reports"]
+    assert "pickle" not in (report.get("notes") or "")

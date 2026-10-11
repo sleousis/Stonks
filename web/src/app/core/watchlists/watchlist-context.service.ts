@@ -81,8 +81,21 @@ function writeStored(value: string | null): void {
   }
 }
 
-/** The ticker a signal notification is about: its title reads "AAPL.US: entry signal". */
+/** A ticker with its exchange: GLD.US, BRK-B.US, BTC-USD.CC. */
+const TICKER = /^[A-Z0-9^][A-Z0-9\-_&^]*\.[A-Z]{1,6}$/;
+
+/**
+ * The ticker a signal notification is about. Titles read "ETF trend: sell
+ * some GLD.US" (the strategy's name, then the action), so the ticker is the
+ * last word that looks like one. Older titles read "AAPL.US: entry signal".
+ */
 export function signalTicker(title: string): string | null {
-  const i = title.indexOf(':');
-  return i > 0 ? title.slice(0, i).trim().toUpperCase() : null;
+  const words = title
+    .toUpperCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[:,;.!?)]+$/, '').replace(/^\(+/, ''));
+  for (let i = words.length - 1; i >= 0; i--) {
+    if (TICKER.test(words[i])) return words[i];
+  }
+  return null;
 }

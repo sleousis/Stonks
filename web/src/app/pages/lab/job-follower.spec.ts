@@ -17,6 +17,7 @@ function handle(jobId: string) {
     progress: signal(0),
     message: signal(null),
     error: signal(null),
+    errorDetail: signal(null),
     done: signal(false),
     finished,
     stop,

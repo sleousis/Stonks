@@ -36,7 +36,7 @@ from stonks.app.operations import OperationsService
 from stonks.app.options import OptionsService
 from stonks.app.order_drafts import OrderDraftService
 from stonks.app.orders import OrdersService
-from stonks.app.ownership import check_owner, owner_filter, owner_of
+from stonks.app.ownership import check_owner, owner_filter, owner_of, sees_all
 from stonks.app.pagination import Page
 from stonks.app.planner import ExecutionService
 from stonks.app.portfolio import PortfolioService
@@ -87,6 +87,10 @@ def _configured_secrets(context: AppContext) -> list[str]:
     return configured_secrets(context.settings)
 
 
+def _without_detail(job: Job) -> Job:
+    return job if job.error_detail is None else job.model_copy(update={"error_detail": None})
+
+
 class JobService:
     """Transport-facing view of the job runner."""
 
@@ -109,19 +113,23 @@ class JobService:
         offset: int,
     ) -> Page[Job]:
         """Jobs the caller may see: their own, or every job for admins."""
-        return self._store.list(
+        page = self._store.list(
             status=status,
             kind=kind,
             owner_id=owner_filter(principal),
             limit=limit,
             offset=offset,
         )
+        if sees_all(principal):
+            return page
+        return page.model_copy(update={"items": [_without_detail(j) for j in page.items]})
 
     def get(self, job_id: str, principal: Principal | None = None) -> Job:
-        """One job; another user's job is ``NotFoundError`` (admins see all)."""
+        """One job; another user's job is ``NotFoundError`` (admins see all).
+        The raw error of a crash (``error_detail``) is for admins only."""
         job = self._store.get(job_id)
         check_owner(job.owner_id, principal, f"no job with id {job_id!r}")
-        return job
+        return job if sees_all(principal) else _without_detail(job)
 
     def cancel(self, job_id: str, principal: Principal | None = None) -> Job:
         """Cancel a queued job, or ask a running cancellable one (lab run)

@@ -2670,6 +2670,7 @@ One book at one moment of a session. ``strategy_id`` is null for the whole portf
 |-------|------|----------|-------------|
 | `created_at` | date-time | yes |  |
 | `error` | string \| null | no |  |
+| `error_detail` | string \| null | no |  |
 | `finished_at` | date-time \| null | no |  |
 | `id` | string | yes |  |
 | `kind` | string | yes |  |
@@ -4765,7 +4766,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 | `base_currency` | string \| null | no | The portfolio's base (reporting) currency. |
 | `cash` | number | yes |  |
 | `cost_basis` | number | no | Sum of the positions' cost_basis (positions with a known cost). |
-| `currency` | string | no | Reporting currency: the currency every held instrument shares, else 'USD' (also for an empty book or unknown currencies). Amounts are not FX-converted. |
+| `currency` | string | no | Reporting currency: the currency every held instrument shares, else the portfolio's base currency (also for an empty book; an instrument with an unknown currency counts as the base currency). Amounts are not FX-converted. |
 | `fx_missing` | list[string] | no | Held currencies with no stored FX rate to the base currency. |
 | `positions` | list[[PositionView](#positionview)] | yes |  |
 | `positions_value` | number | yes |  |
@@ -7325,6 +7326,7 @@ The server's ``[lab.offload]`` timing, which the worker follows.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `error` | string \| null | no |  |
+| `error_detail` | string \| null | no |  |
 | `research` | [ResearchRows](#researchrows) | no |  |
 | `result` | any | no |  |
 | `status` | "succeeded" \| "failed" \| "cancelled" | yes |  |

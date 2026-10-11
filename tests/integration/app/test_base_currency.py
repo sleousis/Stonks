@@ -111,3 +111,15 @@ def test_tca_summary_money_in_base(settings, foreign, services):
     group, money = after.groups[0], after.groups_base[0]
     assert after.fx_missing == []
     assert money.filled_notional == pytest.approx(group.filled_notional * 2.0)
+
+
+def test_book_with_unknown_or_no_currency_reports_in_its_base(settings, seeded, services):
+    """A EUR book (a DEGIRO import) never falls back to US dollars."""
+    lake = DuckDBLake(settings.lake.path)
+    lake.con.execute("UPDATE instruments SET currency = NULL WHERE id = 'UP.US'")
+    lake.close()
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE portfolios SET base_currency = 'EUR' WHERE id = 'pf_default'")
+    view = services.portfolio.current("pf_default")
+    assert view.positions and view.currency == "EUR"
+    assert view.total_value_base == pytest.approx(view.total_value)

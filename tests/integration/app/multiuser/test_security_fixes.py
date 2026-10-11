@@ -302,3 +302,29 @@ def test_as13_a_trader_cancels_their_own_queued_universe_job(client, app, people
     # Operator jobs stay admin-only.
     ingest = store.create("ingest", {}, owner_id=alice["id"])
     assert client.post(f"/api/jobs/{ingest.id}/cancel", headers=alice["headers"]).status_code == 403
+
+
+# ---- crash details for admins only ------------------------------------------------
+
+
+def test_a_crashed_jobs_raw_error_is_shown_to_admins_only(client, app, people):
+    store = app.state.services.runner.store
+    job = store.create("lab_run", {}, owner_id=people["alice"]["id"])
+    store.finish(
+        job.id,
+        "failed",
+        error="The job stopped because of a problem on our side.",
+        error_detail="TypeError: cannot pickle '_thread.lock' object",
+    )
+    alice, ada = people["alice"]["headers"], people["ada"]["headers"]
+
+    mine = client.get(f"/api/jobs/{job.id}", headers=alice).json()
+    assert mine["error"] == "The job stopped because of a problem on our side."
+    assert mine["error_detail"] is None
+    listed = client.get("/api/jobs", headers=alice).json()["items"]
+    assert [j["error_detail"] for j in listed if j["id"] == job.id] == [None]
+
+    seen = client.get(f"/api/jobs/{job.id}", headers=ada).json()
+    assert seen["error_detail"] == "TypeError: cannot pickle '_thread.lock' object"
+    listed = client.get("/api/jobs", headers=ada).json()["items"]
+    assert "_thread.lock" in str([j["error_detail"] for j in listed if j["id"] == job.id])

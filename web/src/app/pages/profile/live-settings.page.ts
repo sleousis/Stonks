@@ -236,7 +236,7 @@ export class LiveSettingsPage {
           { label: 'Portfolio', value: p.name },
           { label: 'Now', value: before ? this.allocationText(before) : 'Not set' },
           { label: 'New', value: formatMoney(amount, { currency }) },
-          { label: 'Reason', value: this.reason().trim() },
+          { label: 'Reason', value: this.reason().trim(), text: true },
         ],
       },
     });

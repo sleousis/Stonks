@@ -10272,6 +10272,17 @@
             ],
             "title": "Error"
           },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
           "finished_at": {
             "anyOf": [
               {
@@ -20514,7 +20525,7 @@
           },
           "currency": {
             "default": "USD",
-            "description": "Reporting currency: the currency every held instrument shares, else 'USD' (also for an empty book or unknown currencies). Amounts are not FX-converted.",
+            "description": "Reporting currency: the currency every held instrument shares, else the portfolio's base currency (also for an empty book; an instrument with an unknown currency counts as the base currency). Amounts are not FX-converted.",
             "title": "Currency",
             "type": "string"
           },
@@ -33905,6 +33916,18 @@
               }
             ],
             "title": "Error"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
           },
           "research": {
             "$ref": "#/components/schemas/ResearchRows"

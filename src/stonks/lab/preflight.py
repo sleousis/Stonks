@@ -345,8 +345,10 @@ def _membership(
     if universe_id is None:
         add(
             "static_universe",
-            "the universe is a static ticker list, so results may carry survivorship "
-            "bias (P14): load universe_membership and run on a universe id",
+            # Survivorship bias (P14), said in words a trader reads.
+            "these tickers are a fixed list. Companies that failed, merged or were "
+            "delisted since are missing, so a backtest looks better than it should. "
+            "Run on a saved universe to include them",
         )
     elif universe_id not in lake.universe_ids():
         add(

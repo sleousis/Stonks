@@ -98,6 +98,7 @@ export function controlledJob(jobId: string) {
     progress,
     message,
     error,
+    errorDetail: signal(null),
     done,
     finished,
     stop: () => undefined,

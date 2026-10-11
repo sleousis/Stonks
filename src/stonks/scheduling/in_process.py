@@ -80,7 +80,8 @@ class InProcessExecutor(JobExecutor):
             result = self.services.jobs.typed_result(job.id, kind, result_model).model_dump(
                 mode="json"
             )
-        return final.status, final.error, result, job.id
+        # the raw error of a crash (a PreTickError) classifies the outcome
+        return final.status, final.error_detail or final.error, result, job.id
 
     def members(self, universe_id: str, day: Any) -> list[str]:
         """A stored universe's members on ``day`` (``job_universe`` resolver)."""

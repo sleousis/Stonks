@@ -75,6 +75,13 @@ from stonks.store.state import SqliteState
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 TERMINAL_STATUSES: frozenset[str] = frozenset({"succeeded", "failed", "cancelled"})
 
+#: What everyone reads when a job stopped on an unexpected exception. The
+#: exception itself is kept in ``Job.error_detail`` for admins.
+JOB_CRASH_MESSAGE = (
+    "The job stopped because of a problem on our side. Try again. "
+    "If it happens again, ask an admin to look at the details."
+)
+
 _log = get_logger("stonks.app.jobs")
 
 
@@ -89,6 +96,9 @@ class Job(BaseModel):
     #: ``.../{job_id}/result`` route, e.g. ``GET /api/lab/backtests/{id}/result``.
     result: Any = None
     error: str | None = None
+    #: The raw error of a crashed job (``"TypeError: ..."``), for admins
+    #: only: other callers get ``null`` and read the plain ``error``.
+    error_detail: str | None = None
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -190,14 +200,15 @@ class JobStore:
         *,
         result: Any = None,
         error: str | None = None,
+        error_detail: str | None = None,
     ) -> None:
         result_json = None if result is None else json.dumps(to_jsonable(result), allow_nan=False)
         progress_sql = ", progress=1" if status == "succeeded" else ""
         with self._state() as s:
             s.execute(
-                f"UPDATE jobs SET status=?, result_json=?, error=?, finished_at=?{progress_sql} "
-                "WHERE id=? AND status IN ('queued', 'running')",
-                [status, result_json, error, _now(), job_id],
+                "UPDATE jobs SET status=?, result_json=?, error=?, error_detail=?, "
+                f"finished_at=?{progress_sql} WHERE id=? AND status IN ('queued', 'running')",
+                [status, result_json, error, error_detail, _now(), job_id],
             )
 
     def cancel(self, job_id: str) -> Job:
@@ -462,7 +473,7 @@ class JobRunner:
             except BaseException as exc:  # same last resort as _run
                 message = format_exception(exc, self.secrets())
                 log.error("job.runner_error", error=message, error_type=type(exc).__name__)
-                self._finish_safely(job_id, "failed", error=message)
+                self._finish_crashed(job_id, message)
         final = self._store.get(job_id)
         return final.status if final.is_terminal else "failed"
 
@@ -638,6 +649,7 @@ class JobRunner:
         *,
         result: Any = None,
         error: str | None = None,
+        error_detail: str | None = None,
     ) -> bool:
         """Last-resort terminal write: retried, and never raises. When it
         still fails the row stays non-terminal until the next startup's
@@ -647,7 +659,9 @@ class JobRunner:
             self._retrying(
                 "finish",
                 job_id,
-                lambda: self._store.finish(job_id, status, result=result, error=error),
+                lambda: self._store.finish(
+                    job_id, status, result=result, error=error, error_detail=error_detail
+                ),
             )
             return True
         except Exception as exc:
@@ -660,6 +674,11 @@ class JobRunner:
             )
             return False
 
+    def _finish_crashed(self, job_id: str, message: str) -> bool:
+        """Fail a job that raised an unexpected exception: a plain sentence
+        for everyone, the (redacted) exception text for admins."""
+        return self._finish_safely(job_id, "failed", error=JOB_CRASH_MESSAGE, error_detail=message)
+
     def _run(self, job_id: str, kind: str, params: dict[str, Any], ctx: JobContext) -> None:
         log = _log.bind(job_id=job_id, kind=kind)
         try:
@@ -667,7 +686,7 @@ class JobRunner:
         except BaseException as exc:  # last resort: never leave a job silently stuck
             message = format_exception(exc, self.secrets())
             log.error("job.runner_error", error=message, error_type=type(exc).__name__)
-            self._finish_safely(job_id, "failed", error=message)
+            self._finish_crashed(job_id, message)
 
     def _execute(
         self,
@@ -703,7 +722,7 @@ class JobRunner:
             message = format_exception(exc, self.secrets())
             trace = redact_secrets("".join(traceback.format_exception(exc)), self.secrets())
             log.error("job.crashed", error=message, error_type=type(exc).__name__, traceback=trace)
-            self._finish_safely(job_id, "failed", error=message)
+            self._finish_crashed(job_id, message)
             return
         try:
             self._retrying(
@@ -733,6 +752,7 @@ def _row_to_job(row: Any) -> Job:
         message=row["progress_message"],
         result=None if row["result_json"] is None else json.loads(row["result_json"]),
         error=row["error"],
+        error_detail=row["error_detail"],
         created_at=datetime.fromisoformat(row["created_at"]),
         started_at=_parse_ts(row["started_at"]),
         finished_at=_parse_ts(row["finished_at"]),

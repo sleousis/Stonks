@@ -229,7 +229,8 @@ def _run_job(
     result = None
     if final["status"] == "succeeded":
         result = ex.client.get(result_path.format(job_id=job_id))
-    return job_id, final["status"], final.get("error"), result
+    # the scheduler is an admin caller: a crash's raw error classifies it
+    return job_id, final["status"], final.get("error_detail") or final.get("error"), result
 
 
 @API_ACTIONS.register("ingest_prices")

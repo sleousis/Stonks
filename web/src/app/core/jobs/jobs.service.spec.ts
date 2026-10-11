@@ -6,6 +6,7 @@ import type { Job, JobEvent } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
 import { AuthTokenService } from '../auth/auth-token.service';
+import { SessionService } from '../auth/session.service';
 import { type FetchLike, JOB_FETCH, JOB_POLL_MS, JobsService } from './jobs.service';
 
 function sseBody(chunks: string[]) {
@@ -46,9 +47,11 @@ describe('JobsService', () => {
   let fetchMock: ReturnType<typeof vi.fn<FetchLike>>;
   let controller: HttpTestingController;
   let jobs: JobsService;
+  let admin: boolean;
 
   beforeEach(() => {
     sessionStorage.clear();
+    admin = false;
     fetchMock = vi.fn<FetchLike>();
     TestBed.configureTestingModule({
       providers: [
@@ -56,6 +59,7 @@ describe('JobsService', () => {
         provideHttpClientTesting(),
         { provide: JOB_FETCH, useValue: fetchMock },
         { provide: JOB_POLL_MS, useValue: 1 },
+        { provide: SessionService, useValue: { isAdmin: () => admin } },
       ],
     });
     controller = TestBed.inject(HttpTestingController);
@@ -167,6 +171,40 @@ describe('JobsService', () => {
     expect(handle.progress()).toBe(1);
     expect(handle.done()).toBe(true);
     expect(handle.error()).toBeNull();
+  });
+
+  it('loads the raw error of a failed job for an admin', async () => {
+    admin = true;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: sseBody([event('done', { status: 'failed', error: 'Stopped on our side.' })]),
+    });
+
+    const handle = jobs.track('j1');
+    await handle.finished;
+    (await nextRequest(controller, '/api/jobs/j1')).flush(
+      job({ status: 'failed', error: 'Stopped on our side.', error_detail: 'TypeError: boom' }),
+    );
+    await tick();
+
+    expect(handle.error()).toBe('Stopped on our side.');
+    expect(handle.errorDetail()).toBe('TypeError: boom');
+  });
+
+  it('never asks for the raw error when the user is not an admin', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: sseBody([event('done', { status: 'failed', error: 'Stopped on our side.' })]),
+    });
+
+    const handle = jobs.track('j1');
+    await handle.finished;
+    await tick();
+
+    controller.expectNone('/api/jobs/j1');
+    expect(handle.errorDetail()).toBeNull();
   });
 
   it('says so when the server stops following a job that never finished', async () => {

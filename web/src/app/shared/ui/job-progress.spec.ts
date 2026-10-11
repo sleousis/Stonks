@@ -14,6 +14,7 @@ function handle(status: JobStatus | null, extra: { message?: string; error?: str
     progress: signal(0.4),
     message: signal(extra.message ?? null),
     error: signal(extra.error ?? null),
+    errorDetail: signal(null),
     done: signal(done),
     finished: Promise.resolve(null),
     stop: () => undefined,

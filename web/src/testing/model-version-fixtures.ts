@@ -136,6 +136,7 @@ export function finishedJob(jobId: string): JobHandle {
     progress: signal(1),
     message: signal(null),
     error: signal(null),
+    errorDetail: signal(null),
     done: signal(true),
     finished: Promise.resolve(event),
     stop: () => undefined,

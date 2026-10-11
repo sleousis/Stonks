@@ -163,6 +163,41 @@ describe('PortfolioCard', () => {
     expect(el.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
   });
 
+  it('stamps a read-only broker portfolio READ ONLY, never PAPER', async () => {
+    const el = await render([
+      book({ id: 'pf_1', name: 'DEGIRO', is_default: true, kind: 'broker', base_currency: 'EUR' }),
+    ]);
+    const stamp = el.querySelector('app-mode-stamp')?.textContent ?? '';
+    expect(stamp).toContain('READ ONLY');
+    expect(stamp).not.toContain('PAPER');
+  });
+
+  it('shows the value in the base currency when the book reports in it', async () => {
+    const el = await render(
+      [
+        book({
+          id: 'pf_1',
+          name: 'DEGIRO',
+          is_default: true,
+          kind: 'broker',
+          base_currency: 'EUR',
+        }),
+      ],
+      undefined,
+      {
+        portfolio: {
+          currency: 'EUR',
+          base_currency: 'EUR',
+          total_value: 1_000,
+          total_value_base: 950,
+        },
+      },
+    );
+    const value = el.querySelector('app-stat-tile')?.textContent ?? '';
+    expect(value).toContain('€950.00');
+    expect(value).not.toContain('$');
+  });
+
   it('links Details to Insights', async () => {
     const el = await render([book({ id: 'pf_1', name: 'Paper', is_default: true })]);
     const details = [...el.querySelectorAll('a')].find((a) => a.textContent?.trim() === 'Details');
