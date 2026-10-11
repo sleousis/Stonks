@@ -759,7 +759,7 @@ flowchart LR
 - **Submit window.** `[production.live.submit]`: `calendar` (XNYS), `window_minutes` (20) and `deadline_minutes` (2). A ticket may go out from the next open minus the window until the open minus the deadline, then it expires. The `live_submit` job fires at open minus 20 minutes on every backend, reads the real time (never the fire time) and is never caught up late.
 - **Submit steps.** Per portfolio: open the broker, `startup_reconcile` then `require_reconciled`, then the halts in force now (a halt of new orders holds every ticket, a halt of buys holds the opening ones). Each order row is committed `pending`, sent, then `submitted`. A rejection fails the ticket. A submit with no answer is `unknown` until reconciliation settles it.
 - **The tick.** An external book now runs `startup_reconcile` before it decides and noops (reason `orders_unreconciled`) while an order is `unknown`. It builds `RiskContext.live` with `build_live_context` (quotes for the held and signalled tickers, since the orders do not exist yet). The tick's order rows write the fine `state` with the status, a submit with no answer turns `unknown`, and a sent order turns `submitted`.
-- **Not yet.** The pre-open gap check at submit (built in 19.14, section 16), the stage (`broker_paper` or `live`) in the live context (19.9: it is `live` for now), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
+- **Not yet.** The pre-open gap check at submit (built in 19.14, section 16), the stage (`broker_paper` or `live`) in the live context (19.9: it is `live` for now), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends). The Approvals menu item now shows a badge with the waiting count.
 
 ## 17. What 19.9 built
 
@@ -790,7 +790,7 @@ flowchart LR
 - **Adapter.** `IbkrBroker` takes a `stage_lookup` (`connect_ibkr` reads `portfolios.live_stage` of the portfolio it serves). At a live gateway an order that may open needs `live_small` or up, and an unknown stage refuses. Closes and cancels still go out, so a book moved down can wind down (P28).
 - **Every real broker.** The same rule guards every broker that trades real money, not only IBKR (`production/live/stage_guard.py`). `make_broker` guards the default portfolio's broker (a live Alpaca endpoint), and `ConnectionService.open_trader` guards every linked account's trader. So the tick, manual orders, tickets, algo slices, protective stops and the rebalancing planner all meet it. A broker says whether it trades real money (`real_money`). One that does not say counts as real money. A refusal is a rejection (`StageRefusedError`), recorded before anything is sent, never an unknown outcome. Closes, buy to cover included, always pass.
 - **Profile lock.** The account profile cannot change while the portfolio is at `live_small` or up.
-- **Console.** The live settings page (`/profile/live/:id`) has a Stage card (the ladder, the checks, the last sessions, moving up and down, the changes) and an Order preview panel.
+- **Console.** The Real-money settings page (`/profile/live/:id`) has a Stage card (the ladder, the checks, the last sessions, moving up and down, the changes) and an Order preview panel.
 
 
 ## 14. What 19.3 built

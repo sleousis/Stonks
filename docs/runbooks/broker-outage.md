@@ -53,5 +53,5 @@ flowchart LR
 
 - Check open orders. An order whose submit timed out is `unknown`, and that portfolio sends nothing until reconciliation finds it. Run `uv run stonks live reconcile --portfolio <id>`. If an order stays unknown, use [stuck-order.md](stuck-order.md).
 - Today's tickets: if the submit window has passed, they expired. Do not place them by hand. The next tick decides afresh.
-- Resume paused auto books only after the gateway has been healthy for a full check cycle and no order is unknown. Resume from the portfolio's subscription in the console. It asks for a fresh second factor.
+- Resume paused auto books only after the gateway has been healthy for a full check cycle and no order is unknown. Resume from the follow control on Today or on the strategy page. It asks for a fresh second factor.
 - An outage longer than a day during the paper soak shows in `stonks live soak-report` as an outage day. Note the cause.

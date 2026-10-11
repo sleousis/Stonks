@@ -50,25 +50,25 @@ Set the tickers the trading run looks at in `[production] universe`, or in the c
 
 Either way works:
 
-- **Studio.** Open Studio, click New draft, start from a template (for example SMA trend following) or from blank rules, and create the draft.
-- **Catalog.** Pick one of the ready strategies in the Lab.
+- **Studio.** Open **Build a strategy** in the menu (or **New strategy** on Strategies). Pick a starting point, a template such as SMA trend following or Blank rules, type a draft name and click Create draft. The draft has three tabs: Build, Test and Ship.
+- **Catalog.** Pick one of the ready strategies in the Lab, or open **Strategies** and pick an Approved one.
 
 ### 3. Test it in the Lab
 
-Open the Lab. The Test a strategy form needs a strategy, the tickers and a start and end date. Click Test it. From the shell:
+Open the Lab. The Test a strategy tab opens in Simple mode: pick a strategy, the tickers to test (tickers you type, a watchlist or a universe) and a start and end date, then click Test it. It runs the Standard robustness tests and puts nothing on trial. The result starts with Held up or Did not hold up. From the shell:
 
 ```bash
 uv run stonks lab run momentum --tickers SPY.US,QQQ.US,AAPL.US --start 2024-06-01 --end 2025-09-01
 ```
 
-A Studio draft has its own backtest on its page.
+A Studio draft has its own backtest on its Test tab.
 
 ### 4. Put it on trial
 
 A strategy On trial runs its own test book every trading run with simulated money. Its signals are real signals.
 
-- Studio: Put on trial, in the Ship panel of the draft.
-- Lab: after a test that passed, click Put it on trial, then start the lab run it sets up.
+- Studio: Put on trial, on the Ship tab of the draft. A trader may do this for their own draft.
+- Lab: after a test that held up, click Put it on trial. It fills in the form again with "Put it on trial if it passes" ticked. Start that lab run.
 - Shell: `stonks lab run ... --register` puts it on trial when every robustness test passes.
 
 ### 5. What "turn it on" means when you only want alerts
@@ -77,7 +77,7 @@ For a person who only wants alerts, turning a strategy on means **following it i
 
 Approving is optional. You may still want it, for example so other people can follow it. Approving needs a passing go-live check. A new strategy has no trial days yet, so an admin approves it with an override and a reason of at least 20 characters:
 
-- Console: on the strategy's page click Override…, give the reason, type override and click Override and approve.
+- Console: on the strategy's page click Override…, give the reason, type override and click Override and approve. Admins also find every strategy on trial under Advanced, Strategy review.
 - Shell: `uv run stonks registry promote STRATEGY_ID --override --reason "Alerts only for me, nothing trades it."`
 
 The override and its reason are kept in the strategy's history.
@@ -86,7 +86,9 @@ Approving also makes your default portfolio follow the strategy in Paper. That t
 
 ### 6. Follow it in Alerts only
 
-On the strategy's page, in the Follow panel, choose Alerts only and click Follow. When your portfolio already follows it (after an approval), the panel shows that follow instead: pick Alerts only there. You can also follow from the Welcome guide.
+On the strategy's page, in the Follow panel, choose Alerts only and click Follow. Alerts only needs no portfolio. When your portfolio already follows it (after an approval), the panel shows that follow instead: pick Alerts only there. The panel asks first, because your paper days start again from 0. You can also follow from Get set up (in the menu under your name), or switch the mode under My strategies on Today.
+
+Today then shows the strategy under My strategies with "You get its signals. Nothing trades."
 
 Alerts only places no order and writes no fill. You get the signals and nothing else.
 
@@ -98,11 +100,11 @@ Alerts only places no order and writes no fill. You get the signals and nothing 
 4. In the console open Notifications, Alert settings, Telegram and click Get a link code. From the shell: `uv run stonks telegram link-code --user you@example.com`.
 5. Send `/link CODE` to your bot in a private chat within 10 minutes. Click Check the link in the console, or run `uv run stonks telegram status --user you@example.com`.
 
-Linking needs no broker. A linked chat also counts as alerts on in the Welcome guide.
+Linking needs no broker. A linked chat also counts as alerts on in Get set up.
 
 ### 8. Choose Telegram only for signals
 
-In Alert settings, the grid Which alerts go where has one row per kind of alert and one column per channel. In the Signals row, untick Push, keep Telegram ticked, and leave Email and Webhook unticked. Each box saves at once.
+In Alert settings, the grid Which alerts go where has one row per kind of alert and one column per channel that is set up. Telegram gets its column once linked. Email and Webhook get theirs only after you add them under More channels. In the Signals row, untick Push and keep Telegram ticked. Each box saves at once. Send a test notification checks that alerts reach you.
 
 The in-app feed always keeps a copy. Quiet hours are set on the same page. During quiet hours your signals wait, then arrive as one summary message when the quiet hours end.
 
@@ -118,11 +120,13 @@ The notifications go out through the delivery worker. `uv run stonks serve` runs
 
 `[notify] deliver_in_serve` sets this: `auto` (the default), `on` or `off`.
 
-You can also start a run by hand in the console: Orders, Trading runs, untick Dry run and click Start paper run. A dry run sends no alerts.
+You can also start a run by hand in the console (admins): Orders, See trading runs, then under Start a trading run untick Dry run and click Start paper run. A dry run sends no alerts.
+
+After each run, read the signals on Today under Today's signals and runs, in Notifications (the bell) or in Telegram.
 
 ## Without a bot token
 
-With `STONKS_TELEGRAM_BOT_TOKEN` unset everything above still works. Telegram is simply not offered: Alert settings shows no Telegram column, the Telegram panel says the server has no bot, and a link code is refused. Signals still reach the feed, and Web Push or email as your alert settings say.
+With `STONKS_TELEGRAM_BOT_TOKEN` unset everything above still works. Telegram is simply not offered: Alert settings shows no Telegram column, the Telegram card says the server has no Telegram bot yet, and a link code is refused. Signals still reach the feed, and Web Push or email as your alert settings say.
 
 ## See also
 

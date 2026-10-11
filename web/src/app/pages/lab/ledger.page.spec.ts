@@ -1,4 +1,5 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
@@ -6,6 +7,7 @@ import { nextRequest, tick } from '../../../testing/http';
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
 import type { LedgerRunDetail, LedgerRunView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { LedgerRunPage, paramsText, searchName } from './ledger-run.page';
 import { LedgerPage, className, scoreText } from './ledger.page';
 
@@ -190,6 +192,73 @@ describe('LedgerRunPage', () => {
     expect(el.textContent).toContain('Buys the strongest trailing returns.');
     expect(el.textContent).not.toContain('None written');
     expect(el.textContent).not.toContain('Premortem');
+    http.verify();
+  });
+
+  for (const admin of [true, false]) {
+    it(`shows the raw error of a failed run under Details ${admin ? 'to an admin' : 'to admins only'}`, async () => {
+      TestBed.configureTestingModule({
+        providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+      });
+      Object.assign(TestBed.inject(SessionService), { isAdmin: signal(admin) });
+      const http = TestBed.inject(HttpTestingController);
+      const fixture = TestBed.createComponent(LedgerRunPage);
+      fixture.componentRef.setInput('runId', 'lab_2');
+      fixture.detectChanges();
+      const detail: LedgerRunDetail = {
+        ...run(2, {
+          robustness: 'error',
+          verdict: 'error',
+          error: 'The run stopped because of a problem on our side.',
+          // The server sends the raw error to admins only.
+          error_detail: admin ? "TypeError: cannot pickle '_thread.lock' object" : null,
+        }),
+        n_trials_class: 3,
+        trials: [],
+      };
+      (await nextRequest(http, '/api/lab/ledger/lab_2')).flush(detail);
+      (await nextRequest(http, '/api/catalog/strategies')).flush(CATALOG);
+      for (let i = 0; i < 3; i++) {
+        await tick();
+        fixture.detectChanges();
+      }
+      const el: HTMLElement = fixture.nativeElement;
+      const reason = el.querySelector('.failed-reason')!;
+      expect(reason.textContent).toContain('The run stopped because of a problem on our side.');
+      if (admin) {
+        expect(reason.querySelector('details summary')!.textContent!.trim()).toBe('Details');
+        expect(reason.querySelector('details code')!.textContent).toContain('cannot pickle');
+      } else {
+        expect(reason.querySelector('details')).toBeNull();
+        expect(el.textContent).not.toContain('pickle');
+      }
+      http.verify();
+    });
+  }
+
+  it('hides a raw error from a trader even if one arrives', async () => {
+    TestBed.configureTestingModule({
+      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+    });
+    Object.assign(TestBed.inject(SessionService), { isAdmin: signal(false) });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(LedgerRunPage);
+    fixture.componentRef.setInput('runId', 'lab_2');
+    fixture.detectChanges();
+    const detail: LedgerRunDetail = {
+      ...run(2, { robustness: 'error', verdict: 'error', error_detail: 'RuntimeError: kaboom' }),
+      n_trials_class: 3,
+      trials: [],
+    };
+    (await nextRequest(http, '/api/lab/ledger/lab_2')).flush(detail);
+    (await nextRequest(http, '/api/catalog/strategies')).flush(CATALOG);
+    for (let i = 0; i < 3; i++) {
+      await tick();
+      fixture.detectChanges();
+    }
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.failed-reason details')).toBeNull();
+    expect(el.textContent).not.toContain('kaboom');
     http.verify();
   });
 });

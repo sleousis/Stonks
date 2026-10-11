@@ -89,5 +89,26 @@ def test_a_run_says_its_robustness_apart_from_how_its_trials_ran(client, setting
     assert [t["outcome"] for t in detail["trials"]] == ["ran", "ran", "error"]
 
 
+def test_a_failed_runs_raw_error_is_for_admins_only(client, settings, people):
+    """Everyone reads why a run failed in plain words, only admins read the
+    raw error, in the list and on the run, like a crashed job."""
+    run_id = _record(settings, "it broke", [math.nan], verdict=None)
+    with SqliteState(settings.state.path) as state:
+        TrialLedger(state, settings.registry.artifacts_dir).finish_run(
+            run_id,
+            "error",
+            error="The run stopped because of a problem on our side.",
+            error_detail="TypeError: cannot pickle '_thread.lock' object",
+        )
+    for who, detail in (("alice", None), ("ada", "TypeError: cannot pickle '_thread.lock' object")):
+        headers = people[who]["headers"]
+        listed = client.get("/api/lab/ledger", headers=headers).json()["items"]
+        (row,) = [r for r in listed if r["id"] == run_id]
+        one = client.get(f"/api/lab/ledger/{run_id}", headers=headers).json()
+        for body in (row, one):
+            assert body["error"] == "The run stopped because of a problem on our side."
+            assert body["error_detail"] == detail, who
+
+
 def test_viewers_cannot_read_the_ledger(client, people):
     assert client.get("/api/lab/ledger", headers=people["vic"]["headers"]).status_code == 403

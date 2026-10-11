@@ -199,10 +199,21 @@ class TrialLedger:
                     ],
                 )
 
-    def finish_run(self, run_id: str, verdict: Verdict) -> None:
+    def finish_run(
+        self,
+        run_id: str,
+        verdict: Verdict,
+        *,
+        error: str | None = None,
+        error_detail: str | None = None,
+    ) -> None:
+        """Close a run with its verdict. A failed run also keeps ``error``
+        (a plain sentence for everyone) and ``error_detail`` (the raw,
+        scrubbed exception, read back by admins only)."""
         self.state.execute(
-            "UPDATE lab_runs SET verdict = ?, finished_at = ? WHERE id = ?",
-            [verdict, _iso_now(), run_id],
+            "UPDATE lab_runs SET verdict = ?, finished_at = ?, error = ?, error_detail = ?"
+            " WHERE id = ?",
+            [verdict, _iso_now(), error, error_detail, run_id],
         )
 
     def record_run(

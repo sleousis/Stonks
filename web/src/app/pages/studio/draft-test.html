@@ -156,7 +156,7 @@
         </progress>
       }
       @if (bt.error(); as e) {
-        <p class="error" role="alert">{{ e }}</p>
+        <app-job-failure [text]="e" [detail]="bt.errorDetail()" />
       }
     </div>
   }
@@ -279,7 +279,7 @@
         </progress>
       }
       @if (lr.error(); as e) {
-        <p class="error" role="alert">{{ e }}</p>
+        <app-job-failure [text]="e" [detail]="lr.errorDetail()" />
       }
     </div>
   }

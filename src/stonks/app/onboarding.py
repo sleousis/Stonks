@@ -59,6 +59,8 @@ class OnboardingStepView(BaseModel):
     state: StepState
     #: True when the data shows the step done (it cannot be undone here).
     derived: bool
+    #: The step may wait: the guide is complete without it.
+    optional: bool
 
 
 class OnboardingView(BaseModel):
@@ -162,6 +164,7 @@ class OnboardingService:
                 id=s,
                 state="done" if derived[s] else stored.get(s, "todo"),
                 derived=derived[s],
+                optional=s in OPTIONAL_STEPS,
             )
             for s in STEPS
         ]

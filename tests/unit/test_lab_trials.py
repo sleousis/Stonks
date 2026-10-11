@@ -128,6 +128,26 @@ def test_finish_run_sets_the_verdict(ledger):
     assert ledger.run(run_id)["verdict"] == "error"
 
 
+def test_finish_run_keeps_a_failed_runs_message_and_raw_error(ledger):
+    run_id = ledger.start_run(_spec())
+    ledger.finish_run(
+        run_id, "error", error="The run stopped.", error_detail="RuntimeError: tuner exploded"
+    )
+    run = ledger.run(run_id)
+    assert (run["verdict"], run["error"], run["error_detail"]) == (
+        "error",
+        "The run stopped.",
+        "RuntimeError: tuner exploded",
+    )
+
+
+def test_a_finished_run_has_no_error(ledger):
+    run_id = ledger.start_run(_spec())
+    ledger.finish_run(run_id, "pass")
+    run = ledger.run(run_id)
+    assert run["error"] is None and run["error_detail"] is None
+
+
 def test_unknown_run_is_none(ledger):
     assert ledger.run("nope") is None
     assert ledger.trial_matrix("nope") is None

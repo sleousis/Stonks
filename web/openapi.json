@@ -12007,6 +12007,30 @@
             ],
             "title": "End"
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run failed, in plain words. Null unless it failed.",
+            "title": "Error"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The raw error of a failed run, for admins only: null for everyone else.",
+            "title": "Error Detail"
+          },
           "finished_at": {
             "anyOf": [
               {
@@ -12247,6 +12271,30 @@
               }
             ],
             "title": "End"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run failed, in plain words. Null unless it failed.",
+            "title": "Error"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The raw error of a failed run, for admins only: null for everyone else.",
+            "title": "Error Detail"
           },
           "finished_at": {
             "anyOf": [
@@ -15227,6 +15275,10 @@
             "title": "Id",
             "type": "string"
           },
+          "optional": {
+            "title": "Optional",
+            "type": "boolean"
+          },
           "state": {
             "enum": [
               "done",
@@ -15240,7 +15292,8 @@
         "required": [
           "id",
           "state",
-          "derived"
+          "derived",
+          "optional"
         ],
         "title": "OnboardingStepView",
         "type": "object"

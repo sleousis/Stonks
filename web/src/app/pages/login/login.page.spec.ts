@@ -186,6 +186,8 @@ describe('LoginPage', () => {
     cont.click();
     await settle();
     expect(heading(el)).toBe('Get alerts on this device?');
+    // Alert settings is its own page under Notifications, not a Settings tab.
+    expect(el.textContent).toContain('You can change this later in Notifications, Alert settings.');
 
     [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Not now')!.click();
     await settle();
@@ -309,6 +311,9 @@ describe('LoginPage', () => {
     await settle();
     expect(heading(el)).toBe('Get alerts on this device?');
     expect(el.textContent).toContain('This server cannot send alerts yet');
+    expect(el.textContent).toContain(
+      'You can turn them on later in Notifications, Alert settings.',
+    );
     expect(navigate).not.toHaveBeenCalled();
     [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Continue')!.click();
     await settle();

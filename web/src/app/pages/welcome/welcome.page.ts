@@ -32,7 +32,6 @@ import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import {
-  OPTIONAL_STEPS,
   STEP_COPY,
   SYSTEM_COPY,
   currentStep,
@@ -160,7 +159,7 @@ export class WelcomePage {
   protected tagWord(step: OnboardingStepView): string {
     if (step.state === 'done') return 'Done';
     if (step.state === 'skipped') return 'Skipped';
-    return OPTIONAL_STEPS.has(step.id) ? 'Optional' : 'To do';
+    return step.optional ? 'Optional' : 'To do';
   }
 
   protected toggle(step: OnboardingStepId): void {

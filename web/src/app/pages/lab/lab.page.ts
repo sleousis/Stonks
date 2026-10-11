@@ -53,6 +53,7 @@ import { LabNav } from './lab-nav';
 import { type StrategyPreset, presetFromStrategy, presetTickers } from './strategy-preset';
 import { WatchlistsService } from '../../api/watchlists.service';
 import { jobErrorText } from '../../shared/lab-results/job-error';
+import { JobFailure } from '../../shared/ui/job-failure';
 
 /** The run types the forms on this screen start. */
 export type FormKind = 'backtest' | 'lab_run';
@@ -151,6 +152,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
     LoadingState,
     EmptyState,
     ErrorState,
+    JobFailure,
     BacktestFormView,
     LabRunFormView,
     SimpleTestFormView,

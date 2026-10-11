@@ -60,8 +60,10 @@ class InsideBar(_SetupMetric):
 class Nr7(_SetupMetric):
     id = "setup_nr7"
     factor_id = "nr7"
-    label = "NR7"
-    description = "The narrowest range of 7 bars, +1 in an uptrend and -1 in a downtrend."
+    label = "Narrowest range in 7 days"
+    description = (
+        "The smallest daily range of the last 7 days: +1 in an uptrend, -1 in a downtrend, 0 none."
+    )
 
 
 class Vcp(_SetupMetric):
@@ -74,5 +76,8 @@ class Vcp(_SetupMetric):
 class Squeeze(_SetupMetric):
     id = "setup_squeeze"
     factor_id = "squeeze"
-    label = "Squeeze"
-    description = "Bollinger bands inside the Keltner channel, signed by the 20-bar trend."
+    label = "Tight range breakout setup"
+    description = (
+        "Prices move in an unusually tight range, a common start of a breakout:"
+        " +1 in an uptrend, -1 in a downtrend, 0 none."
+    )

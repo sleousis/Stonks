@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError
+from stonks.app.ownership import sees_all
 from stonks.app.pagination import Page
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
@@ -76,6 +77,13 @@ class LedgerRunView(BaseModel):
     interval: str | None = None
     start: str | None = None
     end: str | None = None
+    error: str | None = Field(
+        default=None, description="Why the run failed, in plain words. Null unless it failed."
+    )
+    error_detail: str | None = Field(
+        default=None,
+        description="The raw error of a failed run, for admins only: null for everyone else.",
+    )
 
 
 class LedgerTrialView(BaseModel):
@@ -131,7 +139,7 @@ class TrialLedgerService:
                 " GROUP BY r.id ORDER BY r.started_at DESC, r.id DESC LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )
-        items = [_run_view(dict(r)) for r in rows]
+        items = [_run_view(dict(r), sees_all(principal)) for r in rows]
         return Page[LedgerRunView](items=items, total=total, limit=limit, offset=offset)
 
     def run(self, principal: Principal, run_id: str) -> LedgerRunDetail:
@@ -151,7 +159,7 @@ class TrialLedgerService:
             ledger = self._ledger(state)
             trials = ledger.trials(run_id)
             n_class = ledger.n_trials(rows[0]["strategy_class"])
-        view = _run_view(dict(rows[0]))
+        view = _run_view(dict(rows[0]), sees_all(principal))
         return LedgerRunDetail(
             **view.model_dump(),
             trials=[
@@ -169,7 +177,8 @@ class TrialLedgerService:
         )
 
 
-def _run_view(row: dict[str, Any]) -> LedgerRunView:
+def _run_view(row: dict[str, Any], admin: bool) -> LedgerRunView:
+    """One run as the API shows it: the raw error only for an ``admin``."""
     dataset = json.loads(row.get("dataset_json") or "{}")
     best = row.get("best_score")
     universe = dataset.get("universe") or []
@@ -198,6 +207,8 @@ def _run_view(row: dict[str, Any]) -> LedgerRunView:
         interval=dataset.get("interval"),
         start=_edge(dataset.get("full_window"), 0),
         end=_edge(dataset.get("full_window"), -1),
+        error=row.get("error"),
+        error_detail=row.get("error_detail") if admin else None,
     )
 
 
