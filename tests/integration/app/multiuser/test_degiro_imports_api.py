@@ -206,3 +206,14 @@ def test_none_maps_the_columns_of_a_degiro_file(client, people):
     assert got.status_code == 200, got.text
     body = got.json()
     assert body["preset"] is None and body["guessed"] is True and body["mapping"]["date"] == "Date"
+
+
+def test_an_imported_portfolio_says_plainly_it_has_no_trading_account(client, people, isins):
+    alice = people["alice"]["headers"]
+    t = _import(client, alice, "transactions_en.csv", new_portfolio="DEGIRO", currency="EUR")
+    pid = t.json()["portfolio_id"]
+    got = client.get(f"/api/portfolios/{pid}/live/margin", headers=alice)
+    assert got.status_code == 200, got.text
+    error = got.json()["read_error"]
+    assert "read only" in error and "imported" in error
+    assert "provider" not in error and pid not in error

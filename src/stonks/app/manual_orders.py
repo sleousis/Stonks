@@ -526,6 +526,11 @@ def connection_trader(context: AppContext, account: AccountPortfolio) -> Broker:
     from stonks.connections.settings import ConnectionsConfig
 
     with context.state() as state:
+        if _imported_only(state, account.id):
+            raise ConflictError(
+                "this portfolio comes from imported statements, so it is read only"
+                " and has no trading account at a broker"
+            )
         service = ConnectionService(state, ConnectionsConfig.load())
         try:
             return service.open_trader(Scope.service("manual_orders"), account.id, session="api")
@@ -533,6 +538,18 @@ def connection_trader(context: AppContext, account: AccountPortfolio) -> Broker:
             raise ConflictError(
                 f"the broker of portfolio {account.id} cannot trade: {exc}"
             ) from None
+
+
+def _imported_only(state: SqliteState, portfolio_id: str) -> bool:
+    """True when the portfolio is fed by CSV statement imports only."""
+    from stonks.app.statement_imports import CSV_PROVIDER
+
+    rows = state.sql(
+        "SELECT c.provider FROM portfolios p"
+        " JOIN broker_connections c ON c.id = p.broker_connection_id WHERE p.id = ?",
+        [portfolio_id],
+    )
+    return bool(rows) and rows[0]["provider"] == CSV_PROVIDER
 
 
 def _as_order(state: SqliteState, result: ManualResult) -> ManualOrder:
