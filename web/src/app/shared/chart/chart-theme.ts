@@ -1,15 +1,19 @@
 import type { ChartTheme } from './chart-engine';
 
-/** The chart colours and type, read from the design tokens of the current theme. */
+/**
+ * The chart colours and type, read from the design tokens of the current
+ * theme. Axis and crosshair labels are figures (prices, dates), so they are
+ * set in the mono face like every other figure.
+ */
 export function readChartTheme(doc: Document): ChartTheme {
   const css = doc.defaultView?.getComputedStyle(doc.documentElement);
   const v = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback;
   return {
     background: v('--color-surface', '#ffffff'),
-    text: v('--color-ink-3', '#5f6b78'),
+    text: v('--chart-text', '#5a6672'),
     grid: v('--chart-grid', '#e3e8ed'),
-    border: v('--color-border', '#d3dae1'),
-    font: v('--font-sans', 'system-ui'),
+    border: v('--color-border', '#d9dfe5'),
+    font: v('--font-mono', 'ui-monospace, monospace'),
     colors: {
       brass: v('--color-brass', '#a26d12'),
       primary: v('--color-primary', '#22477a'),

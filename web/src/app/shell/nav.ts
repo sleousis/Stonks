@@ -248,14 +248,14 @@ const TICKETS = '/tickets';
       top: 7px;
       bottom: 7px;
       width: 3px;
-      border-radius: 2px;
+      border-radius: var(--radius-xs);
       background: var(--color-accent);
     }
     .count {
       min-width: 20px;
       margin-left: auto;
       padding: 0 6px;
-      border-radius: 999px;
+      border-radius: var(--radius-pill);
       background: var(--color-primary);
       color: var(--color-primary-ink);
       font-size: var(--text-xs);

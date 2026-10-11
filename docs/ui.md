@@ -1720,14 +1720,15 @@ define every colour.
 
 | Group | Tokens |
 |---|---|
-| Colour | `--color-bg`, `-surface`, `-surface-2`, `-surface-3`, `-border`, `-border-strong`, `-control-border`, `-ink`, `-ink-2`, `-ink-3`. `--color-primary` (research blue), `--color-accent` (markers). `--color-live`, `-live-ink`, `-live-soft` (brass, real money only). `--color-paper`, `-paper-soft`. `--color-gain`, `-loss`, `-warn`, `-info`, each with `-soft`. `--color-focus`, `--color-scrim`. `--color-rail`, `-rail-2`, `-rail-ink`, `-rail-ink-2`, `-rail-accent`. `--color-brass` stays as an alias of `--color-live`. |
-| Type | `--font-sans` (Public Sans, body), `--font-display` (Archivo at `--display-stretch` 76%: page titles, headline figures, empty-state titles, stamps), `--font-mono` (IBM Plex Mono for figures, at `--mono-scale`). `--text-xs` 12, `sm` 13, `md` 14, `lg` 16, `xl` 20, `2xl` 26, `title` 30, `figure` 44 (smaller on phones). `--weight-*`, `--leading-*`, `--tracking-display`, `--tracking-stamp` |
+| Colour | `--color-bg`, `-surface`, `-surface-2`, `-surface-3`, `-border`, `-border-strong`, `-control-border`, `-ink`, `-ink-2`, `-ink-3`. `--color-primary` (research blue, a filled button with `-primary-ink` text and `-primary-hover`), `--color-link` (text links, readable in both themes), `--color-accent` (markers). `--color-live`, `-live-ink`, `-live-soft` (brass, real money only). `--color-paper`, `-paper-soft`. `--color-gain`, `-loss`, `-warn`, `-info`, each with `-soft`. `--color-loss-ink` (text on a loss fill). `--color-focus`, `--color-scrim`. `--color-hover` (ink at 4%) and `--color-pressed` (ink at 8%) for hover and press. `--color-rail`, `-rail-2`, `-rail-ink`, `-rail-ink-2`, `-rail-accent`. `--color-brass` stays as an alias of `--color-live`. |
+| Type | `--font-sans` (Public Sans, body), `--font-display` (Archivo at `--display-stretch` 76%: page titles, headline figures, empty-state titles, stamps), `--font-mono` (IBM Plex Mono for figures, at `--mono-scale`). `--text-xs` 12, `sm` 13, `md` 14, `panel` 15 (panel titles), `lg` 16, `xl` 20, `stat` 24 (stat values), `2xl` 26, `title` 30 (26 on phones), `figure` 44 (36 on phones). `--weight-*`, `--leading-*`, `--tracking-display`, `--tracking-display-sm` (display text under 24px), `--tracking-overline`, `--tracking-stamp` |
 | Space | `--space-1`…`--space-8` = 4, 8, 12, 16, 24, 32, 48, 64 px. `--gutter` (24px, 16px on phones) |
-| Radius | `--radius-xs` 2 (tags, stamps, tickets), `-sm` 4 (controls), `-md` 6 (panels), `-lg` 10 (dialogs), `-pill` (lifecycle status only) |
+| Radius | `--radius-xs` 2 (tags, stamps, tickets), `-sm` 5 (controls, wells, callouts), `-md` 8 (panels, tables), `-lg` 12 (dialogs, drawer, palette, toasts), `-pill` (lifecycle status only). Pages never use a literal radius |
 | Border | `--border-live` 3px (real money), `--border-rule` |
-| Elevation | `--shadow-0`, `--shadow-1` (panels), `--shadow-2` (dialogs, drawer, toasts), `--shadow-ticket`, `--ring-live` |
+| Elevation | Panels are flat: a 1px hairline and no shadow (`--shadow-1` is none). `--shadow-overlay` (one tinted shadow for the palette, dialogs, sheets, toasts and the drawer, `--shadow-2` is its older name), `--shadow-ticket`, `--ring-live` |
+| Layers | `--z-sticky`, `--z-drawer`, `--z-overlay`, `--z-toast`, `--z-skip`. No other z-index values |
 | Motion | `--dur-fast` 120ms, `--dur` 200ms, `--dur-slow` 420ms, `--dur-count` 700ms, `--tape-speed`, `--ease`, `--ease-out`. Durations are 0 under reduced motion |
-| Size | `--control-h` 32, `--touch-min` 44, `--row-h` 34, `--sidebar-w` 224, `--strip-h` 40 |
+| Size | `--control-h` 32, `--touch-min` 44, `--row-h` 34, `--row-h-2` 40 (two-line rows), `--sidebar-w` 224, `--strip-h` 40 |
 
 Fonts are self-hosted from npm (`@fontsource-variable/public-sans`,
 `@fontsource-variable/archivo` with its width axis, `@fontsource/ibm-plex-mono`),
@@ -1735,16 +1736,38 @@ so they work offline and under the API's content policy. Each has a fallback
 stack (Arial Narrow and Roboto Condensed for the display face, the system
 monospace for figures).
 
-Global primitives (`styles.scss`): `.btn` (+ `.btn-primary`, `.btn-danger`,
-`.btn-ghost`, `.btn-icon`), `.field` / `.input` / `.check` / `.hint` / `.error`,
-`.form-grid` (+ `.form-grid-2`), `.panel` / `.panel-head` / `.panel-body`,
-`.page-grid` with `.span-4…12`, `.num`, `.figure`, `.display`, `.ticket`,
-`.live-frame`, `.gain`, `.loss`, `.muted`, `.visually-hidden`.
+Global primitives (`styles.scss`):
 
-Reusable components: `app-page-header`, `app-stat-tile` (`featured` for the one
-headline figure, `live`, and `amount` with `format` to count up),
+- Buttons: `.btn` (secondary, outlined), `.btn-primary` (filled blue, one per
+  action row), `.btn-tertiary` (a quiet text action, `.btn-ghost` is the older
+  name), `.btn-danger` (filled loss), `.btn-icon`. A press moves the button
+  down 1px. A disabled button fades and gets a dashed edge.
+- Fields: `.field` / `.input` / `.check` / `.hint` / `.error`, `fieldset.group`
+  (a group of fields under an overline), `.form-grid` (+ `.form-grid-2`).
+- Surfaces: three tiers only. The page, `.panel` (`.panel-head`, `.panel-body`,
+  `.panel-flush` when the body is a table) and `.well` (a borderless inset
+  group inside a panel). A panel never holds a bordered card.
+- `.callout` with `data-tone` `info`, `warn`, `loss`, `gain` or `neutral`: a
+  note with a 2px rule on the left (`.callout-title` for its heading). There
+  is no live tone: brass stays for frames that hold real money.
+- Grids: `.page-grid` with `.span-4…12`, `.tile-grid` (tiles that fill the
+  row, never an orphan on phones, `.featured` spans two), `.stat-strip` (stat
+  tiles inside a panel, a hairline between them).
+- Type: `.num`, `.figure`, `.display`, `.display-sm` (display face under
+  24px), `.overline` (the one small uppercase label), `.prose` (70ch measure).
+- Links: `.table-link` (ink, underline on hover, as links in table cells
+  are), `.touch-link` (a 44px hit box on an inline link without changing
+  the line).
+- `.ticket`, `.live-frame`, `.gain`, `.loss`, `.muted`, `.visually-hidden`.
+
+Reusable components: `app-page-header`, `app-page-tabs` (`variant="sub"` for
+a second tab row), `app-stat-tile` (`featured` for the one
+headline figure, `live`, `amount` with `format` to count up, and `bare`
+for a tile in a `.stat-strip`), `app-segmented`,
 `app-status-pill`, `app-side-tag`, `app-mode-stamp`, `app-brand-mark`,
-`app-data-table`, `app-loading-state`, `app-empty-state`, `app-error-state`,
+`app-data-table` (a column with `wrap: true` wraps long text),
+`app-loading-state`, `app-empty-state` (`compact` when it is a panel's only
+content), `app-error-state`,
 `app-time-series-chart`, `app-session-strip`. The shell hosts
 `app-confirm-dialog` and `app-toast-outlet`.
 

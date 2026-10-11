@@ -222,7 +222,7 @@ export function categoryLabel(category: string | null): string {
       align-items: center;
       gap: 6px;
       font-weight: var(--weight-semibold);
-      color: var(--color-primary);
+      color: var(--color-link);
     }
     .dot {
       width: 8px;

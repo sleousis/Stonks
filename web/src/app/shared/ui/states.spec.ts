@@ -61,4 +61,15 @@ describe('shared states', () => {
     error.querySelector('button')!.click();
     expect(fixture.componentInstance.retries).toBe(1);
   });
+
+  it('empty: compact lowers the floor when it is all a panel holds', () => {
+    const fixture = TestBed.createComponent(EmptyState);
+    fixture.componentRef.setInput('title', 'Nothing yet');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.classList).not.toContain('compact');
+    fixture.componentRef.setInput('compact', true);
+    fixture.detectChanges();
+    expect(el.classList).toContain('compact');
+  });
 });

@@ -58,7 +58,16 @@ import {
       border-radius: var(--radius-lg);
       background: var(--color-surface);
       color: var(--color-ink);
-      box-shadow: var(--shadow-2);
+      box-shadow: var(--shadow-overlay);
+    }
+    app-sheet .sheet[open] {
+      animation: sheet-in var(--dur) var(--ease-out);
+    }
+    @keyframes sheet-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
     }
     app-sheet .sheet.sheet-wide {
       width: min(520px, calc(100vw - 32px));
@@ -73,6 +82,7 @@ import {
     }
     app-sheet .sheet-form h2 {
       font-size: var(--text-lg);
+      font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     app-sheet .sheet-message {

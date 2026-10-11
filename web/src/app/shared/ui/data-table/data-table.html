@@ -49,6 +49,7 @@
               [class.num]="isFigure(col)"
               [class.cell-title]="col.mobile === 'title'"
               [class.hide-phone]="col.mobile === 'hide'"
+              [class.wrap]="col.wrap"
               [class]="tone(row, col)"
             >
               @if (cellTemplates().get(col.key); as tpl) {

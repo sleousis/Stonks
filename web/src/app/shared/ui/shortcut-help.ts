@@ -113,7 +113,7 @@ interface Row {
       min-width: 1.8em;
       padding: 1px 6px;
       border: 1px solid var(--color-border-strong);
-      border-radius: 3px;
+      border-radius: var(--radius-xs);
       background: var(--color-surface-2);
       font: inherit;
       font-size: var(--text-xs);

@@ -22,10 +22,11 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
     .tag {
       display: inline-grid;
       place-items: center;
-      width: 1.5rem;
-      height: 1.5rem;
+      /* 20px: the same height as a status pill, so a row keeps one baseline. */
+      width: 20px;
+      height: 20px;
       border: 1.5px solid var(--color-ink);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-xs);
       font-family: var(--font-mono);
       font-size: var(--text-xs);
       font-weight: var(--weight-bold);

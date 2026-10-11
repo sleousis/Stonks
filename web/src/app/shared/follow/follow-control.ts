@@ -213,9 +213,13 @@ let nextId = 0;
       outline: 2px solid var(--color-focus);
       outline-offset: -2px;
     }
+    /* Picked: a soft blue fill with a primary ring, so the three modes do
+       not outrank the page's primary button. Link blue stays readable in
+       both themes. */
     .mode.on {
-      background: var(--color-primary);
-      color: var(--color-primary-ink);
+      background: var(--color-primary-soft);
+      box-shadow: inset 0 0 0 1px var(--color-primary);
+      color: var(--color-link);
       font-weight: var(--weight-semibold);
     }
     .help,
@@ -228,7 +232,7 @@ let nextId = 0;
     }
     .note {
       padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
+      border-left: 2px solid var(--color-warn);
       border-radius: var(--radius-sm);
       background: var(--color-warn-soft);
       font-size: var(--text-sm);

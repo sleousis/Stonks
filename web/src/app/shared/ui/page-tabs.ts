@@ -40,11 +40,15 @@ export interface PageTab {
  *                    [tabs]="sections" [(selected)]="section" />
  *
  * Segmented controls stay for filters and view switches inside a panel.
+ *
+ * `variant="sub"` is a second tab row under the first (Journal): smaller,
+ * no rule, the current tab a soft pill, so it reads as sub-navigation.
  */
 @Component({
   selector: 'app-page-tabs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive],
+  host: { '[attr.data-variant]': 'variant()' },
   template: `
     @if (asLinks()) {
       <nav class="tabs" [attr.aria-label]="label()">
@@ -121,7 +125,9 @@ export interface PageTab {
       text-decoration: none;
       white-space: nowrap;
       cursor: pointer;
-      transition: color var(--dur-fast) var(--ease);
+      transition:
+        color var(--dur-fast) var(--ease),
+        background-color var(--dur-fast) var(--ease);
     }
     .tab:last-child {
       margin-right: 24px;
@@ -137,6 +143,7 @@ export interface PageTab {
       text-align: center;
     }
     .tab:hover {
+      background: var(--color-hover);
       color: var(--color-ink);
     }
     .tab.active {
@@ -148,14 +155,36 @@ export interface PageTab {
       outline: 2px solid var(--color-focus);
       outline-offset: -2px;
     }
+    /* Sub: a second-level row. No rule, 13px, the current tab a soft pill. */
+    :host([data-variant='sub']) {
+      margin-top: 0;
+    }
+    :host([data-variant='sub']) .tabs {
+      gap: var(--space-1);
+      border-bottom: 0;
+    }
+    :host([data-variant='sub']) .tab {
+      min-height: 30px;
+      margin-bottom: 0;
+      padding: 0 var(--space-3);
+      border-bottom: 0;
+      border-radius: var(--radius-pill);
+      font-size: var(--text-sm);
+    }
+    :host([data-variant='sub']) .tab.active {
+      background: var(--color-accent-soft);
+      color: var(--color-ink);
+    }
     @include bp.phone {
-      .tab {
+      .tab,
+      :host([data-variant='sub']) .tab {
         min-height: var(--touch-min);
         padding: 0 var(--space-2);
       }
     }
     @include bp.coarse {
-      .tab {
+      .tab,
+      :host([data-variant='sub']) .tab {
         min-height: var(--touch-min);
       }
     }
@@ -174,6 +203,8 @@ export class PageTabs {
   readonly idPrefix = input('tabs');
   /** The section shown, for tablist tabs. */
   readonly selected = model<string | null>(null);
+  /** `main` (default): the page's tabs. `sub`: a second row under them. */
+  readonly variant = input<'main' | 'sub'>('main');
 
   protected readonly asLinks = computed(() => this.tabs().every((t) => !!t.path));
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('tab');

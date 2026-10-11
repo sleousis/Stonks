@@ -189,7 +189,7 @@ interface TapeItem {
       padding: 0;
       border: 0;
       background: none;
-      color: var(--color-primary);
+      color: var(--color-link);
       text-decoration: underline;
       cursor: pointer;
     }

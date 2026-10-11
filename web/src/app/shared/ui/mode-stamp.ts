@@ -28,6 +28,7 @@ import { paperStampLabel } from '../live-stages';
       padding: 1px var(--space-2) 0;
       border: 1.5px dashed var(--color-paper);
       border-radius: var(--radius-xs);
+      background: transparent;
       color: var(--color-paper);
       font-family: var(--font-display);
       font-stretch: var(--display-stretch);

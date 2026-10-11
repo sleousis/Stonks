@@ -21,4 +21,20 @@ describe('StatTile', () => {
     expect(render('+5.24%').classList).not.toContain('text');
     expect(render('$12,400').classList).not.toContain('text');
   });
+
+  it('drops its box when bare, for a divided strip inside a panel', () => {
+    const fixture = TestBed.createComponent(StatTile);
+    fixture.componentRef.setInput('label', 'Cash');
+    fixture.componentRef.setInput('value', '$1,200');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.classList).not.toContain('bare');
+    fixture.componentRef.setInput('bare', true);
+    fixture.detectChanges();
+    expect(el.classList).toContain('bare');
+  });
+
+  it('marks a phrase as text so it is set quietly in the body face', () => {
+    expect(render('Too early to tell').classList).toContain('text');
+  });
 });

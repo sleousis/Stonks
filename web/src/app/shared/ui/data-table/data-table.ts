@@ -56,6 +56,11 @@ export interface TableColumn<T> {
    */
   mobile?: 'title' | 'show' | 'hide';
   /**
+   * Long text (a description, an explanation): the cell wraps at about 40
+   * characters and the row grows to two lines instead of running wide.
+   */
+  wrap?: boolean;
+  /**
    * Glossary key for the header's help tip. Defaults to the label, so metric
    * columns ("Sharpe", "Drawdown") get one automatically; `false` hides it.
    */

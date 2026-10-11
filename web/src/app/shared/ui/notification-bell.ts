@@ -61,7 +61,7 @@ import { NotificationFeedService } from '../../core/notify/notification-feed.ser
       padding: 0;
     }
     .bell.current {
-      color: var(--color-primary);
+      color: var(--color-link);
     }
     .badge {
       position: absolute;
@@ -71,10 +71,12 @@ import { NotificationFeedService } from '../../core/notify/notification-feed.ser
       height: 18px;
       padding: 0 5px;
       border: 2px solid var(--color-surface);
-      border-radius: 999px;
+      border-radius: var(--radius-pill);
       background: var(--color-loss);
-      color: var(--color-surface);
+      color: var(--color-loss-ink);
+      font-family: var(--font-mono);
       font-size: 10px;
+      font-variant-numeric: tabular-nums slashed-zero;
       font-weight: var(--weight-semibold);
       line-height: 14px;
       text-align: center;

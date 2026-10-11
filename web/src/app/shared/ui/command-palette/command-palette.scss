@@ -9,12 +9,13 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-ink);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-overlay);
   overflow: hidden;
 
   &[open] {
     display: flex;
     flex-direction: column;
+    animation: palette-in var(--dur) var(--ease-out);
   }
 
   &::backdrop {
@@ -115,7 +116,7 @@
       top: 8px;
       bottom: 8px;
       width: 3px;
-      border-radius: 2px;
+      border-radius: var(--radius-xs);
       background: var(--color-accent);
     }
   }
@@ -145,7 +146,7 @@ kbd {
   min-width: 1.6em;
   padding: 0 5px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-2);
   color: var(--color-ink-2);
   font: inherit;
@@ -222,5 +223,12 @@ kbd {
 
   .foot:not(:has(.status.visible)) {
     display: none;
+  }
+}
+
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }

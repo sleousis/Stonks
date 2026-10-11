@@ -43,10 +43,4 @@
   }
 }
 
-.touch-link {
-  @include bp.coarse {
-    display: inline-block;
-    min-height: var(--touch-min);
-    line-height: var(--touch-min);
-  }
-}
+// .touch-link is global (styles.scss).
