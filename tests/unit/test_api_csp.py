@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
@@ -86,10 +87,20 @@ def test_the_console_policy_allows_only_this_origin():
     assert "'unsafe-inline'" not in policy["script-src"]
 
 
+def _hosts(policy: str) -> set[str]:
+    """Every host a policy names as a source, in any directive."""
+    return {
+        host
+        for sources in _directives(policy).values()
+        for src in sources
+        if (host := urlparse(src).hostname)
+    }
+
+
 def test_the_docs_policy_allows_the_swagger_cdn_only_there():
-    assert "cdn.jsdelivr.net" in docs_policy()
-    assert "cdn.jsdelivr.net" not in console_policy()
-    assert "frame-ancestors 'none'" in docs_policy()
+    assert {"cdn.jsdelivr.net"} <= _hosts(docs_policy())
+    assert _hosts(console_policy()).isdisjoint({"cdn.jsdelivr.net"})
+    assert _directives(docs_policy())["frame-ancestors"] == ["'none'"]
 
 
 def _allowed(sources: list[str], url: str) -> bool:
@@ -110,9 +121,8 @@ def test_the_docs_policy_allows_everything_fastapis_docs_pages_load():
         get_swagger_ui_html(openapi_url="/openapi.json", title="t"),
     ):
         html = bytes(page.body).decode("utf-8")
-        for tag, url in re.findall(
-            r"<(script|link)\b[^>]*?(?:src|href)=\"(https://[^\"]+)\"", html
-        ):
+        loaded = re.findall(r"<(script|link)\b[^>]*?(?:src|href)=\"(https://[^\"]+)\"", html)
+        for tag, url in loaded:
             if "favicon" in url:
                 directive = "img-src"
             elif tag == "script":
@@ -120,7 +130,7 @@ def test_the_docs_policy_allows_everything_fastapis_docs_pages_load():
             else:
                 directive = "style-src"
             assert _allowed(policy[directive], url), (directive, url)
-        if "fonts.googleapis.com" in html:
+        if any(urlparse(url).hostname == "fonts.googleapis.com" for _, url in loaded):
             assert _allowed(policy["font-src"], "https://fonts.gstatic.com/x"), "font-src"
 
 
