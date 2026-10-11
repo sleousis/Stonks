@@ -174,7 +174,15 @@ describe('PortfolioCard', () => {
 
   it('shows the value in the base currency when the book reports in it', async () => {
     const el = await render(
-      [book({ id: 'pf_1', name: 'DEGIRO', is_default: true, kind: 'broker', base_currency: 'EUR' })],
+      [
+        book({
+          id: 'pf_1',
+          name: 'DEGIRO',
+          is_default: true,
+          kind: 'broker',
+          base_currency: 'EUR',
+        }),
+      ],
       undefined,
       {
         portfolio: {
