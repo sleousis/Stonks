@@ -105,6 +105,8 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(browse, stack, vie
     page.get_by_role("button", name="New draft").click()
     page.get_by_role("radio", name=re.compile(r"^SMA trend following")).check()
     page.locator("#new-name").fill(name)
+    # The template can fill a default name a moment later: be sure ours stuck.
+    expect(page.locator("#new-name")).to_have_value(name)
     page.get_by_role("button", name="Create draft").click()
     page.get_by_role("tab", name=re.compile("Test")).click()
     page.locator("#t-tickers").fill("AAA.US, BBB.US, CCC.US")
