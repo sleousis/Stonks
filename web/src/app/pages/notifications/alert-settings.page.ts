@@ -75,6 +75,7 @@ import { TelegramLink } from './telegram-link';
       display: block;
       min-width: 0;
     }
+    /* Two groups 24px apart, panels 16px apart inside (12px on phones). */
     .layout {
       display: grid;
       gap: var(--space-5);
@@ -88,9 +89,13 @@ import { TelegramLink } from './telegram-link';
       display: grid;
       gap: var(--space-4);
       min-width: 0;
+      @include bp.phone {
+        gap: var(--space-3);
+      }
     }
     .group-title {
       font-size: var(--text-lg);
+      font-weight: var(--weight-semibold);
     }
     .body {
       display: grid;
@@ -98,7 +103,9 @@ import { TelegramLink } from './telegram-link';
       gap: var(--space-3);
     }
     .lead {
+      max-width: 70ch;
       color: var(--color-ink-2);
+      font-size: var(--text-sm);
     }
   `,
 })

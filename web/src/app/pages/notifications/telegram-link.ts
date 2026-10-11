@@ -159,8 +159,14 @@ export function botLink(username: string | null | undefined): string | null {
       gap: var(--space-3);
     }
     .lead {
+      max-width: 70ch;
       color: var(--color-ink-2);
       overflow-wrap: anywhere;
+    }
+    .hint {
+      max-width: 70ch;
+      color: var(--color-ink-3);
+      font-size: var(--text-sm);
     }
     .steps {
       display: grid;

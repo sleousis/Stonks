@@ -124,7 +124,12 @@ interface BlotterRow {
       <div class="panel-head">
         <h2 id="home-signals">Today's signals and runs</h2>
         @if (unread().length) {
-          <button type="button" class="btn btn-ghost" [disabled]="marking()" (click)="markRead()">
+          <button
+            type="button"
+            class="btn btn-tertiary"
+            [disabled]="marking()"
+            (click)="markRead()"
+          >
             Mark all read
           </button>
         }
@@ -309,8 +314,17 @@ interface BlotterRow {
       position: absolute;
       inset: 0;
     }
-    a.title:hover {
-      text-decoration-thickness: 2px;
+    /* Blotter titles read as names to open: ink, underlined on hover or focus. */
+    a.title {
+      color: var(--color-ink);
+      text-decoration: none;
+    }
+    a.title:hover,
+    a.title:focus-visible {
+      text-decoration: underline;
+    }
+    .more a.title {
+      color: var(--color-link);
     }
     .message {
       color: var(--color-ink-2);

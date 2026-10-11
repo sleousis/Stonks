@@ -79,11 +79,14 @@
   border-top: 1px solid var(--color-border);
 }
 
+// Group labels: the shared overline.
 .section-title {
   padding: var(--space-3) var(--space-4) var(--space-1);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
   color: var(--color-ink-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
 }
 
 .option {
@@ -97,6 +100,7 @@
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease);
 
   @include bp.phone {
     min-height: var(--touch-min);
@@ -106,8 +110,9 @@
     min-height: var(--touch-min);
   }
 
+  // The selected row: a quiet well with the accent bar at its edge.
   &.active {
-    background: var(--color-surface-3);
+    background: var(--color-hover);
 
     &::before {
       content: '';
@@ -141,16 +146,18 @@
   overflow-wrap: anywhere;
 }
 
+// Key hints: small mono chips.
 kbd {
   display: inline-block;
   min-width: 1.6em;
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-xs);
-  background: var(--color-surface-2);
+  background: var(--color-surface);
   color: var(--color-ink-2);
-  font: inherit;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  line-height: 1.5;
   text-align: center;
   white-space: nowrap;
 }
@@ -193,7 +200,7 @@ kbd {
   margin-left: auto;
 
   kbd + kbd {
-    margin-left: 2px;
+    margin-left: var(--space-1);
   }
 
   @include bp.phone {

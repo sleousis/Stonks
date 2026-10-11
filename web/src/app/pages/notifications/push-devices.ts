@@ -115,7 +115,7 @@ export function isThisBrowser(
               </div>
               <button
                 type="button"
-                class="btn btn-ghost"
+                class="btn btn-tertiary"
                 [disabled]="removing() === d.id || !canManage()"
                 (click)="remove(d)"
               >
@@ -134,7 +134,8 @@ export function isThisBrowser(
       min-width: 0;
     }
     .lead {
-      padding: var(--space-3) var(--space-4) 0;
+      max-width: 70ch;
+      padding: var(--space-4) var(--space-4) var(--space-1);
       color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
@@ -151,6 +152,9 @@ export function isThisBrowser(
       gap: var(--space-2) var(--space-3);
       padding: var(--space-3) var(--space-4);
       border-bottom: 1px solid var(--color-border);
+    }
+    li:last-child {
+      border-bottom: 0;
     }
     .text {
       display: grid;
@@ -170,9 +174,19 @@ export function isThisBrowser(
     }
     .facts {
       font-size: var(--text-xs);
+      font-variant-numeric: tabular-nums;
     }
     .note-row {
       padding: 0 var(--space-4) var(--space-3);
+    }
+    @media (max-width: 767.98px) {
+      .lead,
+      li {
+        padding-inline: var(--space-3);
+      }
+      .note-row {
+        padding: 0 var(--space-3) var(--space-3);
+      }
     }
   `,
 })

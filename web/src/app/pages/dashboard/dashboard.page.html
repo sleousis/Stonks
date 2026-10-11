@@ -17,9 +17,9 @@
       (retry)="portfolio.reload()"
     />
   }
-  <section class="tiles" aria-label="Portfolio summary">
+  <section class="tiles tile-grid" aria-label="Portfolio summary">
     <app-stat-tile
-      class="tile-value"
+      class="tile-value featured"
       label="Portfolio value"
       featured
       [live]="live()"
@@ -106,7 +106,7 @@
     } @else {
       <div class="health-summary">
         <app-status-pill
-          [status]="health.value().healthy ? 'healthy' : 'unhealthy'"
+          [status]="health.value().healthy ? 'pass' : 'unhealthy'"
           [label]="
             health.value().healthy
               ? 'All ' + checkCount() + ' checks passed'
@@ -114,7 +114,9 @@
           "
         />
         @if (version.hasValue()) {
-          <span class="muted">API {{ version.value().version }}</span>
+          <span class="muted"
+            >API <span class="num">{{ version.value().version }}</span></span
+          >
         }
       </div>
       <ul class="checks">
@@ -137,7 +139,8 @@
               <p class="check-name">{{ checkTitle(check.name) }}</p>
               <p class="check-detail">{{ plainDetail(check) }}</p>
             </div>
-            <app-status-pill [status]="check.level" [tone]="pill.tone" [label]="pill.label" />
+            <!-- Outcomes of a finished check: always a receipt, toned by the check's level. -->
+            <app-status-pill status="pass" [tone]="pill.tone" [label]="pill.label" />
           </li>
         } @empty {
           @if (!freshness()) {
@@ -150,7 +153,7 @@
 
   @if (book() !== 'none') {
     <!-- Positions ------------------------------------------------------------>
-    <section class="panel span-7" aria-labelledby="positions-title">
+    <section class="panel panel-flush span-7" aria-labelledby="positions-title">
       <div class="panel-head">
         <h2 id="positions-title">Positions</h2>
         <a routerLink="/insights" class="panel-link">All holdings</a>
@@ -180,7 +183,7 @@
   }
 
   <!-- Ticks ---------------------------------------------------------------->
-  <section class="panel span-5" aria-labelledby="ticks-title">
+  <section class="panel panel-flush span-5" aria-labelledby="ticks-title">
     <div class="panel-head">
       <h2 id="ticks-title">Recent trading runs</h2>
       <a routerLink="/orders/ticks" class="panel-link">
@@ -212,7 +215,7 @@
       >
         <ng-template appCell="as_of" [appCellOf]="ticks.value().items" let-tick>
           <a
-            class="cell-link num"
+            class="cell-link table-link num"
             [routerLink]="['/orders/ticks', tick.id]"
             [attr.title]="'Ran ' + (tick.started_at | dateTime)"
             >{{ tick.as_of ? (tick.as_of | day) : (tick.started_at | dateTime) }}</a
