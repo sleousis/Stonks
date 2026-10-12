@@ -53,7 +53,44 @@ const PAPER: ShadowPnlSummary[] = [
   },
 ];
 
+const SUBS = [
+  {
+    id: 'sub-1',
+    strategy_id: 'momentum-v3',
+    strategy_name: 'momentum-v3',
+    strategy_status: 'active',
+    portfolio_id: 'pf_default',
+    mode: 'paper' as const,
+    enabled: true,
+    weight: 1,
+    auto_blockers: [],
+    auto_enabled_at: null,
+    paper_days_completed: 3,
+    paper_days_required: 20,
+    paused_reason: null,
+    created_at: '2026-09-01T10:00:00Z',
+    updated_at: '2026-09-01T10:00:00Z',
+  },
+];
+
 const isPaper = (req: { url: string }) => req.url.split('?')[0] === '/api/shadow/pnl';
+const isCurve = (req: { url: string }) => /^\/api\/shadow\/strategies\/[^/]+\/pnl$/.test(req.url.split('?')[0]);
+const isSubs = (req: { url: string }) => req.url.split('?')[0] === '/api/subscriptions';
+
+/** A test book's daily rows, rising from 10,000. */
+function curve(id: string) {
+  return {
+    strategy_id: id,
+    rows: [0, 1, 2].map((i) => ({
+      day: `2026-09-0${i + 1}`,
+      total_value: 10000 + i * 50,
+      cumulative_return: i * 0.005,
+      daily_change: null,
+      daily_return: null,
+      drawdown: 0,
+    })),
+  };
+}
 
 describe('StrategiesPage', () => {
   let fixture: ComponentFixture<StrategiesPage>;
@@ -88,13 +125,23 @@ describe('StrategiesPage', () => {
           req.flush(page(PAPER));
         }
       }
+      for (const req of controller.match(isSubs)) req.flush(page(SUBS));
+      for (const req of controller.match(isCurve)) {
+        req.flush(curve(req.request.url.split('/').at(-2)!));
+      }
       fixture.detectChanges();
     }
   }
 
   function rowIds(): string[] {
-    return Array.from(el.querySelectorAll('tbody tr td:first-child')).map(
-      (td) => td.textContent?.trim() ?? '',
+    return Array.from(el.querySelectorAll('tbody tr td:first-child .row-link')).map(
+      (a) => a.textContent?.trim() ?? '',
+    );
+  }
+
+  function pill(label: string): HTMLButtonElement | undefined {
+    return Array.from(el.querySelectorAll<HTMLButtonElement>('.filter-pill')).find(
+      (b) => b.childNodes[0].textContent?.trim() === label,
     );
   }
 
@@ -150,23 +197,45 @@ describe('StrategiesPage', () => {
     expect(el.textContent).not.toContain('command line');
   });
 
-  it('refetches with the chosen status filter', async () => {
-    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+  it('filters by status in the browser, with a count on each pill', async () => {
+    const req = await nextRequest(controller, '/api/strategies');
+    expect(statusParam(req)).toBeNull();
+    req.flush(page(ALL));
     await settle();
 
-    const shadow = Array.from(el.querySelectorAll<HTMLLabelElement>('.segment')).find(
-      (l) => l.textContent?.trim() === 'On trial',
-    );
-    shadow?.querySelector('input')?.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
-
-    const req = await nextRequest(controller, '/api/strategies');
-    expect(statusParam(req)).toBe('shadow');
-    req.flush(page([ALL[1]]));
+    expect(pill('All')?.querySelector('.count')?.textContent).toBe('3');
+    expect(pill('On trial')?.querySelector('.count')?.textContent).toBe('1');
+    pill('On trial')!.click();
     await settle();
 
     expect(rowIds()).toEqual(['buyhold-spy']);
-    expect(shadow?.classList).toContain('selected');
+    expect(pill('On trial')?.getAttribute('aria-pressed')).toBe('true');
+    expect(controller.match((r) => r.url.split('?')[0] === '/api/strategies')).toEqual([]);
+  });
+
+  it('sums the list up and builds its standfirst from the data', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+    await settle();
+    const strip = el.querySelector('.summary-strip')!;
+    expect(strip.textContent).toContain('Approved');
+    expect(strip.textContent).toContain('Best trial return');
+    expect(strip.textContent).toContain('+4.12%');
+    expect(el.querySelector('.standfirst')?.textContent).toContain('1 approved, 1 on trial.');
+  });
+
+  it('shows how you follow each strategy, with its stamp, and a trend line', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+    await settle();
+    const row = Array.from(el.querySelectorAll('tbody tr')).find((tr) =>
+      tr.textContent?.includes('momentum-v3'),
+    )!;
+    expect(row.textContent).toContain('Paper');
+    expect(row.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
+    const trial = Array.from(el.querySelectorAll('tbody tr')).find((tr) =>
+      tr.textContent?.includes('buyhold-spy'),
+    )!;
+    expect(trial.textContent).toContain('Not followed');
+    expect(trial.querySelector('app-sparkline path.line')).not.toBeNull();
   });
 
   it('filters by search text in the browser and explains no matches', async () => {
@@ -207,7 +276,9 @@ describe('StrategiesPage', () => {
   it('uses trader words only: pills, filters and copy (UX-09)', async () => {
     (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
     await settle();
-    const filters = [...el.querySelectorAll('.segment')].map((l) => l.textContent?.trim());
+    const filters = [...el.querySelectorAll('.filter-pill')].map((l) =>
+      l.childNodes[0].textContent?.trim(),
+    );
     expect(filters).toEqual(['All', 'Approved', 'On trial', 'Retired']);
     const pills = [...el.querySelectorAll('app-status-pill')].map((p) => p.textContent?.trim());
     expect(pills.length).toBeGreaterThan(0);

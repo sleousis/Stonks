@@ -24,7 +24,7 @@ export function sourceWords(source: GoLiveReport['source']): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, HelpTip, StatusPill],
   template: `
-    <p class="summary panel-body">
+    <p class="summary">
       @if (checks().failing.length === 0) {
         All {{ checks().total }} checks pass.
       } @else {
@@ -64,7 +64,7 @@ export function sourceWords(source: GoLiveReport['source']): string {
         }
       </ul>
     }
-    <details class="checklist panel-body">
+    <details class="checklist">
       <summary>Before you approve</summary>
       <p class="muted checklist-lead">
         What a reviewer reads before approving. It does not change the verdict.
@@ -87,70 +87,73 @@ export function sourceWords(source: GoLiveReport['source']): string {
   styles: `
     @use 'breakpoints' as bp;
 
+    /* The count first, then one row per failing check (label and chip, the
+       sentence and the fix under it), hairlines between. The reviewer's
+       checklist folds below as label and value rows. No boxes. */
     :host {
       display: block;
       min-width: 0;
     }
     .summary {
       display: grid;
-      gap: var(--space-1);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      gap: 2px;
+      padding: var(--space-4) 0;
+      font-size: var(--text-lead);
+      font-weight: var(--weight-semibold);
     }
     .source {
-      color: var(--color-ink-2);
+      color: var(--muted);
+      font-size: var(--text-sm);
       font-weight: var(--weight-regular);
     }
     .checks {
       margin: 0;
-      padding: 0 var(--space-4) var(--space-2);
+      padding: 0;
       list-style: none;
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
-    /* One row per check: title row, 12px, then the body. Hairlines between. */
     .checks li {
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-2);
       min-width: 0;
       padding: var(--space-4) 0;
-      border-top: 1px solid var(--color-border);
-    }
-    .checks li:first-child {
-      border-top: 0;
+      border-bottom: 1px solid var(--rule);
     }
     .check-head {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
+      justify-content: space-between;
       gap: var(--space-2);
     }
     .check-label {
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
     }
     .check-body {
       display: grid;
       gap: var(--space-1);
-      max-width: 70ch;
+      max-width: 68ch;
     }
     .check-detail {
-      font-size: var(--text-sm);
+      color: var(--ink);
+      font-size: var(--text-md);
       overflow-wrap: anywhere;
     }
     .check-fix {
       display: grid;
       justify-items: start;
-      gap: var(--space-2);
-      color: var(--color-ink-2);
+      gap: var(--space-1);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
-    /* The link is a quiet button, nudged so its text lines up with the text above. */
     .check-fix .btn {
       margin-inline-start: calc(-1 * var(--space-3));
     }
     .checklist {
       display: grid;
       gap: var(--space-2);
-      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-2);
     }
     .checklist summary {
       display: flex;
@@ -160,46 +163,51 @@ export function sourceWords(source: GoLiveReport['source']): string {
       cursor: pointer;
     }
     .checklist-lead {
+      color: var(--muted);
       font-size: var(--text-sm);
     }
     .checklist-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-2);
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0 var(--space-6);
       margin: 0;
     }
     @include bp.from-tablet {
       .checklist-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
     .checklist-grid > div {
-      display: grid;
-      align-content: start;
-      gap: var(--space-1);
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-3);
       min-width: 0;
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      padding: 10px 0;
+      border-bottom: 1px solid var(--rule);
     }
     .checklist-grid > div.text {
+      display: grid;
+      gap: 2px;
       grid-column: 1 / -1;
     }
     .checklist-grid dt {
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
     .checklist-grid dd {
       margin: 0;
-      font-weight: var(--weight-medium);
+      font-weight: var(--weight-label);
+      text-align: right;
       overflow-wrap: anywhere;
     }
     .checklist-grid .text dd {
-      max-width: 70ch;
+      max-width: 68ch;
       font-weight: var(--weight-regular);
+      text-align: left;
     }
     .checklist-grid .missing dd {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

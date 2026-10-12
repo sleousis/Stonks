@@ -92,8 +92,8 @@ describe('FactorTearsheetResult', () => {
     const cells = section('Monthly IC').querySelectorAll<HTMLElement>('tbody td');
     expect(cells.length).toBe(12);
     expect(cells[0].textContent!.trim()).toBe('0.05');
-    expect(cells[0].getAttribute('style')).toContain('--color-gain');
-    expect(cells[1].getAttribute('style')).toContain('--color-loss');
+    expect(cells[0].getAttribute('style')).toContain('--up');
+    expect(cells[1].getAttribute('style')).toContain('--down');
     expect(cells[2].classList).toContain('na');
   });
 

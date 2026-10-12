@@ -182,19 +182,19 @@ import { lastPreview } from './preview-memory';
       max-width: 20rem;
     }
     .progress {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .bar {
       height: 6px;
-      border-radius: var(--radius-xs);
-      background: var(--color-surface-3);
+      border-radius: var(--r-tag);
+      background: var(--rule);
       overflow: hidden;
     }
     .bar span {
       display: block;
       height: 100%;
-      background: var(--color-gain);
+      background: var(--up);
       transition: width var(--dur) var(--ease-out);
     }
     /* The steps: one panel, a hairline between rows. */
@@ -204,13 +204,13 @@ import { lastPreview } from './preview-memory';
       margin: 0;
       padding: 0;
       list-style: none;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-sheet);
+      background: var(--raise);
       overflow: hidden;
     }
     .steps > li + li {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     .step {
       display: grid;
@@ -226,7 +226,7 @@ import { lastPreview } from './preview-memory';
     }
     .later {
       padding: var(--space-3) var(--space-4);
-      background: var(--color-surface-2);
+      background: var(--sunk);
       font-size: var(--text-sm);
 
       @include bp.phone {
@@ -239,18 +239,18 @@ import { lastPreview } from './preview-memory';
       place-items: center;
       width: 2rem;
       height: 2rem;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-xs);
-      color: var(--color-ink-2);
+      border: 1px solid var(--rule-control);
+      border-radius: var(--r-tag);
+      color: var(--ink-2);
       font-family: var(--font-mono);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
       font-variant-numeric: tabular-nums slashed-zero;
     }
     .step[data-state='done'] .mark {
-      border-color: var(--color-gain);
-      background: var(--color-gain);
-      color: var(--color-surface);
+      border-color: var(--up);
+      background: var(--up);
+      color: var(--raise);
     }
     .body {
       display: grid;
@@ -258,13 +258,13 @@ import { lastPreview } from './preview-memory';
       min-width: 0;
     }
     .title {
-      font-size: var(--text-panel);
+      font-size: var(--text-section);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     .detail {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
@@ -286,7 +286,7 @@ import { lastPreview } from './preview-memory';
     }
     /* Brass only where real money moves: the done steps of a Real money portfolio. */
     .steps.live .step[data-state='done'] {
-      box-shadow: inset var(--border-live) 0 0 var(--color-live);
+      box-shadow: inset var(--border-live) 0 0 var(--brass);
     }
     .foot {
       max-width: 70ch;

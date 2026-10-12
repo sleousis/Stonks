@@ -103,11 +103,11 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       max-height: 18rem;
       overflow-y: auto;
       overscroll-behavior: contain;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
     }
     .group + .group {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     /* Group labels (Yardsticks, Trend following): the one overline style. */
     .group-label {
@@ -119,8 +119,8 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: var(--tracking-overline);
-      color: var(--color-ink-3);
-      background: var(--color-surface-2);
+      color: var(--muted);
+      background: var(--sunk);
     }
     .option {
       display: grid;
@@ -132,24 +132,24 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       cursor: pointer;
       box-shadow: inset 2px 0 0 transparent;
       transition:
-        background-color var(--dur-fast) var(--ease),
-        box-shadow var(--dur-fast) var(--ease);
+        background-color var(--dur-fast) var(--ease-out),
+        box-shadow var(--dur-fast) var(--ease-out);
     }
     .option + .option {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     .option:hover {
-      background: var(--color-hover);
+      background: var(--sunk);
     }
     .option.selected {
-      background: var(--color-surface);
-      box-shadow: inset 2px 0 0 var(--color-accent);
+      background: var(--raise);
+      box-shadow: inset 2px 0 0 var(--accent);
     }
     input[type='radio'] {
       margin: 2px 0 0;
       width: 16px;
       height: 16px;
-      accent-color: var(--color-accent);
+      accent-color: var(--accent);
     }
     @media (pointer: coarse) {
       input[type='radio'] {
@@ -169,11 +169,11 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     }
     .desc {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .tags {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .none {
       padding: var(--space-3);
@@ -181,7 +181,7 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     }
     .error {
       font-size: var(--text-xs);
-      color: var(--color-loss);
+      color: var(--down);
     }
   `,
 })

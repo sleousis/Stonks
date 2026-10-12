@@ -12,6 +12,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 
 import type {
+  GoLiveReport,
   OrderView,
   PnlRowView,
   ShadowDecisionView,
@@ -35,7 +36,7 @@ import {
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
-import { traderChecks } from '../../shared/golive-checks';
+import { type CheckRow, checkRow, traderChecks } from '../../shared/golive-checks';
 import { demoteOptions, isRealMoneyBroker, promoteThroughGate } from '../../shared/governance';
 import {
   LIFECYCLE,
@@ -224,6 +225,36 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
 }
 
 const NA = 'n/a';
+
+/** Checks the trader does not need to read in the verdict (kept in the go-live check). */
+const QUIET_CHECKS = new Set(['status', 'hypothesis_recorded']);
+
+/** The verdict's check rows: each go-live check with its value and a pass or fail glyph. */
+export function verdictCheckRows(report: GoLiveReport | null, strategyId: string): CheckRow[] {
+  if (!report) return [];
+  return report.checks.filter((c) => !QUIET_CHECKS.has(c.name)).map((c) => checkRow(c, strategyId));
+}
+
+/**
+ * The standfirst under the name, from its trial: "Momentum strategy. Up
+ * 8.00% over 3 trial days, worst drop -5.00%." Without a trial record it
+ * says what the status means.
+ */
+export function detailStandfirst(
+  kind: string | null,
+  status: StrategyDetail['status'],
+  perf: PaperPerformance | null,
+): string {
+  const head = kind ? `${kind}.` : '';
+  if (!perf) return `${head} ${STATUS_MEANING[status]}`.trim();
+  const ret = perf.totalReturn ?? 0;
+  const move =
+    ret === 0
+      ? 'Flat'
+      : `${ret > 0 ? 'Up' : 'Down'} ${formatPercent(Math.abs(ret))}`;
+  const days = perf.days === 1 ? '1 trial day' : `${perf.days} trial days`;
+  return `${head} ${move} over ${days}, worst drop ${formatPercent(perf.maxDrawdown)}.`.trim();
+}
 
 @Component({
   selector: 'app-strategy-detail-page',
@@ -469,10 +500,16 @@ export class StrategyDetailPage {
 
   protected readonly description = computed(() => {
     const s = this.detail();
-    return s
-      ? `${this.kindName()}. ${STATUS_WORDS[s.status]}.`
-      : 'Verdict, trial results and how to follow it.';
+    if (!s) return 'Verdict, trial results and how to follow it.';
+    if (!this.sheet.hasValue()) return `${this.kindName()}. ${STATUS_WORDS[s.status]}.`;
+    return detailStandfirst(this.kindName(), s.status, this.performance());
   });
+  protected readonly statusWord = computed(() => {
+    const s = this.detail();
+    return s ? STATUS_WORDS[s.status] : '';
+  });
+  /** The verdict's check rows, pass or fail. */
+  protected readonly checkRows = computed(() => verdictCheckRows(this.goliveReport(), this.id()));
   protected readonly meaning = computed(() => {
     const s = this.detail();
     return s ? STATUS_MEANING[s.status] : '';

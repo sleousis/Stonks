@@ -18,12 +18,12 @@
   margin: 0;
   padding: var(--space-4) 0 0;
   border: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--rule);
 
   // Section titles: 13px semibold, second ink, under a hairline.
   > legend {
     padding: 0 var(--space-2) 0 0;
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
   }
@@ -33,7 +33,7 @@
   margin-left: var(--space-1);
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .grid-2 {
@@ -66,9 +66,9 @@
   gap: var(--space-3);
   margin-left: calc(16px + var(--space-2));
   padding: var(--space-3);
-  border-left: 2px solid var(--color-border-strong);
-  background: var(--color-surface-2);
-  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--rule-control);
+  background: var(--sunk);
+  border-radius: var(--r-ctl);
 }
 
 .tests {
@@ -95,7 +95,7 @@
   display: block;
   margin: -4px 0 0 calc(16px + var(--space-2));
   font-size: var(--text-xs);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .reset {
@@ -116,7 +116,7 @@
     gap: var(--space-1) var(--space-2);
     justify-content: space-between;
     padding: var(--space-1) 0;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
   .pname {
@@ -129,14 +129,14 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
 }
 
 .register-when {
   margin-left: calc(16px + var(--space-2));
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border-radius: var(--r-ctl);
+  background: var(--raise);
 }
 
 // Suite presets ---------------------------------------------------------------
@@ -158,31 +158,31 @@
   min-height: var(--touch-min);
   padding: var(--space-3);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
   cursor: pointer;
   transition:
-    background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
   input {
     margin-top: 2px;
-    accent-color: var(--color-accent);
+    accent-color: var(--accent);
     flex: none;
   }
 
   &:hover {
-    border-color: var(--color-border-strong);
+    border-color: var(--rule-control);
   }
 
   &.chosen {
-    border-color: var(--color-accent);
-    background: var(--color-surface);
-    box-shadow: inset 2px 0 0 var(--color-accent);
+    border-color: var(--accent);
+    background: var(--raise);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   &:focus-within {
-    outline: 2px solid var(--color-focus);
+    outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
 }
@@ -200,7 +200,7 @@
 
 .suite-hint {
   font-size: var(--text-xs);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 .suite-list {
@@ -213,9 +213,9 @@
 
 .chip {
   padding: 1px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--sunk);
   font-size: var(--text-xs);
   line-height: 18px;
 }
@@ -242,7 +242,7 @@
 
 // The Advanced fold: hairlines above and below, no box inside the panel.
 .advanced {
-  border-block: 1px solid var(--color-border);
+  border-block: 1px solid var(--rule);
 
   > summary {
     display: flex;
@@ -297,7 +297,7 @@
   margin: 0;
   padding: var(--space-3);
   border: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--rule);
 
   &:first-of-type {
     border-top: 0;
@@ -352,7 +352,7 @@
 
 .error {
   font-size: var(--text-xs);
-  color: var(--color-loss);
+  color: var(--down);
 }
 
 .summary {

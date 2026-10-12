@@ -67,7 +67,7 @@ export const LAB_SECTIONS: readonly LabSection[] = [
     }
     .lab-nav {
       margin-bottom: var(--space-4);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     /* One row like the page tabs: it scrolls sideways, and a fading right
        edge hints at tabs past the edge. */
@@ -100,13 +100,13 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       padding: 0 var(--space-3);
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
       text-decoration: none;
       transition:
-        color var(--dur-fast) var(--ease),
-        background-color var(--dur-fast) var(--ease);
+        color var(--dur-fast) var(--ease-out),
+        background-color var(--dur-fast) var(--ease-out);
       @include bp.phone {
         min-height: var(--touch-min);
         padding: 0 var(--space-2);
@@ -116,16 +116,16 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       }
     }
     a:hover {
-      background: var(--color-hover);
-      color: var(--color-ink);
+      background: var(--sunk);
+      color: var(--ink);
     }
     a.active {
-      color: var(--color-ink);
+      color: var(--ink);
       font-weight: var(--weight-semibold);
-      border-bottom-color: var(--color-accent);
+      border-bottom-color: var(--accent);
     }
     a:focus-visible {
-      outline: 2px solid var(--color-focus);
+      outline: 2px solid var(--accent);
       outline-offset: -2px;
     }
     /* "More tools": an overline set off by a hairline, inside the row. */
@@ -133,8 +133,8 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       align-items: center;
       margin-left: var(--space-2);
       padding: 0 var(--space-2) 0 var(--space-3);
-      border-left: 1px solid var(--color-border);
-      color: var(--color-ink-3);
+      border-left: 1px solid var(--rule);
+      color: var(--muted);
       font-size: var(--text-xs);
       font-weight: 600;
       letter-spacing: var(--tracking-overline);

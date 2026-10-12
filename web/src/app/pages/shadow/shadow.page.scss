@@ -19,7 +19,7 @@
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   min-width: 0;
 
   select {
@@ -40,17 +40,17 @@
 .chart-note {
   margin-top: var(--space-3);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   max-width: 70ch;
 
   &.warn {
-    color: var(--color-ink);
+    color: var(--ink);
   }
 }
 
 .count {
   font-size: var(--text-sm);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .filters {
@@ -58,7 +58,7 @@
   gap: var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--rule);
 
   @include bp.from-tablet {
     grid-template-columns: repeat(2, minmax(0, 16rem));
@@ -111,12 +111,12 @@
 
   &[data-side='buy']::before {
     content: '▲ ';
-    color: var(--color-gain);
+    color: var(--up);
   }
 
   &[data-side='sell']::before {
     content: '▼ ';
-    color: var(--color-loss);
+    color: var(--down);
   }
 }
 
@@ -125,6 +125,6 @@
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-2);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   font-size: var(--text-sm);
 }

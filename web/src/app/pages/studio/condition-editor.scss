@@ -61,19 +61,19 @@
     min-width: var(--touch-min);
     min-height: var(--touch-min);
     font-size: var(--text-lg);
-    color: var(--color-ink-3);
+    color: var(--muted);
 
     &:hover:not(:disabled) {
-      color: var(--color-loss);
+      color: var(--down);
     }
   }
 }
 
 .compare {
   padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  background: var(--raise);
 }
 
 // A group is an inset well with an accent rule on its edge; nested groups
@@ -84,9 +84,9 @@
   min-width: 0;
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 0;
-  border-left: 2px solid var(--color-accent);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
 
   @include bp.phone {
     padding-left: var(--space-2);
@@ -94,7 +94,7 @@
 }
 
 .not {
-  border-left-color: var(--color-warn);
+  border-left-color: var(--warn);
 }
 
 .group-head,
@@ -121,7 +121,7 @@
   font-weight: 600;
   letter-spacing: var(--tracking-overline);
   text-transform: uppercase;
-  color: var(--color-warn);
+  color: var(--warn);
 }
 
 .group-type {
@@ -150,6 +150,6 @@
 .issue {
   margin-top: var(--space-1);
   font-size: var(--text-xs);
-  color: var(--color-loss);
+  color: var(--down);
   overflow-wrap: anywhere;
 }

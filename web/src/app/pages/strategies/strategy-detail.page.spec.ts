@@ -319,11 +319,11 @@ describe('StrategyDetailPage', () => {
 
   it('shows the trial result from its test book with a value chart', async () => {
     await load();
-    const perf = el.querySelector('.perf')!.textContent!;
+    const perf = el.querySelector('.summary-strip')!.textContent!.replace(/\s+/g, ' ');
     expect(perf).toContain('+8.00%');
     expect(perf).toContain('-5.00%');
     // Days on trial from the rows, the same count as the verdict (NB-13).
-    expect(perf).toContain('Days on trial3');
+    expect(perf).toContain('Days on trial 3');
     expect(el.querySelector('#perf-title')!.textContent).toBe('Trial results');
     const summary = el.querySelector('app-time-series-chart')!.textContent!;
     expect(summary).toContain('a return of +8.00%');
@@ -334,7 +334,7 @@ describe('StrategyDetailPage', () => {
 
   it('shows an approved strategy its trial record, never an empty page (F28)', async () => {
     await load({ ...DETAIL, status: 'active' }, HISTORY, { passed: true });
-    expect(el.querySelector('.perf')!.textContent).toContain('+8.00%');
+    expect(el.querySelector('.summary-strip')!.textContent).toContain('+8.00%');
     expect(el.querySelector('app-strategy-verdict')!.textContent).toContain('Worth following');
     expect(el.textContent).not.toMatch(/trades live now/i);
   });
@@ -348,8 +348,8 @@ describe('StrategyDetailPage', () => {
 
   it('never calls the strategy live and uses the ladder words (B1)', async () => {
     await load({ ...DETAIL, status: 'active' });
-    const subtitle = el.querySelector('app-page-header p')?.textContent ?? '';
-    expect(subtitle).toContain('Momentum strategy. Approved.');
+    const subtitle = el.querySelector('app-page-header .standfirst')?.textContent ?? '';
+    expect(subtitle).toContain('Momentum strategy. Up 8.00% over 3 trial days');
     const copy = el.cloneNode(true) as HTMLElement;
     copy.querySelectorAll('.timeline .reason').forEach((r) => r.remove());
     expect(copy.textContent).not.toMatch(/(?<!go-)\blive\b|shadow|promot|regist/i);
@@ -512,9 +512,12 @@ describe('StrategyDetailPage', () => {
     expect(el.querySelector('app-page-header app-mode-stamp')!.textContent).toContain('LIVE');
   });
 
-  it('shows no stamp for an approved strategy on a paper broker', async () => {
+  it('shows the PAPER stamp for an approved strategy on a paper broker', async () => {
     await load({ ...DETAIL, status: 'active' });
-    expect(el.querySelector('app-page-header app-mode-stamp')).toBeNull();
+    expect(el.querySelector('app-page-header app-mode-stamp')!.textContent).toContain('PAPER');
+    expect(el.querySelector('app-page-header .title-meta app-status-pill')?.textContent).toContain(
+      'Approved',
+    );
   });
 
   it('approves with a reason and a hold after showing the go-live check', async () => {
@@ -666,7 +669,7 @@ describe('StrategyDetailPage', () => {
   it('names it once, in words, and tests a Studio strategy again in Studio (NAMES, NB-09)', async () => {
     await load({ ...DETAIL, name: 'Admin trend rule', draft_id: 'draft_9', kind: 'Studio rules' });
     expect(el.querySelector('h1')?.textContent).toContain('Admin trend rule');
-    const again = [...el.querySelectorAll('nav.related a')].find((a) =>
+    const again = [...el.querySelectorAll('app-page-header .actions a')].find((a) =>
       a.textContent?.includes('Test again'),
     );
     expect(again?.getAttribute('href')).toBe('/studio/draft_9?tab=test');

@@ -216,10 +216,10 @@ import { FormulaEditor } from './formula-editor';
     }
     .tag {
       padding: 0 var(--space-2);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-xs);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-tag);
       font-size: var(--text-xs);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .formula-fold summary {
       display: flex;
@@ -227,7 +227,7 @@ import { FormulaEditor } from './formula-editor';
       min-height: var(--touch-min);
       cursor: pointer;
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .formula {
       display: flex;
@@ -235,11 +235,11 @@ import { FormulaEditor } from './formula-editor';
       align-items: center;
       gap: var(--space-2) var(--space-3);
       padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       .label {
         font-size: var(--text-xs);
-        color: var(--color-ink-2);
+        color: var(--ink-2);
       }
       code {
         flex: 1 1 16rem;

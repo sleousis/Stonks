@@ -11,7 +11,7 @@
 .name {
   display: inline-grid;
   align-content: center;
-  color: var(--color-ink);
+  color: var(--ink);
   text-decoration: none;
 
   &:hover .id,
@@ -89,7 +89,7 @@
     gap: var(--space-3);
     min-height: var(--row-h);
     padding: var(--space-1) 0;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--rule);
 
     &:first-child {
       border-top: 0;
@@ -97,7 +97,7 @@
   }
 
   dt {
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-size: var(--text-sm);
   }
 
@@ -115,7 +115,7 @@
 
 .note {
   max-width: 70ch;
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   font-size: var(--text-sm);
 
   a {

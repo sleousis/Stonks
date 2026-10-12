@@ -17,12 +17,12 @@
 
 .hint {
   font-size: var(--text-xs);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .error {
   font-size: var(--text-xs);
-  color: var(--color-loss);
+  color: var(--down);
   overflow-wrap: anywhere;
 }
 
@@ -36,8 +36,8 @@
 
   li {
     padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
-    background: var(--color-surface-3);
+    border-radius: var(--r-pill);
+    background: var(--rule);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     font-variant-numeric: tabular-nums slashed-zero;
@@ -53,8 +53,8 @@
     padding: var(--space-3);
   }
 
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--rule);
+  background: var(--sunk);
 }
 
 .job-line {
@@ -71,7 +71,7 @@
 .job-message {
   min-width: 0;
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 
@@ -80,27 +80,27 @@ progress {
   height: 8px;
   appearance: none;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--r-pill);
   overflow: hidden;
-  background: var(--color-surface-3);
-  accent-color: var(--color-accent);
+  background: var(--rule);
+  accent-color: var(--accent);
 
   &::-webkit-progress-bar {
-    background: var(--color-surface-3);
+    background: var(--rule);
   }
   &::-webkit-progress-value {
-    background: var(--color-accent);
-    transition: width var(--dur) var(--ease);
+    background: var(--accent);
+    transition: width var(--dur) var(--ease-out);
   }
   &::-moz-progress-bar {
-    background: var(--color-accent);
+    background: var(--accent);
   }
 }
 
 .lab-options {
   display: grid;
   gap: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--rule);
 }
 
 fieldset.plain {
@@ -145,20 +145,20 @@ fieldset.plain {
   align-items: flex-start;
   padding: var(--space-3);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
   transition:
-    background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
   &:hover {
-    border-color: var(--color-border-strong);
+    border-color: var(--rule-control);
   }
 
   &.chosen {
-    border-color: var(--color-accent);
-    background: var(--color-surface);
-    box-shadow: inset 2px 0 0 var(--color-accent);
+    border-color: var(--accent);
+    background: var(--raise);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   input {
@@ -188,8 +188,8 @@ fieldset.plain {
 
 .chip {
   padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-3);
+  border-radius: var(--r-pill);
+  background: var(--rule);
   font-size: var(--text-xs);
 }
 
