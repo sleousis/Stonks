@@ -55,7 +55,7 @@
   </section>
 }
 
-<section class="tiles tile-grid" aria-label="Health summary">
+<section class="tiles summary-strip" aria-label="Health summary">
   <app-stat-tile
     label="Fresh tickers"
     [loading]="!report.hasValue() && !report.error()"
@@ -77,18 +77,63 @@
   />
 </section>
 
-<div class="page-grid">
-  <app-alerts-panel class="span-12" />
+<div class="section-stack">
+  <!-- Runs ----------------------------------------------------------------->
+  <section class="page-section checks-section" aria-labelledby="runs-title">
+    <div class="section-head">
+      <h2 id="runs-title">
+        System checks
+        @if (report.hasValue()) {
+          <span class="count">{{ runChecks().length }}</span>
+        }
+      </h2>
+    </div>
+    @if (report.error()) {
+      <p class="muted section-note">System checks are unavailable until the report loads.</p>
+    } @else if (!report.hasValue()) {
+      <app-loading-state label="Loading system checks" [rows]="3" />
+    } @else if (runChecks().length === 0) {
+      <app-empty-state
+        compact
+        title="No system checks"
+        message="The server sent no checks besides data freshness. Run the checks again, or look at the server's log."
+      />
+    } @else {
+      <ul class="checks">
+        @for (c of runChecks(); track c.name) {
+          @let pill = checkPill(c);
+          <li [attr.data-level]="c.level">
+            <div class="check-head">
+              <p class="check-name">{{ checkTitle(c.name) }}</p>
+              <app-status-pill [status]="c.level" [tone]="pill.tone" [label]="pill.label" />
+            </div>
+            @if (checkMeaning(c.name); as meaning) {
+              <p class="check-meaning">{{ meaning }}</p>
+            }
+            <p class="check-detail">{{ plainDetail(c) }}</p>
+            @if (threshold(c.name); as limit) {
+              <p class="check-limit"><span class="visually-hidden">Limit: </span>{{ limit }}</p>
+            }
+            @if (!c.ok && canRunChecks() && checkAction(c.name); as action) {
+              <a class="check-action" [routerLink]="action.link">{{ action.label }}</a>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </section>
 
-  <app-gateway-panel class="span-12" />
+  <app-alerts-panel />
 
-  <app-reconcile-panel class="span-12" />
+  <app-gateway-panel />
 
-  <app-price-check-panel class="span-12" />
+  <app-reconcile-panel />
+
+  <app-price-check-panel />
 
   <!-- Freshness ------------------------------------------------------------>
-  <section class="panel span-7" aria-labelledby="fresh-title">
-    <div class="panel-head">
+  <section class="page-section" aria-labelledby="fresh-title">
+    <div class="section-head">
       <h2 id="fresh-title">Data freshness</h2>
       <span class="muted">
         {{ tickers().length ? tickers().length + ' chosen tickers' : 'Tickers we trade' }}
@@ -117,14 +162,14 @@
       <div class="form-actions">
         <button type="submit" class="btn">Check</button>
         @if (tickers().length) {
-          <button type="button" class="btn btn-tertiary" (click)="resetTickers(tickerInput)">
+          <button type="button" class="btn btn-ghost" (click)="resetTickers(tickerInput)">
             Check the tickers we trade
           </button>
         }
       </div>
     </form>
     @if (report.error()) {
-      <p class="panel-body muted">Freshness is unavailable until the report loads.</p>
+      <p class="muted section-note">Freshness is unavailable until the report loads.</p>
     } @else if (!report.hasValue()) {
       <app-loading-state label="Loading freshness" [rows]="5" />
     } @else if (freshness().length === 0) {
@@ -173,131 +218,93 @@
     }
   </section>
 
-  <!-- Runs ----------------------------------------------------------------->
-  <section class="panel span-5" aria-labelledby="runs-title">
-    <div class="panel-head">
-      <h2 id="runs-title">System checks</h2>
-    </div>
-    @if (report.error()) {
-      <p class="panel-body muted">System checks are unavailable until the report loads.</p>
-    } @else if (!report.hasValue()) {
-      <app-loading-state label="Loading system checks" [rows]="3" />
-    } @else if (runChecks().length === 0) {
-      <app-empty-state
-        compact
-        title="No system checks"
-        message="The server sent no checks besides data freshness. Run the checks again, or look at the server's log."
-      />
-    } @else {
-      <ul class="checks">
-        @for (c of runChecks(); track c.name) {
-          @let pill = checkPill(c);
-          <li [attr.data-level]="c.level">
-            <div class="check-head">
-              <p class="check-name">{{ checkTitle(c.name) }}</p>
-              <app-status-pill [status]="c.level" [tone]="pill.tone" [label]="pill.label" />
-            </div>
-            @if (checkMeaning(c.name); as meaning) {
-              <p class="check-meaning">{{ meaning }}</p>
-            }
-            <p class="check-detail">{{ plainDetail(c) }}</p>
-            @if (threshold(c.name); as limit) {
-              <p class="check-limit"><span class="visually-hidden">Limit: </span>{{ limit }}</p>
-            }
-            @if (!c.ok && canRunChecks() && checkAction(c.name); as action) {
-              <a class="check-action" [routerLink]="action.link">{{ action.label }}</a>
-            }
-          </li>
-        }
-      </ul>
-    }
-  </section>
-
   <!-- Failures ------------------------------------------------------------->
-  <section class="panel span-7" aria-labelledby="ingest-fail-title">
-    <div class="panel-head">
-      <h2 id="ingest-fail-title">Recent data update failures</h2>
-      @if (
-        failedIngest.hasValue() && failedIngest.value().total > failedIngest.value().items.length
-      ) {
-        <span class="muted num">
-          Latest {{ failedIngest.value().items.length }} of {{ failedIngest.value().total }}
-        </span>
+  <div class="cols failures">
+    <section class="page-section" aria-labelledby="ingest-fail-title">
+      <div class="section-head">
+        <h2 id="ingest-fail-title">Recent data update failures</h2>
+        @if (
+          failedIngest.hasValue() && failedIngest.value().total > failedIngest.value().items.length
+        ) {
+          <span class="muted num">
+            Latest {{ failedIngest.value().items.length }} of {{ failedIngest.value().total }}
+          </span>
+        }
+      </div>
+      @if (failedIngest.error(); as err) {
+        <app-error-state
+          title="Could not load data updates"
+          [error]="err"
+          (retry)="failedIngest.reload()"
+        />
+      } @else if (!failedIngest.hasValue()) {
+        <app-loading-state label="Loading data update failures" [rows]="4" />
+      } @else if (failedIngest.value().items.length === 0) {
+        <app-empty-state
+          compact
+          title="No failed data updates"
+          message="Updates that end in error show here with the data provider's message."
+        />
+      } @else {
+        <app-data-table
+          caption="Most recent failed data updates"
+          [rows]="failedIngest.value().items"
+          [columns]="ingestColumns"
+          [rowKey]="ingestKey"
+          [pageSize]="0"
+        >
+          <ng-template appCell="error" [appCellOf]="failedIngest.value().items" let-run>
+            @if (run.error) {
+              <span class="error-text">{{ run.error }}</span>
+            } @else {
+              <span class="muted">No message recorded.</span>
+            }
+          </ng-template>
+        </app-data-table>
       }
-    </div>
-    @if (failedIngest.error(); as err) {
-      <app-error-state
-        title="Could not load data updates"
-        [error]="err"
-        (retry)="failedIngest.reload()"
-      />
-    } @else if (!failedIngest.hasValue()) {
-      <app-loading-state label="Loading data update failures" [rows]="4" />
-    } @else if (failedIngest.value().items.length === 0) {
-      <app-empty-state
-        compact
-        title="No failed data updates"
-        message="Updates that end in error show here with the data provider's message."
-      />
-    } @else {
-      <app-data-table
-        caption="Most recent failed data updates"
-        [rows]="failedIngest.value().items"
-        [columns]="ingestColumns"
-        [rowKey]="ingestKey"
-        [pageSize]="0"
-      >
-        <ng-template appCell="error" [appCellOf]="failedIngest.value().items" let-run>
-          @if (run.error) {
-            <span class="error-text">{{ run.error }}</span>
-          } @else {
-            <span class="muted">No message recorded.</span>
-          }
-        </ng-template>
-      </app-data-table>
-    }
-  </section>
+    </section>
 
-  <section class="panel span-5" aria-labelledby="tick-fail-title">
-    <div class="panel-head">
-      <h2 id="tick-fail-title">Recent trading run failures</h2>
-    </div>
-    @if (failedTicks.error(); as err) {
-      <app-error-state
-        title="Could not load trading runs"
-        [error]="err"
-        (retry)="failedTicks.reload()"
-      />
-    } @else if (!failedTicks.hasValue()) {
-      <app-loading-state label="Loading trading run failures" [rows]="4" />
-    } @else if (failedTicks.value().items.length === 0) {
-      <app-empty-state
-        compact
-        title="No failed trading runs"
-        message="Trading runs that fail show here with the reason."
-      />
-    } @else {
-      <app-data-table
-        caption="Most recent failed trading runs"
-        [rows]="failedTicks.value().items"
-        [columns]="tickColumns"
-        [rowKey]="tickKey"
-        [pageSize]="0"
-      >
-        <ng-template appCell="started_at" [appCellOf]="failedTicks.value().items" let-t>
-          <a class="num cell-link" [routerLink]="['/orders/ticks', t.id]">{{
-            dateTime(t.started_at)
-          }}</a>
-        </ng-template>
-        <ng-template appCell="status" [appCellOf]="failedTicks.value().items" let-t>
-          <app-status-pill [status]="t.status" [label]="runWord(t.status)" />
-        </ng-template>
-        <ng-template appCell="error" [appCellOf]="failedTicks.value().items" let-t>
-          <span class="error-text">{{
-            t.summary?.error || t.summary?.reason || 'No reason recorded.'
-          }}</span>
-        </ng-template>
-      </app-data-table>
-    }
-  </section>
+    <section class="page-section" aria-labelledby="tick-fail-title">
+      <div class="section-head">
+        <h2 id="tick-fail-title">Recent trading run failures</h2>
+      </div>
+      @if (failedTicks.error(); as err) {
+        <app-error-state
+          title="Could not load trading runs"
+          [error]="err"
+          (retry)="failedTicks.reload()"
+        />
+      } @else if (!failedTicks.hasValue()) {
+        <app-loading-state label="Loading trading run failures" [rows]="4" />
+      } @else if (failedTicks.value().items.length === 0) {
+        <app-empty-state
+          compact
+          title="No failed trading runs"
+          message="Trading runs that fail show here with the reason."
+        />
+      } @else {
+        <app-data-table
+          caption="Most recent failed trading runs"
+          [rows]="failedTicks.value().items"
+          [columns]="tickColumns"
+          [rowKey]="tickKey"
+          [pageSize]="0"
+        >
+          <ng-template appCell="started_at" [appCellOf]="failedTicks.value().items" let-t>
+            <a class="num cell-link" [routerLink]="['/orders/ticks', t.id]">{{
+              dateTime(t.started_at)
+            }}</a>
+          </ng-template>
+          <ng-template appCell="status" [appCellOf]="failedTicks.value().items" let-t>
+            <app-status-pill [status]="t.status" [label]="runWord(t.status)" />
+          </ng-template>
+          <ng-template appCell="error" [appCellOf]="failedTicks.value().items" let-t>
+            <span class="error-text">{{
+              t.summary?.error || t.summary?.reason || 'No reason recorded.'
+            }}</span>
+          </ng-template>
+        </app-data-table>
+      }
+    </section>
+  </div>
 </div>

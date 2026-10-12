@@ -151,8 +151,8 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
     }
     .turn {
       padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
     }
     .turn-head {
       display: flex;
@@ -167,7 +167,7 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
     }
     .calls li {
       padding-left: var(--space-3);
-      border-left: 2px solid var(--color-border-strong);
+      border-left: 2px solid var(--rule-control);
       font-size: var(--text-sm);
       min-width: 0;
     }
@@ -182,7 +182,7 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
       gap: var(--space-2);
     }
     .args dt {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .args dd {
@@ -194,9 +194,9 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
       overflow: auto;
       margin: var(--space-1) 0 0;
       padding: var(--space-2);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-xs);
-      background: var(--color-surface);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-tag);
+      background: var(--raise);
       font-size: var(--text-xs);
       white-space: pre-wrap;
       overflow-wrap: anywhere;

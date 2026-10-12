@@ -248,8 +248,9 @@ describe('ConnectionsPage', () => {
     expect(card.textContent).toContain('You paste API keys from your eToro account.');
     button('Connect with keys')!.click();
     fixture.detectChanges();
-    expect(card.textContent).toContain('In eToro open Settings, then Trading, then API keys.');
-    expect(card.textContent).toContain('Untick only for real-money keys.');
+    // The keys are typed in a side sheet.
+    expect(el.textContent).toContain('In eToro open Settings, then Trading, then API keys.');
+    expect(el.textContent).toContain('Untick only for real-money keys.');
     expect(el.querySelector('label[for="key-etoro-api_key"]')?.textContent).toContain('API key');
     expect(el.querySelector('label[for="key-etoro-user_key"]')?.textContent).toContain('User key');
     expect(el.textContent).toContain('paper or demo account keys');

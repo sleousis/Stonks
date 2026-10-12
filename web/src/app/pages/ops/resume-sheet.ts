@@ -178,7 +178,7 @@ const CHECK_LABEL: Record<string, string> = {
       margin: 0 0 var(--space-1);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .check-list {
       display: grid;
@@ -192,7 +192,7 @@ const CHECK_LABEL: Record<string, string> = {
       gap: var(--space-1) var(--space-2);
       align-items: center;
       padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     .check-list li:last-child {
       border-bottom: 0;
@@ -202,7 +202,7 @@ const CHECK_LABEL: Record<string, string> = {
     }
     .check-detail {
       flex-basis: 100%;
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .override {

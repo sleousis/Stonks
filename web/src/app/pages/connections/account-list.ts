@@ -85,7 +85,7 @@ export interface LinkChoice {
       gap: var(--space-2);
       padding: var(--space-3) 0;
       font-variant-numeric: tabular-nums slashed-zero;
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
       min-width: 0;
     }
     .account:first-child {
@@ -101,7 +101,7 @@ export interface LinkChoice {
     }
     .who .muted {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .linked {
       display: flex;

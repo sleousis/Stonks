@@ -64,8 +64,8 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
       min-width: 0;
       max-width: min(100%, 46rem);
       padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       font-size: var(--text-sm);
     }
     .step {
@@ -83,7 +83,7 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
     }
     .step-error {
       margin: var(--space-1) 0 0;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .more {
@@ -93,7 +93,7 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
       display: inline-flex;
       align-items: center;
       min-height: var(--control-h);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
       cursor: pointer;
@@ -115,7 +115,7 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
       gap: var(--space-2);
     }
     .args dt {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .args dd {
@@ -124,7 +124,7 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
     }
     .seen {
       margin: var(--space-2) 0 var(--space-1);
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .result {
@@ -132,9 +132,9 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
       margin: 0;
       padding: var(--space-2);
       overflow: auto;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-xs);
-      background: var(--color-surface);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-tag);
+      background: var(--raise);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       font-size: var(--text-xs);

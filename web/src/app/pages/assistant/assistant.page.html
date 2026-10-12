@@ -97,7 +97,7 @@
                 </a>
                 <button
                   type="button"
-                  class="btn btn-tertiary btn-icon"
+                  class="btn btn-ghost btn-icon"
                   [attr.aria-label]="'Delete ' + (conv.title || 'Untitled conversation')"
                   (click)="remove(conv)"
                 >
@@ -120,7 +120,7 @@
           <span class="tag">Research only</span>
         }
         @if (currentId()) {
-          <button type="button" class="btn btn-tertiary" (click)="openTrace()">Trace</button>
+          <button type="button" class="btn btn-ghost" (click)="openTrace()">Trace</button>
         }
       </div>
 

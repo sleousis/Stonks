@@ -1,6 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
   computed,
   inject,
   resource,
@@ -103,6 +106,70 @@ export class ProfilePage {
   protected readonly me = this.session.me;
   protected readonly viaSession = this.session.viaSession;
   protected readonly roleLabel = computed(() => ROLE_LABELS[this.me()?.role ?? ''] ?? 'Unknown');
+  /** Two letters for the avatar squircle. */
+  protected readonly initials = computed(() => {
+    const name = this.me()?.display_name?.trim() ?? '';
+    const parts = name.split(/\s+/).filter(Boolean);
+    const letters = parts.length > 1 ? parts[0][0] + parts.at(-1)![0] : name.slice(0, 2);
+    return letters.toUpperCase() || '?';
+  });
+  /** One sentence from the account: who, and how well the sign-in is guarded. */
+  protected readonly standfirst = computed(() => {
+    const m = this.me();
+    if (!m) return 'Your account, security, portfolios and API tokens.';
+    const guard = m.mfa_enrolled ? 'Authenticator set up' : 'Authenticator not set up';
+    if (!this.tokens.hasValue())
+      return `${m.display_name}, ${this.roleLabel().toLowerCase()}. ${guard}.`;
+    const n = this.activeTokens().length;
+    const tokens = n === 0 ? 'no API tokens' : n === 1 ? '1 API token' : `${n} API tokens`;
+    return `${m.display_name}, ${this.roleLabel().toLowerCase()}. ${guard}, ${tokens}.`;
+  });
+
+  // Section list ----------------------------------------------------------------
+  protected readonly sections = computed(() => [
+    { id: 'account', label: 'Account' },
+    ...(this.me() ? [{ id: 'security', label: 'Security' }] : []),
+    { id: 'portfolios', label: 'Portfolios' },
+    { id: 'tokens', label: 'API tokens' },
+  ]);
+  /** The section in view, marked in the list. */
+  protected readonly active = signal('account');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      if (typeof IntersectionObserver === 'undefined') return;
+      // The section whose top crossed the upper third of the screen is the one in view.
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const seen = entries.filter((e) => e.isIntersecting).map((e) => e.target.id);
+          if (seen.length) this.active.set(seen[0]);
+        },
+        { rootMargin: '-20% 0px -70% 0px' },
+      );
+      for (const s of this.sections()) {
+        const el = this.host.nativeElement.querySelector(`#${s.id}`);
+        if (el) observer.observe(el);
+      }
+      destroyRef.onDestroy(() => observer.disconnect());
+    });
+  }
+
+  /** Scroll to a section and move focus to its heading. */
+  protected jump(event: Event, id: string): void {
+    event.preventDefault();
+    const target = this.host.nativeElement.querySelector<HTMLElement>(`#${id}`);
+    if (!target) return;
+    this.active.set(id);
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+    const heading = target.querySelector<HTMLElement>('h2');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }
   /** Only the scopes the server lets this role put on a token. */
   protected readonly scopes = computed(() => {
     const role = this.session.role();

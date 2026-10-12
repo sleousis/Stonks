@@ -88,21 +88,21 @@ export function previewLines(preview: unknown): string[] {
       min-width: 0;
     }
     .confirm.danger {
-      border-color: var(--color-loss);
+      border-color: var(--down);
     }
     h3 {
-      font-size: var(--text-panel);
+      font-size: var(--text-section);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     .decided {
       font-size: var(--text-xs);
       font-weight: var(--weight-semibold);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .about {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       white-space: pre-line;
       overflow-wrap: anywhere;
@@ -124,7 +124,7 @@ export function previewLines(preview: unknown): string[] {
       display: inline-flex;
       align-items: center;
       min-height: var(--control-h);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       cursor: pointer;
       @include bp.phone {
@@ -132,7 +132,7 @@ export function previewLines(preview: unknown): string[] {
       }
     }
     .hint {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .actions {

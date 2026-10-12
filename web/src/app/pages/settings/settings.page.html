@@ -6,263 +6,295 @@
   }
 </app-page-header>
 
-<!-- One section at a time (M14): Display, Risk limits, and System for admins. -->
-<app-page-tabs
-  #tabs
-  idPrefix="settings"
-  label="Settings sections"
-  [tabs]="sections()"
-  [selected]="section()"
-  (selectedChange)="pick($event)"
-/>
+<!--
+  A sticky list of sections on the left from 1024px, an underline tab row
+  above the content on smaller screens. One tablist either way (M14).
+-->
+<div class="settings-layout">
+  <app-page-tabs
+    #tabs
+    class="section-list"
+    idPrefix="settings"
+    label="Settings sections"
+    [tabs]="sections()"
+    [selected]="section()"
+    (selectedChange)="pick($event)"
+  />
 
-@switch (section()) {
-  @case ('risk') {
-    <section
-      class="column"
-      role="tabpanel"
-      [id]="tabs.panelId('risk')"
-      [attr.aria-labelledby]="tabs.tabId('risk')"
-    >
-      <h2 class="visually-hidden">Risk limits</h2>
-      <app-risk-limits-panel />
-    </section>
-  }
-  @case ('system') {
-    <section
-      class="column wide"
-      role="tabpanel"
-      [id]="tabs.panelId('system')"
-      [attr.aria-labelledby]="tabs.tabId('system')"
-    >
-      <h2 class="visually-hidden">System</h2>
-      <p class="group-note full">
-        Only admins see this. The broker, data keys and the data plan are set on the server.
-      </p>
+  @switch (section()) {
+    @case ('risk') {
+      <section
+        class="settings-body"
+        role="tabpanel"
+        [id]="tabs.panelId('risk')"
+        [attr.aria-labelledby]="tabs.tabId('risk')"
+      >
+        <h2 class="visually-hidden">Risk limits</h2>
+        <app-risk-limits-panel />
+      </section>
+    }
+    @case ('system') {
+      <section
+        class="settings-body"
+        role="tabpanel"
+        [id]="tabs.panelId('system')"
+        [attr.aria-labelledby]="tabs.tabId('system')"
+      >
+        <h2 class="visually-hidden">System</h2>
+        <p class="callout">
+          Only admins see this. The broker, data keys and the data plan are set on the server.
+        </p>
 
-      <!-- Editable operational settings: shows only when the server offers them. -->
-      <app-system-settings class="full" />
+        <!-- Editable operational settings: shows only when the server offers them. -->
+        <app-system-settings />
 
-      <!-- The assistant is off: it is hidden from the menu, so say here how to turn it on. -->
-      @if (assistantOff()) {
-        <section class="panel" aria-labelledby="assistant-title">
-          <div class="panel-head">
-            <h3 id="assistant-title">AI assistant</h3>
-            <app-status-pill status="disabled" label="Off" />
-          </div>
-          <div class="panel-body">
-            <p class="lead">
-              The assistant is off, so it is not in anyone's menu. To turn it on, set the address of
-              your model server in the assistant part of the server settings and restart Stonks. It
-              then shows in the menu for everyone.
-            </p>
-          </div>
-        </section>
-      }
+        <!-- The assistant is off: it is hidden from the menu, so say here how to turn it on. -->
+        @if (assistantOff()) {
+          <section class="page-section" aria-labelledby="assistant-title">
+            <div class="section-head">
+              <h3 id="assistant-title">AI assistant</h3>
+              <app-status-pill status="disabled" label="Off" />
+            </div>
+            <div class="section-body">
+              <p class="prose">
+                The assistant is off, so it is not in anyone's menu. To turn it on, set the address
+                of your model server in the assistant part of the server settings and restart
+                Stonks. It then shows in the menu for everyone.
+              </p>
+            </div>
+          </section>
+        }
 
-      <!-- Broker ---------------------------------------------------------------->
-      <section class="panel" aria-labelledby="broker-title">
-        <div class="panel-head">
-          <h3 id="broker-title">Broker</h3>
-          @if (broker.hasValue()) {
-            <app-mode-stamp [live]="!broker.value().paper" />
-          }
-        </div>
-        @if (broker.error(); as err) {
-          <app-error-state
-            title="Could not load the broker"
-            [error]="err"
-            (retry)="broker.reload()"
-          />
-        } @else if (!broker.hasValue()) {
-          <app-loading-state label="Loading broker" [rows]="4" />
-        } @else {
-          <dl class="facts">
-            @for (f of brokerFacts(); track f.label) {
-              <div>
-                <dt>{{ f.label }}</dt>
-                <dd>{{ f.value }}</dd>
-              </div>
-            }
-          </dl>
-          @if (broker.value().kind === 'alpaca') {
-            <div class="sub">
-              <h4>Alpaca connection</h4>
-              @if (alpaca.error(); as err) {
-                <app-error-state
-                  title="Could not check Alpaca"
-                  [error]="err"
-                  (retry)="alpaca.reload()"
-                />
-              } @else if (!alpaca.hasValue()) {
-                <app-loading-state label="Checking Alpaca" [rows]="3" />
-              } @else {
-                <p class="connection">
-                  <app-status-pill
-                    [status]="alpaca.value().connected ? 'ok' : 'error'"
-                    [label]="alpaca.value().connected ? 'Connected' : 'Not connected'"
-                  />
-                  @if (alpaca.value().error; as reason) {
-                    <span class="reason">{{ reason }}</span>
-                  }
-                </p>
-                @if (alpacaFacts().length) {
-                  <dl class="facts">
-                    @for (f of alpacaFacts(); track f.label) {
-                      <div>
-                        <dt>{{ f.label }}</dt>
-                        <dd class="num">{{ f.value }}</dd>
-                      </div>
-                    }
-                  </dl>
+        <div class="server-cols">
+          <!-- Broker ------------------------------------------------------------>
+          <section class="page-section" aria-labelledby="broker-title">
+            <div class="section-head">
+              <h3 id="broker-title">Broker</h3>
+              @if (broker.hasValue()) {
+                <app-mode-stamp [live]="!broker.value().paper" />
+              }
+            </div>
+            @if (broker.error(); as err) {
+              <app-error-state
+                title="Could not load the broker"
+                [error]="err"
+                (retry)="broker.reload()"
+              />
+            } @else if (!broker.hasValue()) {
+              <app-loading-state label="Loading broker" [rows]="4" />
+            } @else {
+              <dl class="fact-list words">
+                @for (f of brokerFacts(); track f.label) {
+                  <div>
+                    <dt>{{ f.label }}</dt>
+                    <dd>{{ f.value }}</dd>
+                  </div>
                 }
+              </dl>
+              @if (broker.value().kind === 'alpaca') {
+                <div class="sub">
+                  <h4>Alpaca connection</h4>
+                  @if (alpaca.error(); as err) {
+                    <app-error-state
+                      title="Could not check Alpaca"
+                      [error]="err"
+                      (retry)="alpaca.reload()"
+                    />
+                  } @else if (!alpaca.hasValue()) {
+                    <app-loading-state label="Checking Alpaca" [rows]="3" />
+                  } @else {
+                    <p class="connection">
+                      <app-status-pill
+                        [status]="alpaca.value().connected ? 'ok' : 'error'"
+                        [label]="alpaca.value().connected ? 'Connected' : 'Not connected'"
+                      />
+                      @if (alpaca.value().error; as reason) {
+                        <span class="muted">{{ reason }}</span>
+                      }
+                    </p>
+                    @if (alpacaFacts().length) {
+                      <dl class="fact-list">
+                        @for (f of alpacaFacts(); track f.label) {
+                          <div>
+                            <dt>{{ f.label }}</dt>
+                            <dd>{{ f.value }}</dd>
+                          </div>
+                        }
+                      </dl>
+                    }
+                  }
+                </div>
+              }
+            }
+          </section>
+
+          <!-- Sources ----------------------------------------------------------->
+          <section class="page-section" aria-labelledby="sources-title">
+            <div class="section-head">
+              <h3 id="sources-title">
+                Data sources
+                @if (sources.hasValue()) {
+                  <span class="count">{{ sources.value().length }}</span>
+                }
+              </h3>
+            </div>
+            @if (sources.error(); as err) {
+              <app-error-state
+                title="Could not load data sources"
+                [error]="err"
+                (retry)="sources.reload()"
+              />
+            } @else if (!sources.hasValue()) {
+              <app-loading-state label="Loading data sources" [rows]="3" />
+            } @else if (sources.value().length === 0) {
+              <app-empty-state
+                compact
+                title="No data sources"
+                message="The server has no data sources set up."
+              />
+            } @else {
+              <ul class="row-list">
+                @for (s of sources.value(); track s.id) {
+                  <li>
+                    <div class="row-main">
+                      {{ sourceName(s.id) }}
+                      @if (s.default) {
+                        <span class="ticker-tag">Default</span>
+                      }
+                      @if (s.detail) {
+                        <span class="row-meta">{{ s.detail }}</span>
+                      }
+                    </div>
+                    <app-status-pill
+                      [status]="s.configured ? 'ok' : 'disabled'"
+                      [label]="s.configured ? 'Configured' : 'Not configured'"
+                    />
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+        </div>
+
+        <!-- Cost models --------------------------------------------------------->
+        <section class="page-section" aria-labelledby="costs-title">
+          <div class="section-head">
+            <h3 id="costs-title">
+              Cost-model presets
+              @if (costModels.hasValue()) {
+                <span class="count">{{ costModels.value().length }}</span>
+              }
+            </h3>
+          </div>
+          @if (costModels.error(); as err) {
+            <app-error-state
+              title="Could not load cost models"
+              [error]="err"
+              (retry)="costModels.reload()"
+            />
+          } @else if (!costModels.hasValue()) {
+            <app-loading-state label="Loading cost models" [rows]="4" />
+          } @else if (costModels.value().length === 0) {
+            <app-empty-state
+              compact
+              title="No presets"
+              message="The server has no cost-model presets."
+            />
+          } @else {
+            <div class="presets">
+              @for (preset of costModels.value(); track preset.name) {
+                <div class="preset">
+                  <div class="preset-head">
+                    <h4>{{ preset.name }}</h4>
+                    <p class="muted">{{ preset.description }}</p>
+                  </div>
+                  <table class="table">
+                    <caption class="visually-hidden">
+                      {{
+                        preset.name
+                      }}
+                      costs by asset class
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Scope</th>
+                        <th scope="col" class="end">Fee</th>
+                        <th scope="col" class="end">Half spread</th>
+                        <th scope="col" class="end">Flat fee</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of costRows(preset); track row.scope) {
+                        <tr>
+                          <th scope="row">{{ row.scope }}</th>
+                          <td class="num">{{ row.fee }}</td>
+                          <td class="num">{{ row.spread }}</td>
+                          <td class="num">{{ row.flat }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                  <p class="hint">
+                    Market impact <span class="num">{{ impact(preset) }}</span
+                    >.
+                  </p>
+                </div>
               }
             </div>
           }
-        }
+        </section>
       </section>
+    }
+    @default {
+      <section
+        class="settings-body"
+        role="tabpanel"
+        [id]="tabs.panelId('display')"
+        [attr.aria-labelledby]="tabs.tabId('display')"
+      >
+        <h2 class="visually-hidden">Display</h2>
+        <!-- Theme --------------------------------------------------------------->
+        <section class="page-section" aria-labelledby="theme-title">
+          <div class="section-head">
+            <h3 id="theme-title">Theme</h3>
+            <span class="muted">Now {{ theme.resolved() }}</span>
+          </div>
+          <div class="section-body theme-row">
+            <p class="muted">The chrome bar stays ink in both themes.</p>
+            <app-segmented
+              label="Theme"
+              [options]="themes"
+              [value]="theme.mode()"
+              (valueChange)="setTheme($any($event))"
+            />
+          </div>
+        </section>
 
-      <!-- Sources --------------------------------------------------------------->
-      <section class="panel" aria-labelledby="sources-title">
-        <div class="panel-head">
-          <h3 id="sources-title">Data sources</h3>
-        </div>
-        @if (sources.error(); as err) {
-          <app-error-state
-            title="Could not load data sources"
-            [error]="err"
-            (retry)="sources.reload()"
-          />
-        } @else if (!sources.hasValue()) {
-          <app-loading-state label="Loading data sources" [rows]="3" />
-        } @else if (sources.value().length === 0) {
-          <app-empty-state
-            title="No data sources"
-            message="The server has no data sources set up."
-          />
-        } @else {
-          <ul class="list">
-            @for (s of sources.value(); track s.id) {
-              <li>
-                <div class="list-main">
-                  <span class="list-title">{{ sourceName(s.id) }}</span>
-                  @if (s.default) {
-                    <span class="tag">Default</span>
-                  }
-                </div>
-                <app-status-pill
-                  [status]="s.configured ? 'ok' : 'disabled'"
-                  [label]="s.configured ? 'Configured' : 'Not configured'"
-                />
-                @if (s.detail) {
-                  <p class="list-detail">{{ s.detail }}</p>
-                }
-              </li>
-            }
-          </ul>
-        }
-      </section>
+        <app-display-prefs />
 
-      <!-- Cost models ----------------------------------------------------------->
-      <section class="panel" aria-labelledby="costs-title">
-        <div class="panel-head">
-          <h3 id="costs-title">Cost-model presets</h3>
-        </div>
-        @if (costModels.error(); as err) {
-          <app-error-state
-            title="Could not load cost models"
-            [error]="err"
-            (retry)="costModels.reload()"
-          />
-        } @else if (!costModels.hasValue()) {
-          <app-loading-state label="Loading cost models" [rows]="4" />
-        } @else if (costModels.value().length === 0) {
-          <app-empty-state title="No presets" message="The server has no cost-model presets." />
-        } @else {
-          @for (preset of costModels.value(); track preset.name) {
-            <div class="preset">
-              <h4>{{ preset.name }}</h4>
-              <p class="list-detail">{{ preset.description }}</p>
-              <table class="mini">
-                <caption class="visually-hidden">
-                  {{
-                    preset.name
-                  }}
-                  costs by asset class
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Scope</th>
-                    <th scope="col" class="num">Fee</th>
-                    <th scope="col" class="num">Half spread</th>
-                    <th scope="col" class="num">Flat fee</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of costRows(preset); track row.scope) {
-                    <tr>
-                      <th scope="row">{{ row.scope }}</th>
-                      <td class="num">{{ row.fee }}</td>
-                      <td class="num">{{ row.spread }}</td>
-                      <td class="num">{{ row.flat }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-              <p class="hint">Market impact {{ impact(preset) }}.</p>
+        <!-- Keyboard ------------------------------------------------------------>
+        <section class="page-section" aria-labelledby="keys-title">
+          <div class="section-head">
+            <h3 id="keys-title">Keyboard</h3>
+          </div>
+          <dl class="fact-list keys">
+            <div>
+              <dt>Search pages, strategies, tickers and jobs, or run a command</dt>
+              <dd>
+                <kbd>Ctrl</kbd> <kbd>K</kbd> <span class="muted">or</span> <kbd>⌘</kbd> <kbd>K</kbd>
+              </dd>
             </div>
-          }
-        }
+            <div>
+              <dt>Every shortcut</dt>
+              <dd><kbd>?</kbd></dd>
+            </div>
+            <div>
+              <dt>Jump to a page</dt>
+              <dd><kbd>g</kbd> <span class="muted">then a letter</span></dd>
+            </div>
+          </dl>
+        </section>
       </section>
-    </section>
+    }
   }
-  @default {
-    <section
-      class="column wide"
-      role="tabpanel"
-      [id]="tabs.panelId('display')"
-      [attr.aria-labelledby]="tabs.tabId('display')"
-    >
-      <h2 class="visually-hidden">Display</h2>
-      <!-- Theme ----------------------------------------------------------------->
-      <section class="panel" aria-labelledby="theme-title">
-        <div class="panel-head">
-          <h3 id="theme-title">Theme</h3>
-          <span class="muted">Now {{ theme.resolved() }}</span>
-        </div>
-        <div class="panel-body">
-          <fieldset class="themes">
-            <legend class="visually-hidden">Theme</legend>
-            @for (option of themes; track option.value) {
-              <label class="check">
-                <input
-                  type="radio"
-                  name="theme"
-                  [value]="option.value"
-                  [checked]="theme.mode() === option.value"
-                  (change)="setTheme(option.value)"
-                />
-                {{ option.label }}
-              </label>
-            }
-          </fieldset>
-        </div>
-      </section>
-
-      <app-display-prefs />
-      <!-- Keyboard -------------------------------------------------------------->
-      <section class="panel" aria-labelledby="keys-title">
-        <div class="panel-head">
-          <h3 id="keys-title">Keyboard</h3>
-        </div>
-        <div class="panel-body">
-          <p class="lead">
-            Press <kbd>Ctrl</kbd> + <kbd>K</kbd> (<kbd>⌘</kbd> + <kbd>K</kbd> on a Mac) to search
-            pages, strategies, tickers and jobs, or to run a command. Press <kbd>?</kbd> for every
-            shortcut, including <kbd>g</kbd> then a letter to jump to a page.
-          </p>
-        </div>
-      </section>
-    </section>
-  }
-}
+</div>

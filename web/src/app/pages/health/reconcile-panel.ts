@@ -93,7 +93,7 @@ export function itemWords(item: DriftItemView): string {
         </div>
         <ul class="reports">
           @for (r of reports.value(); track r.id) {
-            <li class="report well" [attr.data-state]="state(r).status">
+            <li class="report" [attr.data-state]="state(r).status">
               <div class="report-head">
                 <h3>{{ kind(r.kind) }}</h3>
                 <span class="muted">{{ r.portfolio_id }}</span>
@@ -137,28 +137,27 @@ export function itemWords(item: DriftItemView): string {
   `,
   styles: `
     .drift {
-      color: var(--color-loss);
+      color: var(--down);
       font-weight: var(--weight-semibold);
     }
     .reports {
       display: grid;
-      gap: var(--space-3);
       margin: 0;
-      padding: var(--space-4);
+      padding: 0;
       list-style: none;
     }
-    // Each report is an inset well; its status pill carries the state.
+    /* Each report is a row on a hairline; its status pill carries the state. */
     .report {
       display: grid;
       gap: var(--space-2);
       min-width: 0;
-      padding: var(--space-3) var(--space-4);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--rule);
     }
-    @media (max-width: 767.98px) {
-      .reports,
-      .report {
-        padding: var(--space-3);
-      }
+    .report[data-state='halted'],
+    .report[data-state='unhealthy'] {
+      padding-left: var(--space-4);
+      box-shadow: inset 3px 0 0 var(--down);
     }
     .report-head {
       display: flex;
@@ -167,8 +166,13 @@ export function itemWords(item: DriftItemView): string {
       gap: var(--space-2) var(--space-3);
     }
     h3 {
-      font-size: var(--text-panel);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
+    }
+    .when {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
     }
     .when {
       margin-left: auto;
@@ -183,7 +187,7 @@ export function itemWords(item: DriftItemView): string {
       overflow-wrap: anywhere;
     }
     .items li.material strong {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .key {
       margin: 0 var(--space-2);

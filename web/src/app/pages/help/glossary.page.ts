@@ -113,11 +113,11 @@ import { PageHeader } from '../../shared/ui/page-header';
       gap: var(--space-2);
       margin: 0;
       padding-left: calc(var(--space-4) + 1.25rem);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .steps ::marker {
       font-family: var(--font-mono);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .search {
       max-width: 28rem;
@@ -144,14 +144,14 @@ import { PageHeader } from '../../shared/ui/page-header';
       scroll-margin-top: var(--space-8);
     }
     .term + .term {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     // The term a link pointed at: an accent rule at the panel edge.
     .term.target {
       margin-inline: calc(-1 * var(--space-4));
       padding-inline: calc(var(--space-4) - 2px) var(--space-4);
-      border-left: 2px solid var(--color-focus);
-      background: var(--color-accent-soft);
+      border-left: 2px solid var(--accent);
+      background: var(--accent-soft);
     }
     .term:focus-visible {
       outline-offset: -2px;
@@ -164,12 +164,12 @@ import { PageHeader } from '../../shared/ui/page-header';
       max-width: 70ch;
       margin: var(--space-1) 0 0;
       font-size: var(--text-md);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .aliases {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .example {
       font-size: var(--text-sm);

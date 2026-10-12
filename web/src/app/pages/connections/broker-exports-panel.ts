@@ -44,27 +44,28 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, ErrorState, LoadingState],
   template: `
-    <section class="panel" aria-labelledby="exports-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="exports-title">
+      <div class="section-head">
         <h2 id="exports-title">Brokers without a connection</h2>
       </div>
-      <div class="panel-body">
-        <p class="muted">
-          These brokers offer no connection Stonks may use, so Stonks never asks for your password
-          there. Export the files below from the broker and import them. Stonks only reads them.
-        </p>
-        @if (presets.error(); as err) {
-          <app-error-state
-            title="Could not load the broker exports"
-            [error]="err"
-            (retry)="presets.reload()"
-          />
-        } @else if (!presets.hasValue()) {
-          <app-loading-state label="Loading broker exports" [rows]="1" />
-        } @else {
-          <ul class="brokers">
-            @for (b of brokers(); track b.broker) {
-              <li class="broker well">
+      <p class="intro">
+        These brokers offer no connection Stonks may use, so Stonks never asks for your password
+        there. Export the files below from the broker and import them. Stonks only reads them.
+      </p>
+      @if (presets.error(); as err) {
+        <app-error-state
+          title="Could not load the broker exports"
+          [error]="err"
+          (retry)="presets.reload()"
+        />
+      } @else if (!presets.hasValue()) {
+        <app-loading-state label="Loading broker exports" [rows]="1" />
+      } @else {
+        <ul class="brokers">
+          @for (b of brokers(); track b.broker) {
+            <li class="broker">
+              <span class="mark" aria-hidden="true">{{ b.broker.charAt(0) }}</span>
+              <div class="broker-text">
                 <h3>{{ b.broker }}</h3>
                 <p class="muted">Reads only. Export these files, in this order:</p>
                 <ol class="exports">
@@ -75,22 +76,20 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
                     </li>
                   }
                 </ol>
-                @if (b.presets[0]; as first) {
-                  <a
-                    class="btn"
-                    routerLink="/connections/import"
-                    [queryParams]="{ preset: first.id }"
-                    >Import {{ b.broker }} files</a
-                  >
-                }
-              </li>
-            }
-          </ul>
-        }
-      </div>
+              </div>
+              @if (b.presets[0]; as first) {
+                <a class="btn" routerLink="/connections/import" [queryParams]="{ preset: first.id }"
+                  >Import {{ b.broker }} files</a
+                >
+              }
+            </li>
+          }
+        </ul>
+      }
     </section>
   `,
   styles: `
+    @use 'breakpoints' as bp;
     :host {
       display: block;
       min-width: 0;
@@ -100,59 +99,91 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
       margin: 0;
       padding: 0;
     }
-    .muted {
-      color: var(--color-ink-2);
+    .intro {
+      margin: var(--space-4) 0 var(--space-2);
+      max-width: 68ch;
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
-    p {
-      max-width: 70ch;
-    }
-    .brokers {
-      display: grid;
-      gap: var(--space-3);
-      margin-top: var(--space-3);
+    .muted {
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
     .broker {
       display: grid;
-      justify-items: start;
-      gap: var(--space-1);
-      padding: var(--space-4);
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: start;
+      gap: var(--space-3) var(--space-4);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--r-sheet);
+      background: var(--sunk);
+      color: var(--ink-2);
+      font-weight: var(--weight-bold);
+    }
+    .broker-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
     }
     .broker h3 {
-      margin: 0;
-      font-size: var(--text-panel);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
+      letter-spacing: 0;
     }
+    /* The steps on a rail, numbered in mono. */
     .exports {
       display: grid;
-      gap: var(--space-2);
-      max-width: 70ch;
-      margin: var(--space-2) 0 var(--space-3);
-      padding-left: var(--space-5);
-      list-style: decimal;
-    }
-    .exports ::marker {
-      font-family: var(--font-mono);
-      color: var(--color-ink-3);
-    }
-    .btn {
-      min-height: var(--touch-min);
-    }
-    @media (max-width: 767.98px) {
-      .broker {
-        padding: var(--space-3);
-      }
-      .btn {
-        width: 100%;
-      }
+      gap: var(--space-3);
+      max-width: 68ch;
+      margin: var(--space-3) 0 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
     }
     .exports li {
-      display: list-item;
+      position: relative;
+      display: grid;
+      gap: 2px;
       min-width: 0;
+      padding-left: var(--space-8);
       overflow-wrap: anywhere;
+      counter-increment: step;
     }
-    .exports .muted {
-      display: block;
+    .exports li::before {
+      content: counter(step);
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border: 1px solid var(--rule-control);
+      border-radius: var(--r-pill);
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      font-weight: var(--weight-semibold);
+    }
+    .exports li strong {
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
+    }
+    @include bp.phone {
+      .broker {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+      .broker .btn {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
     }
   `,
 })

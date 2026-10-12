@@ -23,7 +23,7 @@ import { SystemService } from '../../api/system.service';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { type ConfirmOptions, ConfirmService } from '../../core/confirm/confirm.service';
-import { formatDate, formatDateTime, formatNumber } from '../../core/format/format';
+import { formatDate, formatDateTime, formatNumber, formatTime } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { TRADING_RUN_ACTION, jobLabel } from '../../core/schedule/job-labels';
@@ -35,6 +35,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { countdown } from '../../shared/ui/session-strip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { StatTile } from '../../shared/ui/stat-tile';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { tickTicket } from '../orders/tick-confirm';
 
@@ -164,6 +165,7 @@ export function passedRun(jobs: readonly ScheduledJobView[], now: number): strin
     ErrorState,
     PermissionNote,
     UpdatedAgo,
+    StatTile,
   ],
   templateUrl: './schedule.page.html',
   styleUrl: './schedule.page.scss',
@@ -226,6 +228,34 @@ export class SchedulePage {
     const id = r.detail?.['tick_id'];
     return r.action === TRADING_RUN_ACTION && typeof id === 'string' ? ['/orders/ticks', id] : null;
   }
+  /** The job that runs next. */
+  protected readonly nextJob = computed(
+    () =>
+      [...this.jobRows()]
+        .filter((j) => !!j.next_run_at)
+        .sort((a, b) => Date.parse(a.next_run_at!) - Date.parse(b.next_run_at!))
+        .at(0) ?? null,
+  );
+  /** Recent runs that did not end well. */
+  protected readonly failedRecent = computed(() =>
+    this.schedule.hasValue()
+      ? this.schedule.value().recent.filter((r) => /fail|error/i.test(r.status ?? '')).length
+      : 0,
+  );
+  /** One sentence from the schedule: is it running, and what runs next. */
+  protected readonly standfirst = computed(() => {
+    const state = this.scheduler();
+    if (!state) return 'When each job runs, how recent runs ended, and backups of the data.';
+    const n = this.jobRows().length;
+    const jobs = n === 1 ? '1 job' : `${n} jobs`;
+    const next = this.nextJob();
+    const head = state.running
+      ? `The scheduler is running ${jobs}.`
+      : `No scheduler is running. ${jobs} wait.`;
+    return next?.next_run_at
+      ? `${head} Next is ${this.jobName(next)} at ${formatTime(next.next_run_at)}.`
+      : head;
+  });
   protected readonly backupRows = computed<BackupView[]>(() =>
     this.backups.hasValue() ? this.backups.value().items : [],
   );

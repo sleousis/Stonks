@@ -1,30 +1,16 @@
 @use 'breakpoints' as bp;
 
-.back {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-sm);
-
-  a {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--touch-min);
-  }
-}
-
+// The connection's state as a summary strip: cells on hairlines, no boxes.
 .facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: var(--space-3) var(--space-4);
   margin: 0;
-  font-variant-numeric: tabular-nums slashed-zero;
 
-  div {
-    min-width: 0;
+  > div {
+    padding: var(--space-3) var(--space-4);
   }
 
   dt {
+    color: var(--muted);
     font-size: var(--text-xs);
-    color: var(--color-ink-3);
   }
 
   dd {
@@ -33,25 +19,31 @@
     align-items: center;
     gap: var(--space-2);
     margin: var(--space-1) 0 0;
-    font-weight: var(--weight-medium);
+    font-size: var(--text-md);
+    font-weight: var(--weight-label);
+    overflow-wrap: anywhere;
+  }
+
+  .num {
+    font-size: var(--text-md);
   }
 }
 
 // Errors are loss callouts (global .callout).
 .problem {
-  margin: var(--space-3) 0 0;
+  margin: var(--space-4) 0 0;
   overflow-wrap: anywhere;
 }
 
 .problem-inline {
-  color: var(--color-loss);
+  color: var(--down);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin: var(--space-5) 0 var(--space-2);
 
   @include bp.phone {
     .btn {
@@ -60,24 +52,27 @@
   }
 }
 
+// The result of a sync started here: a callout with what changed.
 .sync-result {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
 
   h3 {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
-    margin: 0 0 var(--space-2);
-    font-size: var(--text-sm);
+    font-size: var(--text-body);
     font-weight: var(--weight-semibold);
-    color: var(--color-ink-2);
+    letter-spacing: 0;
   }
 
   p {
-    margin: 0 0 var(--space-2);
+    margin: 0;
   }
 }
 
@@ -90,8 +85,8 @@
 }
 
 .hint {
-  margin: 0 0 var(--space-2);
-  max-width: 70ch;
+  margin: 0 0 var(--space-3);
+  max-width: 68ch;
+  color: var(--ink-2);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
 }

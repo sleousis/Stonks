@@ -42,23 +42,20 @@ type SeverityFilter = '' | StatementFlagView['severity'];
     UpdatedAgo,
   ],
   template: `
-    <app-page-header
-      title="Data quality"
-      description="Company report periods that failed a check. Lab runs warn when their tickers have errors here."
-    >
+    <app-page-header title="Data quality" [description]="standfirst()">
       <app-updated-ago [at]="auto.updatedAt()" />
     </app-page-header>
 
-    <section class="panel" aria-labelledby="flags-title">
-      <div class="panel-head">
-        <h2 id="flags-title">Statement flags</h2>
-        @if (shown(); as p) {
-          <span class="muted"
-            ><span class="num">{{ p.total }}</span> flagged</span
-          >
-        }
+    <section class="page-section" aria-labelledby="flags-title">
+      <div class="section-head">
+        <h2 id="flags-title">
+          Statement flags
+          @if (shown(); as p) {
+            <span class="count">{{ p.total }}</span>
+          }
+        </h2>
       </div>
-      <form class="filters panel-body" (submit)="$event.preventDefault(); apply(tickerInput.value)">
+      <form class="filters" (submit)="$event.preventDefault(); apply(tickerInput.value)">
         <div class="field">
           <label for="flag-ticker">Ticker</label>
           <input
@@ -87,7 +84,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
         <div class="actions">
           <button type="submit" class="btn">Filter</button>
           @if (filtered()) {
-            <button type="button" class="btn btn-tertiary" (click)="reset(tickerInput)">
+            <button type="button" class="btn btn-ghost" (click)="reset(tickerInput)">
               Show all
             </button>
           }
@@ -143,10 +140,14 @@ type SeverityFilter = '' | StatementFlagView['severity'];
       display: grid;
       gap: var(--space-3);
       align-items: end;
-      border-bottom: 1px solid var(--color-border);
+      padding: var(--space-4) 0;
       @include bp.from-tablet {
-        grid-template-columns: minmax(0, 14rem) minmax(0, 10rem) auto;
+        grid-template-columns: minmax(0, 16rem) minmax(0, 11rem) auto;
       }
+    }
+    .cell-link {
+      font-family: var(--font-sans);
+      font-weight: var(--weight-bold);
     }
     @include bp.phone {
       .cell-link {
@@ -188,6 +189,16 @@ export class DataQualityPage {
   /** The last loaded page stays on screen while the next one loads. */
   protected readonly shown = keepLatest(this.flags);
   protected readonly auto = autoRefresh(() => [this.flags]);
+
+  /** One sentence from the list: how many periods failed a check. */
+  protected readonly standfirst = computed(() => {
+    const page = this.shown();
+    const words = 'Lab runs warn when their tickers have errors here.';
+    if (!page) return `Company report periods that failed a check. ${words}`;
+    if (page.total === 0) return `No report period fails a check. ${words}`;
+    const n = page.total === 1 ? '1 report period fails' : `${page.total} report periods fail`;
+    return `${n} a check${this.filtered() ? ' in this filter' : ''}. ${words}`;
+  });
 
   protected readonly flagKey = (f: StatementFlagView) =>
     `${f.ticker}|${f.period_end}|${f.frequency}|${f.check_id}`;
