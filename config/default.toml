@@ -335,6 +335,13 @@ min_capital_quantile = 0.95
 # [backtest.lots.lot_sizes]
 # "7203.TSE" = 100
 
+[backtest.delisting]
+# A held name that delists settles for cash on the first bar after its last
+# bar, once it is past instruments.delisted_date or past the end of its
+# universe membership with no later bar (P14). It settles at
+# last close x (1 + return). 0.0 is the last close, -0.3 a 30% haircut.
+return = 0.0
+
 [backtest.execution]
 # Cash-account settlement of sale proceeds in lab and API backtests, in
 # business days (0 = available at once, 1 = T+1).

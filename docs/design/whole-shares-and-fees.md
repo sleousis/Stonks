@@ -100,3 +100,7 @@ us_sell_fees = true
 
 A backtest with a commission counts as a costed run for the go-live `nonzero_costs`
 check and the lab's zero-cost warning.
+
+The `cost_stress` survival test (P19) scales commissions and regulatory fees with the
+rest of the costs through `commission_multiplier` in `[backtest.costs.commissions]`
+(1.0 by default). Its 1x level costs exactly what the backtest paid.

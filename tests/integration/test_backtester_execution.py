@@ -4,6 +4,7 @@ price query."""
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -211,4 +212,140 @@ def test_engine_loads_prices_with_a_single_query(tmp_path, monkeypatch):
 
     assert len(calls) == 1
     assert len(report.equity_curve) == 10
+    lake.close()
+
+
+# ---- mixed calendars: a weekend rebalance must not drop a queued order ------------
+
+
+class _OneShot:
+    """Buys 10 E.US on its first decision, then never decides anything."""
+
+    id = "oneshot"
+    applicable_asset_classes = ("equity", "crypto")
+
+    def __init__(self) -> None:
+        self.done = False
+
+    def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
+        return None
+
+    def decide(
+        self,
+        my_picks: Sequence[tuple[float, str]],
+        portfolio: Portfolio,
+        prices: Mapping[str, float],
+        as_of: Any,
+    ) -> list[Order]:
+        if self.done:
+            return []
+        self.done = True
+        return [Order(client_id=f"x:{as_of}", ticker="E.US", side="buy", quantity=10.0)]
+
+
+def _daily_lake(tmp_path) -> tuple[DuckDBLake, pd.DatetimeIndex]:
+    def frame(ticker: str, days) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "ticker": ticker,
+                "date": [d.date() for d in days],
+                "open": 100.0,
+                "high": 100.0,
+                "low": 100.0,
+                "close": 100.0,
+                "adj_close": 100.0,
+                "volume": 1e6,
+            }
+        )
+
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    days = pd.date_range("2026-01-09", periods=10)  # starts on a Friday
+    lake.upsert_prices(frame("BTC-USD.CC", days))
+    lake.upsert_prices(frame("E.US", [d for d in days if d.weekday() < 5]))
+    return lake, days
+
+
+@pytest.mark.parametrize("universe", [["E.US"], ["BTC-USD.CC", "E.US"]])
+def test_queued_order_survives_a_rebalance_on_a_bar_without_its_ticker(tmp_path, universe):
+    """Friday's buy of E.US must fill on Monday, crypto weekend bars or not:
+    Saturday's rebalance decides nothing for E.US, so it keeps the order."""
+    lake, days = _daily_lake(tmp_path)
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), slippage_bps=0.0)
+    config = BacktestConfig(start=days[0].date(), end=days[-1].date(), universe=universe)
+    Backtester([_OneShot()], broker, lake, config).run()
+    assert broker.fetch_portfolio().positions == {"E.US": pytest.approx(10.0)}
+    (fill,) = broker.fills
+    assert fill.filled_at.date() == date(2026, 1, 12)  # Monday
+    lake.close()
+
+
+class _BuyOnFridaySellOnSunday:
+    """Buys E.US on Friday, then on Sunday decides a sell of E.US: the new
+    decision for the same ticker replaces the queued buy."""
+
+    id = "replace"
+    applicable_asset_classes = ("equity", "crypto")
+
+    def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
+        return None
+
+    def decide(
+        self,
+        my_picks: Sequence[tuple[float, str]],
+        portfolio: Portfolio,
+        prices: Mapping[str, float],
+        as_of: Any,
+    ) -> list[Order]:
+        day = as_of.date()
+        if day == date(2026, 1, 9):
+            return [Order(client_id="buy", ticker="E.US", side="buy", quantity=10.0)]
+        if day == date(2026, 1, 11):
+            return [Order(client_id="sell", ticker="E.US", side="sell", quantity=4.0)]
+        return []
+
+
+def test_new_decision_for_the_same_ticker_replaces_the_queued_order(tmp_path):
+    lake, days = _daily_lake(tmp_path)
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={"E.US": 5.0}), slippage_bps=0.0)
+    config = BacktestConfig(
+        start=days[0].date(), end=days[-1].date(), universe=["BTC-USD.CC", "E.US"]
+    )
+    Backtester([_BuyOnFridaySellOnSunday()], broker, lake, config).run()
+    assert [f.side for f in broker.fills] == ["sell"]
+    assert broker.fetch_portfolio().positions == {"E.US": pytest.approx(1.0)}
+    lake.close()
+
+
+# ---- a NaN close must not poison the equity curve ---------------------------------
+
+
+def test_nan_close_is_skipped_and_the_last_mark_carries(tmp_path):
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    dates = pd.bdate_range("2026-01-02", periods=10)
+    closes = [100.0 + i for i in range(10)]
+    closes[5] = float("nan")
+    lake.upsert_prices(
+        pd.DataFrame(
+            {
+                "ticker": "A.US",
+                "date": [d.date() for d in dates],
+                "open": [100.0 + i for i in range(10)],
+                "high": 120.0,
+                "low": 90.0,
+                "close": closes,
+                "adj_close": closes,
+                "volume": 1e6,
+            }
+        )
+    )
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), slippage_bps=0.0)
+    config = BacktestConfig(start=dates[0].date(), end=dates[-1].date(), universe=["A.US"])
+    report = Backtester([BuyAndHold({"ticker": "A.US"})], broker, lake, config).run()
+    assert all(math.isfinite(v) for v in report.equity_curve)
+    assert math.isfinite(report.sharpe)
+    assert report.sharpe != 0.0
+    assert math.isfinite(report.max_drawdown)
+    assert len(report.equity_curve) == 9  # the bad bar is skipped
     lake.close()

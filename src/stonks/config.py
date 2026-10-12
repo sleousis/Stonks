@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.delisting import DelistingSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.breadth.settings import BreadthSettings
 from stonks.core.types import AssetClass
@@ -588,6 +589,9 @@ class BacktestSettings(BaseModel):
     #: ``[backtest.lots]``: round order sizes to tradable lots in backtests,
     #: the lab and paper books (roadmap 23.1, ``fractional`` by default).
     lots: LotSettings = LotSettings()
+    #: ``[backtest.delisting]``: the return a held name settles at when it
+    #: delists (P14, ``return`` applied to the last close, 0.0 by default).
+    delisting: DelistingSettings = DelistingSettings()
 
 
 class LabSettings(BaseModel):
