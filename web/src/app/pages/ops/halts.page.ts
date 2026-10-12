@@ -186,7 +186,8 @@ export class HaltsPage {
     }
     const n = this.active().length;
     const past = this.past().length;
-    const history = past === 1 ? '1 past halt' : `${past} past halts`;
+    const history =
+      past === 0 ? 'no past halts' : past === 1 ? '1 past halt' : `${past} past halts`;
     if (this.killOn())
       return `Trading is stopped. ${n === 1 ? '1 halt' : n + ' halts'} active, ${history}.`;
     if (n)

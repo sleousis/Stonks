@@ -131,6 +131,7 @@
 // Each preset: a name and a sentence, then its costs as a table.
 .presets {
   display: grid;
+  align-items: start;
   gap: var(--space-8) var(--column-gap);
 
   @include bp.from-desktop {

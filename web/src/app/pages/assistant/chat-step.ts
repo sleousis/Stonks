@@ -58,15 +58,17 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
   `,
   styles: `
     @use 'breakpoints' as bp;
-    // A tool step: an inset well, the state as a working or receipt pill.
+    /* A tool step: a callout, the state as a working or receipt pill. */
     :host {
       display: block;
       min-width: 0;
-      max-width: min(100%, 46rem);
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--r-ctl);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--r-sheet);
       background: var(--sunk);
       font-size: var(--text-sm);
+    }
+    :host:has(.step[data-state='failed']) {
+      box-shadow: inset 3px 0 0 var(--down);
     }
     .step {
       display: flex;
@@ -75,7 +77,8 @@ export const STEP_STATE: Record<StepItem['state'], { text: string; mark: string 
       gap: var(--space-1) var(--space-2);
     }
     .label {
-      font-weight: var(--weight-medium);
+      color: var(--ink);
+      font-weight: var(--weight-label);
       overflow-wrap: anywhere;
     }
     .state {

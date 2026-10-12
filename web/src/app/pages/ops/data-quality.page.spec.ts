@@ -53,7 +53,7 @@ describe('DataQualityPage', () => {
     expect(req.request.urlWithParams).toContain('limit=50');
     req.flush(FLAGS);
     await settle();
-    expect(el.textContent).toContain('1 flagged');
+    expect(el.textContent).toContain('1 report period fails a check');
     expect(el.textContent).toContain('Balance identity');
     expect(el.textContent).toContain('assets differ');
     const link = el.querySelector<HTMLAnchorElement>('app-data-table a')!;

@@ -1,7 +1,4 @@
-<app-page-header
-  title="Assistant"
-  description="Ask about your portfolio, strategies and research. It uses the same tools you do, as you, and asks before it changes anything."
->
+<app-page-header title="Assistant" [description]="standfirst()">
   @if (status.value()?.enabled) {
     <button actions type="button" class="btn" (click)="newConversation()">New conversation</button>
   }
@@ -12,9 +9,18 @@
 } @else if (!status.hasValue()) {
   <app-loading-state label="Checking the assistant" [rows]="3" />
 } @else if (!status.value().enabled) {
-  <section class="panel off" aria-labelledby="off-title">
-    <div class="panel-body">
-      <span class="off-mark" aria-hidden="true">◌</span>
+  <section class="off" aria-labelledby="off-title">
+    <div class="off-body">
+      <span class="off-mark" aria-hidden="true">
+        <svg viewBox="0 0 20 20" fill="none">
+          <path
+            d="M4 5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5v5a2.5 2.5 0 0 1-2.5 2.5H9l-3.5 3v-3A1.5 1.5 0 0 1 4 11.5v-6Z"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
       <h2 id="off-title" class="off-title">The assistant is not set up on this server</h2>
       <p>
         Nothing is wrong, and the rest of Stonks works without it. The assistant needs a model
@@ -62,11 +68,16 @@
   }
 
   <div class="layout" [class.has-open]="!!currentId()">
-    <nav class="convos panel" aria-labelledby="convos-title">
-      <div class="panel-head">
-        <h2 id="convos-title">Conversations</h2>
+    <nav class="convos" aria-labelledby="convos-title">
+      <div class="section-head">
+        <h2 id="convos-title">
+          Conversations
+          @if (list.hasValue()) {
+            <span class="count">{{ list.value().length }}</span>
+          }
+        </h2>
       </div>
-      <div class="panel-body">
+      <div class="convos-body">
         @if (list.error(); as err) {
           <app-error-state
             title="Could not load your conversations"
@@ -101,7 +112,9 @@
                   [attr.aria-label]="'Delete ' + (conv.title || 'Untitled conversation')"
                   (click)="remove(conv)"
                 >
-                  <span aria-hidden="true">✕</span>
+                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="m4.5 4.5 7 7m0-7-7 7" stroke="currentColor" stroke-width="1.6" />
+                  </svg>
                 </button>
               </li>
             }
@@ -110,8 +123,8 @@
       </div>
     </nav>
 
-    <section class="chat panel" aria-labelledby="chat-title">
-      <div class="panel-head chat-head">
+    <section class="chat" aria-labelledby="chat-title">
+      <div class="chat-head">
         @if (currentId()) {
           <a class="back" routerLink="/assistant">All conversations</a>
         }
@@ -124,7 +137,7 @@
         }
       </div>
 
-      <div class="panel-body chat-body">
+      <div class="chat-body">
         @if (historyState() === 'failed') {
           <app-error-state
             title="Could not load this conversation"
@@ -135,11 +148,13 @@
           <app-loading-state label="Loading the conversation" [rows]="4" />
         } @else if (items().length === 0) {
           <div class="intro">
-            <p>Try one of these:</p>
-            <ul>
-              <li>How is my portfolio doing this month?</li>
-              <li>Which strategies agree with my biggest holding?</li>
-              <li>Backtest a simple trend strategy on my watchlist.</li>
+            <p class="intro-title">Try one of these</p>
+            <ul class="prompts">
+              @for (q of prompts; track q) {
+                <li>
+                  <button type="button" class="prompt" (click)="draft.set(q)">{{ q }}</button>
+                </li>
+              }
             </ul>
             <p class="muted">
               Model {{ st.model }}. Up to {{ st.max_steps }} steps per answer.
@@ -194,7 +209,7 @@
         <p class="visually-hidden" role="status">{{ announce() }}</p>
       </div>
 
-      <form class="composer" (submit)="$event.preventDefault(); send()" novalidate>
+      <form class="composer sheet-box" (submit)="$event.preventDefault(); send()" novalidate>
         <div class="field">
           <label for="assistant-message">Message</label>
           <textarea

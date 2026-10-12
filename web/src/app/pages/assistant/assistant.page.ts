@@ -81,6 +81,12 @@ export class AssistantPage {
   readonly c = input<string | undefined>();
 
   protected readonly messageMax = MESSAGE_MAX;
+  /** Questions to start with: a tap puts one in the message box. */
+  protected readonly prompts = [
+    'How is my portfolio doing this month?',
+    'Which strategies agree with my biggest holding?',
+    'Backtest a simple trend strategy on my watchlist.',
+  ];
   protected readonly status = resource({ loader: () => this.api.status() });
   protected readonly list = resource({
     params: () => (this.status.value()?.enabled ? {} : undefined),
@@ -133,6 +139,16 @@ export class AssistantPage {
     return c?.title?.trim() || 'Untitled conversation';
   });
   protected readonly when = (c: ConversationView) => formatDateTime(c.updated_at);
+
+  /** One sentence from the assistant's state: its model and how many conversations you have. */
+  protected readonly standfirst = computed(() => {
+    const words = 'It uses your tools, as you, and asks before it changes anything.';
+    const st = this.status.value();
+    if (!st?.enabled) return `Ask about your portfolio, strategies and research. ${words}`;
+    const n = this.list.hasValue() ? this.list.value().length : null;
+    const convos = !n ? '' : n === 1 ? ' 1 conversation so far.' : ` ${n} conversations so far.`;
+    return `${words}${convos}`;
+  });
 
   constructor() {
     effect(() => {

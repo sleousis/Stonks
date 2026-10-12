@@ -110,7 +110,8 @@ describe('ConnectionsPage', () => {
 
   it('puts Connect a broker right under your connections', async () => {
     await setUp();
-    const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
+    // The title without its count.
+    const headings = [...el.querySelectorAll('h2')].map((h) => h.firstChild?.textContent?.trim());
     expect(headings.slice(0, 2)).toEqual(['Your connections', 'Connect a broker']);
   });
 

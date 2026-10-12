@@ -33,7 +33,10 @@ describe('GlossaryPage', () => {
 
   it('opens with how Stonks works, then the trading words and the figures (F5)', () => {
     const { el } = render();
-    const headings = [...el.querySelectorAll('section.group h2')].map((h) => h.textContent);
+    // The title without its count.
+    const headings = [...el.querySelectorAll('section.group h2')].map((h) =>
+      h.firstChild?.textContent?.trim(),
+    );
     expect(headings).toEqual([
       'How Stonks works',
       'Trading words',

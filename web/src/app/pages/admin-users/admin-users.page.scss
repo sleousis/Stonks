@@ -243,12 +243,23 @@ tr.open .avatar {
 
     .who {
       display: flex;
-      width: calc(100% - var(--touch-min) - var(--space-2));
+      flex: 1 1 calc(100% - var(--touch-min) - var(--space-4));
+      min-width: 0;
     }
 
+    // The overflow button sits beside the name, the chips wrap below.
     .more {
       position: static;
+      flex: none;
+      order: 1;
       width: auto;
+    }
+
+    .role-cell,
+    .status-cell,
+    .mfa-cell,
+    .seen {
+      order: 2;
     }
 
     .role-cell {
