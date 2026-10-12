@@ -11,7 +11,8 @@ import {
   NotificationFeedService,
 } from '../../core/notify/notification-feed.service';
 import { nextRequest, tick } from '../../../testing/http';
-import { FEED_PAGE } from './notification-feed';
+import { componentCss, rulesFor } from '../../../testing/styles';
+import { FEED_PAGE, NotificationFeed } from './notification-feed';
 import { NotificationsPage, inboxStandfirst } from './notifications.page';
 
 @Component({ template: '' })
@@ -89,6 +90,12 @@ describe('NotificationsPage', () => {
     [...root.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
       b.textContent?.includes(text),
     );
+
+  it('keeps a 44px touch target on Mark read and Open (old .text-btn and .open)', () => {
+    const rules = rulesFor(componentCss(NotificationFeed), '.buttons .btn');
+    expect(rules.length).toBe(2);
+    expect(rules.every((r) => r.includes('var(--touch-min)'))).toBe(true);
+  });
 
   it('builds the standfirst from the unread count', () => {
     expect(inboxStandfirst(3)).toBe(

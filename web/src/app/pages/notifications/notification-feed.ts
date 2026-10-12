@@ -277,6 +277,17 @@ export function categoryLabel(category: string | null): string {
         justify-content: space-between;
       }
     }
+    /* Touch: Mark read and Open keep a 44px target (old .text-btn and .open). */
+    @include bp.phone {
+      .buttons .btn {
+        min-height: var(--touch-min);
+      }
+    }
+    @include bp.coarse {
+      .buttons .btn {
+        min-height: var(--touch-min);
+      }
+    }
     .more {
       display: flex;
       justify-content: center;

@@ -19,11 +19,13 @@ import { OptionsBacktest } from './options-backtest';
 import {
   type ChainCell,
   type ChainSide,
+  type ChainSort,
   chainLayout,
   inTheMoney,
   optionsStrategyName,
   paramLabel,
   pricingModelsText,
+  sortChainRows,
   structureLabel,
 } from './options-view';
 import { SessionService } from '../../core/auth/session.service';
@@ -107,8 +109,13 @@ export class OptionsPage {
   /** The rows by strike, with the underlying's price marked between two strikes. */
   protected readonly chainRows = computed(() => {
     if (!this.chain.hasValue()) return [];
-    const { rows, spot } = this.chain.value();
-    let marked = spot === null || spot === undefined;
+    const { rows: raw, spot } = this.chain.value();
+    const sort = this.chainSort();
+    const { calls, puts } = this.layout();
+    const rows = sortChainRows(raw, sort, [...calls, ...puts]);
+    // The price line sits between two strikes only while rows run by strike, low to high.
+    const byStrike = !sort || (sort.key === 'strike' && sort.dir === 'asc');
+    let marked = !byStrike || spot === null || spot === undefined;
     return rows.map((row: OptionChainRow) => {
       const spotBefore = !marked && row.strike >= (spot as number);
       if (spotBefore) marked = true;
@@ -116,6 +123,28 @@ export class OptionsPage {
     });
   });
   protected readonly itm = inTheMoney;
+
+  /** The column the chain is sorted by, or null for the strike order (old sortable table). */
+  protected readonly chainSort = signal<ChainSort | null>(null);
+  /** Said to screen readers after each sort. */
+  protected readonly sortMessage = signal('');
+
+  /** `aria-sort` for a header: the strike counts as sorted while no other column is. */
+  protected ariaSort(key: string): 'ascending' | 'descending' | null {
+    const sort = this.chainSort() ?? (key === 'strike' ? { key, dir: 'asc' as const } : null);
+    if (!sort || sort.key !== key) return null;
+    return sort.dir === 'asc' ? 'ascending' : 'descending';
+  }
+
+  /** Numbers sort high to low first, the strike low to high; a second press flips it. */
+  protected toggleSort(key: string, label: string): void {
+    const current = this.chainSort() ?? { key: 'strike', dir: 'asc' as const };
+    const first: ChainSort['dir'] = key === 'strike' ? 'asc' : 'desc';
+    const dir: ChainSort['dir'] =
+      current.key === key ? (current.dir === 'asc' ? 'desc' : 'asc') : first;
+    this.chainSort.set({ key, dir });
+    this.sortMessage.set(`Sorted by ${label}, ${dir === 'asc' ? 'ascending' : 'descending'}`);
+  }
 
   /** The header's visible words: "bid" under Calls, the short form for IV. */
   protected shortLabel(col: ChainCell): string {

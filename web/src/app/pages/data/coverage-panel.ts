@@ -161,7 +161,7 @@ export class CoveragePanel {
       value: (r) => barTime(r.last_bar, r.interval),
       display: (r) => barTime(r.last_bar, r.interval),
     },
-    { key: 'rows', label: 'Prices', format: 'number', mobile: 'hide' },
+    { key: 'rows', label: 'Prices', format: 'number' },
     { key: 'freshness', label: 'Freshness', mobile: 'inline', value: (r) => RANK[r.freshness] },
   ];
   protected readonly key = (r: CoverageView) => `${r.ticker}|${r.interval}`;

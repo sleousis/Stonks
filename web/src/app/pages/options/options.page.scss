@@ -133,6 +133,45 @@
     gap: 2px;
   }
 
+  // Each header sorts the chain, as the old table's headers did.
+  .sort {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
+  }
+
+  .arrow {
+    width: 0;
+    height: 0;
+    border-left: 3.5px solid transparent;
+    border-right: 3.5px solid transparent;
+    border-top: 4.5px solid currentColor;
+    opacity: 0.3;
+
+    &[data-dir] {
+      opacity: 1;
+    }
+
+    &[data-dir='ascending'] {
+      transform: rotate(180deg);
+    }
+  }
+
   // Headers in sentence case: "bid" under Calls reads "Bid".
   .short {
     display: inline-block;

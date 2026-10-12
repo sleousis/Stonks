@@ -188,6 +188,25 @@ describe('navigation', () => {
       expect(el.querySelector('a[aria-current="page"]')!.textContent).toContain('Orders');
     });
 
+    it('hints the go-to shortcut on tabs and switcher links (old nav.ts:136)', async () => {
+      me.set(TRADER);
+      const tabs = TestBed.createComponent(WorkspaceTabs);
+      await go('/strategies');
+      tabs.detectChanges();
+      const tab = [...(tabs.nativeElement as HTMLElement).querySelectorAll('a.tab')].find((a) =>
+        a.textContent?.includes('Strategies'),
+      )!;
+      expect(tab.getAttribute('title')).toMatch(/^Shortcut: g \w$/);
+      const menu = TestBed.createComponent(WorkspaceMenu);
+      menu.detectChanges();
+      const el = menu.nativeElement as HTMLElement;
+      el.querySelector<HTMLButtonElement>('button[data-open-nav]')!.click();
+      menu.detectChanges();
+      const hints = [...el.querySelectorAll('.pages kbd')].map((k) => k.textContent?.trim());
+      expect(hints.length).toBeGreaterThan(0);
+      expect(hints.every((h) => /^g \w$/.test(h ?? ''))).toBe(true);
+    });
+
     it('keeps the last workspace on an account page', async () => {
       me.set(TRADER);
       const state = TestBed.inject(NavState);

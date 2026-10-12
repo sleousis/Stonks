@@ -133,6 +133,11 @@ describe('DataPage', () => {
     expect(coverage.textContent).toContain('AAPL.US');
     expect(coverage.textContent).toContain('Fresh');
     expect(coverage.textContent).toContain('Old');
+    // The Prices count shows on phones too, as before the redesign.
+    const prices = [...coverage.querySelectorAll('td')].find(
+      (td) => (td as HTMLElement).dataset['label'] === 'Prices',
+    )!;
+    expect(prices.classList).not.toContain('hide-phone');
   });
 
   it('shows data updates with status and error text in trader words', () => {

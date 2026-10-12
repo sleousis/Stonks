@@ -203,7 +203,7 @@ function runTime(iso: string, now: number): string {
                 [attr.aria-label]="nextLabel()"
                 [attr.title]="n.trigger"
               >
-                <span class="job">Trading run</span>
+                <span class="job">{{ n.label }}</span>
                 <span class="at num meta">{{ n.at }}</span>
                 <span class="in" aria-hidden="true">in</span>
                 <span class="clock num" aria-hidden="true">{{ n.in }}</span>

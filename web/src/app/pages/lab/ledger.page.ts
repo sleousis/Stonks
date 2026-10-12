@@ -106,7 +106,6 @@ export function scoreText(score: number | null | undefined): string {
           <app-columns-picker
             [columns]="columns"
             storageKey="stonks.lab.ledger.columns"
-            [defaultHidden]="['n_failed']"
             (hiddenChange)="hidden.set($event)"
           />
         </div>

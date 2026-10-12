@@ -9,6 +9,13 @@
 .none {
   border-top: 2px solid var(--rule-strong);
   padding-top: var(--space-4);
+
+  + .lead {
+    max-width: 68ch;
+    margin-top: var(--space-3);
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+  }
 }
 
 // How to read trade costs: a quiet callout beside the breakdown.

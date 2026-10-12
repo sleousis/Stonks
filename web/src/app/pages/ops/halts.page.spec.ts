@@ -14,7 +14,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
-import { HaltsPage, actorText, endedText } from './halts.page';
+import { HaltsPage, actorText, endedText, sortHalts } from './halts.page';
 import { book } from '../../../testing/portfolio-fixtures';
 
 function halt(over: Partial<HaltView>): HaltView {
@@ -157,6 +157,9 @@ describe('HaltsPage', () => {
       expect(active.textContent).not.toContain('Buys only');
       expect(button('Resume trading')).toBeDefined();
       expect(button('Clear')).toBeDefined();
+      // More than one active halt: a Sort by control, newest first.
+      const sort = active.querySelector<HTMLSelectElement>('#halt-sort')!;
+      expect(sort.value).toBe('newest');
 
       // Who started it in words, with the time, never an id (AO-17).
       expect(active.textContent).toContain('Olive, ');
@@ -432,5 +435,21 @@ describe('halt actor words (AO-17)', () => {
     expect(
       endedText(halt({ cleared_by: 'user:usr_1', cleared_at: '2026-09-20T10:00:00Z' }), 'usr_1'),
     ).toMatch(/^You, /);
+  });
+});
+
+describe('active halt order (old table initialSort tripped_at desc)', () => {
+  const older = halt({ id: 3, kind: 'drawdown', tripped_at: '2026-09-20T09:00:00Z' });
+  const newer = halt({ id: 1, kind: 'kill', tripped_at: '2026-09-26T09:00:00Z' });
+  const scope = () => 'Everyone';
+
+  it('puts the newest halt first by default, whatever order the API sends', () => {
+    expect(sortHalts([older, newer], 'newest', scope).map((h) => h.id)).toEqual([1, 3]);
+    expect(sortHalts([newer, older], 'oldest', scope).map((h) => h.id)).toEqual([3, 1]);
+  });
+
+  it('sorts by kind, as the Kind column could', () => {
+    // Drawdown before Stop trading, in the words the page shows.
+    expect(sortHalts([newer, older], 'kind', scope).map((h) => h.id)).toEqual([3, 1]);
   });
 });

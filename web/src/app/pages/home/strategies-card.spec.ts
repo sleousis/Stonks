@@ -102,9 +102,13 @@ describe('StrategiesCard', () => {
     await tick();
     fixture.detectChanges();
     expect(modeValue(el)).toBe('paper');
-    // Rows stay compact: the mode's line is not repeated on each row.
-    expect(el.textContent).not.toContain(MODES[1].help);
-    expect(el.textContent).toContain('Paper day 0 of 20');
+    // As before the redesign: the mode's line and how far it has come show on the row.
+    const help = el.querySelector('app-follow-control .help')!;
+    expect(help.textContent).toContain(MODES[1].help);
+    const why = [...el.querySelectorAll('app-follow-control .why')].find((p) =>
+      p.textContent?.includes('Your paper days: 0 of 20.'),
+    )!;
+    expect(why.classList).not.toContain('visually-hidden');
   });
 
   it('turns a strategy off', async () => {

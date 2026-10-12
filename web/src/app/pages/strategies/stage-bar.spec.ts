@@ -3,9 +3,16 @@ import { provideRouter } from '@angular/router';
 
 import type { GoLiveReport } from '../../api/models';
 import { goLiveReport } from '../../../testing/status-dialog';
+import { componentCss, rulesFor } from '../../../testing/styles';
 import { StageBar } from './stage-bar';
 
 describe('StageBar (UX-64)', () => {
+  it('keeps each stage detail line on phones too (old stage-bar.ts:219)', () => {
+    const rules = rulesFor(componentCss(StageBar), '.stage-detail');
+    expect(rules.length).toBeGreaterThan(0);
+    expect(rules.some((r) => /display:\s*none/.test(r))).toBe(false);
+  });
+
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [provideRouter([])] });
   });

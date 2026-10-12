@@ -124,5 +124,7 @@ describe('TcaSummary', () => {
     await settle();
     expect(el.textContent).toContain('Costs appear after the first filled order.');
     expect(el.querySelector('table')).toBeNull();
+    // What shortfall means shows before the first trade too.
+    expect(el.textContent).toContain('Shortfall is the gap between the price');
   });
 });

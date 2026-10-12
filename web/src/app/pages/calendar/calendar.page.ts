@@ -10,11 +10,14 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import type { DividendEvent, EarningsEvent, EconomicEvent, FilingEvent } from '../../api/models';
+
 import { CalendarsService, type NewsQuery } from '../../api/calendars.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatDate, isoDay } from '../../core/format/format';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import { DataPlanNote } from '../../shared/ui/data-plan-note';
+import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -28,17 +31,49 @@ import {
   dividendItem,
   earningsItem,
   economicItem,
+  economicRelease,
+  economicValue,
   filingItem,
+  filingItemsLabel,
   groupByDay,
+  importanceLabel,
   parseCountries,
   parseTickers,
   relativeDay,
+  safeUrl,
   scopeQuery,
+  timingLabel,
   windowError,
 } from './calendar-view';
 import { NewsPanel } from './news-panel';
 
 type Tab = 'all' | 'earnings' | 'dividends' | 'economic' | 'filings' | 'news';
+
+/** How one kind of event shows: the day agenda, or the sortable table. */
+export type CalendarLayout = 'agenda' | 'table';
+
+export const CALENDAR_VIEW_KEY = 'stonks.calendar.view';
+
+const VIEWS: SegmentOption<CalendarLayout>[] = [
+  { value: 'agenda', label: 'Agenda' },
+  { value: 'table', label: 'Table' },
+];
+
+function storedView(): CalendarLayout {
+  try {
+    return localStorage.getItem(CALENDAR_VIEW_KEY) === 'table' ? 'table' : 'agenda';
+  } catch {
+    return 'agenda';
+  }
+}
+
+/** An economic figure column, in the release's own unit (old calendar.page.ts:58). */
+function economicFigure(
+  key: 'actual' | 'estimate' | 'previous',
+  label: string,
+): TableColumn<EconomicEvent> {
+  return { key, label, format: 'number', help: false, display: (e) => economicValue(e[key], e) };
+}
 
 /** Rows shown before "Show more". */
 const ROW_STEP = 120;
@@ -79,6 +114,8 @@ interface DayRange {
     EmptyState,
     NewsPanel,
     DataPlanNote,
+    DataTable,
+    TableCell,
   ],
   templateUrl: './calendar.page.html',
   styleUrl: './calendar.page.scss',
@@ -244,6 +281,80 @@ export class CalendarPage implements OnInit {
     const { start, end } = this.ahead();
     return `${parts[0]}, ${parts[1]} and ${parts[2]} from ${formatDate(start)} to ${formatDate(end)}.`;
   });
+
+  /**
+   * Each single kind of event can also show as the sortable table it was
+   * before the agenda (old calendar.page.ts:248), 50 rows a page. The choice
+   * is remembered on this device.
+   */
+  protected readonly views = VIEWS;
+  protected readonly view = signal<CalendarLayout>(storedView());
+  protected readonly tableView = computed(
+    () => this.view() === 'table' && this.tab() !== 'all' && this.tab() !== 'news',
+  );
+  protected pickView(view: CalendarLayout): void {
+    this.view.set(view);
+    try {
+      localStorage.setItem(CALENDAR_VIEW_KEY, view);
+    } catch {
+      // Storage is off: the choice lasts for this visit only.
+    }
+  }
+
+  protected readonly earningsColumns: TableColumn<EarningsEvent>[] = [
+    { key: 'report_date', label: 'Date', format: 'date' },
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'name', label: 'Company', mobile: 'hide' },
+    { key: 'when', label: 'When', value: (e) => timingLabel(e.before_after_market) },
+    { key: 'period_end', label: 'Quarter ending', format: 'date', mobile: 'hide' },
+    { key: 'eps_estimate', label: 'EPS estimate', format: 'money', currency: (e) => e.currency },
+    { key: 'eps_actual', label: 'EPS actual', format: 'money', currency: (e) => e.currency },
+    {
+      key: 'surprise',
+      label: 'Surprise',
+      format: 'signedPercent',
+      tone: true,
+      value: (e) => (typeof e.surprise_percent === 'number' ? e.surprise_percent / 100 : null),
+      mobile: 'hide',
+    },
+  ];
+  protected readonly dividendColumns: TableColumn<DividendEvent>[] = [
+    { key: 'ex_date', label: 'Ex-dividend', format: 'date' },
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'name', label: 'Company', mobile: 'hide' },
+    { key: 'amount', label: 'Amount', format: 'money', currency: (d) => d.currency },
+    { key: 'record_date', label: 'Record', format: 'date', mobile: 'hide' },
+    { key: 'pay_date', label: 'Paid', format: 'date' },
+  ];
+  protected readonly economicColumns: TableColumn<EconomicEvent>[] = [
+    { key: 'event_time', label: 'Time', format: 'datetime' },
+    { key: 'event_type', label: 'Release', mobile: 'title', value: (e) => economicRelease(e) },
+    { key: 'country', label: 'Country' },
+    { key: 'importance', label: 'Importance', value: (e) => importanceLabel(e.importance) },
+    { key: 'period', label: 'Period', mobile: 'hide' },
+    economicFigure('actual', 'Actual'),
+    economicFigure('estimate', 'Estimate'),
+    { ...economicFigure('previous', 'Previous'), mobile: 'hide' },
+  ];
+  protected readonly filingColumns: TableColumn<FilingEvent>[] = [
+    { key: 'accepted_at', label: 'Filed', format: 'datetime' },
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'name', label: 'Company', mobile: 'hide' },
+    { key: 'form', label: 'Form' },
+    {
+      key: 'items',
+      label: 'What it announces',
+      value: (f) => filingItemsLabel(f),
+      sortable: false,
+    },
+    { key: 'url', label: 'Document', sortable: false },
+  ];
+  protected readonly safeUrl = safeUrl;
+  protected readonly filingKey = (f: FilingEvent) => `${f.ticker}|${f.accepted_at}|${f.form}`;
+  protected readonly earningsKey = (e: EarningsEvent) => `${e.ticker}|${e.period_end}`;
+  protected readonly dividendKey = (d: DividendEvent) => `${d.ticker}|${d.ex_date}`;
+  protected readonly economicKey = (e: EconomicEvent) =>
+    `${e.country}|${e.event_time}|${e.event_type}|${e.comparison}`;
 
   protected readonly kindLabels = KIND_LABELS;
   protected readonly dayLabel = agendaDayLabel;

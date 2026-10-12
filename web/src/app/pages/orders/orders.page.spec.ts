@@ -72,10 +72,13 @@ describe('OrdersPage', () => {
     expect(el.textContent).not.toContain('Run tick');
   });
 
-  it('offers the CSV of the list on screen only', async () => {
+  it('offers both CSV downloads on Orders and on Fills, as before the redesign', async () => {
     let el = await at('/orders');
     expect(el.textContent).toContain('Orders CSV');
-    expect(el.textContent).not.toContain('Fills CSV');
+    expect(el.textContent).toContain('Fills CSV');
+    el = await at('/orders/fills');
+    expect(el.textContent).toContain('Orders CSV');
+    expect(el.textContent).toContain('Fills CSV');
     el = await at('/orders/new');
     expect(el.textContent).not.toContain('CSV');
   });

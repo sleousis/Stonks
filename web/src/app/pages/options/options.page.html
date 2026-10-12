@@ -117,6 +117,7 @@
             tabindex="0"
             aria-label="Option chain by strike, scrollable table"
           >
+            <p class="visually-hidden" aria-live="polite">{{ sortMessage() }}</p>
             <table class="chain" [attr.data-side]="side()">
               <caption class="visually-hidden">
                 Option chain by strike
@@ -149,22 +150,55 @@
                 }
                 <tr>
                   @for (col of layout().calls; track col.key) {
-                    <th scope="col" class="q" [class.hide-phone]="!col.phone">
+                    <th
+                      scope="col"
+                      class="q"
+                      [class.hide-phone]="!col.phone"
+                      [attr.aria-sort]="ariaSort(col.key)"
+                    >
                       <span class="th-inner">
-                        <span class="visually-hidden">{{ col.prefix }} </span
-                        ><span class="short">{{ shortLabel(col) }}</span>
+                        <button type="button" class="sort" (click)="toggleSort(col.key, col.label)">
+                          <span class="visually-hidden">{{ col.prefix }} </span
+                          ><span class="short">{{ shortLabel(col) }}</span>
+                          <span
+                            class="arrow"
+                            aria-hidden="true"
+                            [attr.data-dir]="ariaSort(col.key)"
+                          ></span>
+                        </button>
                         <app-help-tip [term]="col.help || null" />
                       </span>
                     </th>
                   }
-                  <th scope="col" class="strike">Strike</th>
+                  <th scope="col" class="strike" [attr.aria-sort]="ariaSort('strike')">
+                    <button type="button" class="sort" (click)="toggleSort('strike', 'Strike')">
+                      Strike
+                      <span
+                        class="arrow"
+                        aria-hidden="true"
+                        [attr.data-dir]="ariaSort('strike')"
+                      ></span>
+                    </button>
+                  </th>
                   @for (col of layout().puts; track col.key) {
-                    <th scope="col" class="q" [class.hide-phone]="!col.phone">
+                    <th
+                      scope="col"
+                      class="q"
+                      [class.hide-phone]="!col.phone"
+                      [attr.aria-sort]="ariaSort(col.key)"
+                    >
                       <span class="th-inner">
-                        @if (col.prefix) {
-                          <span class="visually-hidden">{{ col.prefix }} </span>
-                        }
-                        <span class="short">{{ shortLabel(col) }}</span>
+                        <button type="button" class="sort" (click)="toggleSort(col.key, col.label)">
+                          @if (col.prefix) {
+                            <span class="visually-hidden">{{ col.prefix }} </span>
+                          }
+                          <span class="short">{{ shortLabel(col) }}</span>
+                          <span
+                            class="arrow"
+                            aria-hidden="true"
+                            [attr.data-dir]="ariaSort(col.key)"
+                          ></span>
+                        </button>
                         <app-help-tip [term]="col.help || null" />
                       </span>
                     </th>

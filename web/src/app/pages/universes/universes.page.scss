@@ -101,9 +101,14 @@ label.check.field {
 }
 
 .name-meta {
-  display: block;
+  display: none;
   color: var(--muted);
   font-size: var(--text-sm);
+
+  // The Id column hides on phones: the id goes under the name there.
+  @include bp.phone {
+    display: block;
+  }
 }
 
 .kind-chip {

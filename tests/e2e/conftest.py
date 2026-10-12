@@ -185,7 +185,7 @@ class Visit:
         page.get_by_role("button", name="Sign in").click()
         page.get_by_role("textbox", name="Code").fill(person.code())
         page.get_by_role("button", name="Continue").click()
-        expect(page.get_by_role("heading", level=1)).to_have_text("Today")
+        expect(page.get_by_role("heading", level=1)).to_contain_text("Hello")
         self.person = person
 
     def api(self, method: str, path: str, **kwargs: Any) -> Response:

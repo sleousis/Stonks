@@ -131,6 +131,9 @@ describe('TicketsPage', () => {
     expect(cards[0].textContent).toContain('Checked by 1 rule');
     expect(cards[0].querySelector('app-mode-stamp')!.textContent).toContain('LIVE');
     expect(button(el, 'Approve all 2')).toBeTruthy();
+    expect(el.querySelector('.head-note')!.textContent).toContain(
+      'Each ticket goes to your broker in the window before the next open.',
+    );
   });
 
   it('keeps the nav badge in step with what waits (22.10)', async () => {

@@ -62,6 +62,8 @@ export interface ChainCell {
   /** Kept on phones: bid, ask and delta. */
   phone: boolean;
   show: (row: OptionChainRow) => string;
+  /** The raw number, for sorting by this column. */
+  value: (row: OptionChainRow) => number | null;
 }
 
 const PHONE_FIELDS: readonly Field[] = ['bid', 'ask', 'delta'];
@@ -79,6 +81,10 @@ function chainCells(side: 'call' | 'put', prefix: string): ChainCell[] {
       const q: OptionQuoteView | null | undefined = row[side];
       return f.show(q ? (q[f.key] ?? null) : null);
     },
+    value: (row: OptionChainRow) => {
+      const q: OptionQuoteView | null | undefined = row[side];
+      return q ? (q[f.key] ?? null) : null;
+    },
   }));
 }
 
@@ -91,6 +97,37 @@ export function chainLayout(side: ChainSide): { calls: ChainCell[]; puts: ChainC
   if (side === 'calls') return { calls: [], puts: chainCells('call', '') };
   if (side === 'puts') return { calls: [], puts: chainCells('put', '') };
   return { calls: chainCells('call', 'Call').reverse(), puts: chainCells('put', 'Put') };
+}
+
+/** A chain sort: a column key (`strike` or `call:bid`) and a direction. */
+export interface ChainSort {
+  key: string;
+  dir: 'asc' | 'desc';
+}
+
+/**
+ * The chain's rows in the order picked from a column header, as the old
+ * sortable table could. Empty cells go last either way. With no sort, the
+ * rows keep the strike order the API sends.
+ */
+export function sortChainRows(
+  rows: readonly OptionChainRow[],
+  sort: ChainSort | null,
+  cells: readonly ChainCell[],
+): OptionChainRow[] {
+  if (!sort) return [...rows];
+  const cell = cells.find((c) => c.key === sort.key);
+  const value = sort.key === 'strike' ? (r: OptionChainRow) => r.strike : cell?.value;
+  if (!value) return [...rows];
+  const sign = sort.dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = value(a);
+    const y = value(b);
+    if (x === null && y === null) return a.strike - b.strike;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return (x - y) * sign || a.strike - b.strike;
+  });
 }
 
 /** In the money: a call below the price, a put above it. */

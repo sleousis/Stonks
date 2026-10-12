@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  resource,
+  signal,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import type { FillView, OrderView } from '../../api/models';
@@ -98,7 +105,7 @@ interface TapeItem {
           } @else {
             <ul class="run" aria-label="Latest fills">
               @for (f of items(); track f.id; let i = $index) {
-                <li [class.extra]="i >= phoneCount">
+                <li [class.extra]="!expanded() && i >= phoneCount">
                   <app-side-tag [side]="f.side" />
                   <span class="ticker">{{ f.ticker }}</span>
                   <span class="num">{{ f.quantity }}</span>
@@ -110,6 +117,15 @@ interface TapeItem {
                 </li>
               }
             </ul>
+            @if (!expanded() && items().length > phoneCount) {
+              <button
+                type="button"
+                class="btn btn-ghost btn-compact more"
+                (click)="expanded.set(true)"
+              >
+                Show {{ items().length - phoneCount }} more
+              </button>
+            }
           }
         </div>
         <a class="all text-link" routerLink="/orders/fills">All fills</a>
@@ -121,6 +137,10 @@ interface TapeItem {
     :host {
       display: block;
       min-width: 0;
+    }
+    /* Show more is for phones only: wider screens scroll the whole row. */
+    .more {
+      display: none;
     }
     .tape {
       display: flex;
@@ -236,6 +256,11 @@ interface TapeItem {
       li.extra {
         display: none;
       }
+      .more {
+        display: inline-flex;
+        min-height: var(--touch-min);
+        margin: var(--space-1) 0 var(--space-3);
+      }
       .time {
         margin-left: auto;
       }
@@ -248,6 +273,11 @@ export class FillsTape {
   private readonly watch = inject(WatchlistContextService);
   protected readonly store = inject(HomeStore);
   protected readonly phoneCount = PHONE_FILLS;
+  /**
+   * A phone lists the first fills, and Show more lists the rest right here,
+   * so every fill of the session stays on Today as the old tape had it.
+   */
+  protected readonly expanded = signal(false);
 
   constructor() {
     this.store.need('orders');

@@ -23,7 +23,10 @@ interface Row {
   ret: string | null;
   tone: string;
   points: readonly number[];
-  /** "Paper day 5 of 20" while the paper days still run, else null. */
+  /**
+   * "Paper day 5 of 20" for an alerts-only follow while the paper days still
+   * run. Other modes say it in the control's own visible line.
+   */
   day: string | null;
 }
 
@@ -91,7 +94,6 @@ interface Row {
                 [sub]="row.sub"
                 [strategyName]="row.name"
                 [compact]="true"
-                [showHelp]="false"
                 (changed)="store.replaceFollow($event)"
               >
                 <span class="who">
@@ -275,7 +277,7 @@ export class StrategiesCard {
         tone: toneClass(value),
         points: record?.points ?? [],
         day:
-          !isGatedMode(sub.mode) && sub.paper_days_completed < sub.paper_days_required
+          sub.mode === 'notify' && sub.paper_days_completed < sub.paper_days_required
             ? `Paper day ${sub.paper_days_completed} of ${sub.paper_days_required}`
             : null,
       };

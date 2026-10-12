@@ -214,6 +214,27 @@ describe('StrategiesPage', () => {
     expect(controller.match((r) => r.url.split('?')[0] === '/api/strategies')).toEqual([]);
   });
 
+  it('reads a picked status on its own when the one read was cut off', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush({ ...page(ALL), total: 600 });
+    await settle();
+    pill('On trial')!.click();
+    fixture.detectChanges();
+    const req = await nextRequest(controller, '/api/strategies');
+    expect(statusParam(req)).toBe('shadow');
+    req.flush(page([ALL[1], strategy('trend-2', 'shadow', 'TrendStrategy')]));
+    await settle();
+    expect(rowIds().sort()).toEqual(['buyhold-spy', 'trend-2']);
+  });
+
+  it('keeps the Kind column, sortable as before', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+    await settle();
+    const kind = Array.from(el.querySelectorAll('thead th')).find((th) =>
+      th.textContent?.includes('Kind'),
+    )!;
+    expect(kind.querySelector('button.sort')).not.toBeNull();
+  });
+
   it('sums the list up and builds its standfirst from the data', async () => {
     (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
     await settle();

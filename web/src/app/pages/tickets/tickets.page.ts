@@ -136,7 +136,9 @@ interface Group {
                   From strategies you follow
                   <span class="count">{{ waiting().length }}</span>
                 </h2>
-                <span class="head-note">Each ticket goes to your broker before the next open.</span>
+                <span class="head-note"
+                  >Each ticket goes to your broker in the window before the next open.</span
+                >
               </header>
               @for (group of groups(); track group.key) {
                 <section class="run" [attr.aria-labelledby]="'run-' + group.key">

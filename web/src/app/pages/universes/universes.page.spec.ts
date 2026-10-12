@@ -88,6 +88,9 @@ describe('UniversesPage', () => {
     // Changed after its last refresh: the members are behind.
     expect(list.textContent).toContain('Changed since');
     expect(el.querySelector('a[href="/data"]')).not.toBeNull();
+    // The Id column is back and sortable, as before the redesign.
+    const id = [...list.querySelectorAll('thead th')].find((th) => th.textContent?.includes('Id'))!;
+    expect(id.querySelector('button.sort')).not.toBeNull();
   });
 
   it('creates a universe from its fields and opens it', async () => {

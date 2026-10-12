@@ -41,6 +41,7 @@ import { NavState } from './nav';
             [routerLink]="item.path"
             [attr.aria-current]="state.isActive(item) ? 'page' : null"
             [attr.aria-label]="state.spoken(item)"
+            [attr.title]="state.hint(item) ? 'Shortcut: ' + state.hint(item) : null"
           >
             {{ item.label }}
             @if (state.badge(item); as n) {

@@ -68,6 +68,7 @@ export class UniversesPage {
 
   protected readonly columns: TableColumn<UniverseView>[] = [
     { key: 'name', label: 'Universe', value: (u) => u.name || u.id, mobile: 'title' },
+    { key: 'id', label: 'Id', mobile: 'hide', help: false },
     { key: 'kind', label: 'Kind', value: (u) => KIND_LABEL[u.kind], mobile: 'inline' },
     { key: 'member_count', label: 'Members', format: 'number', mobile: 'figure' },
     { key: 'refreshed_at', label: 'Last refresh', format: 'datetime' },

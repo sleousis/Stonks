@@ -96,6 +96,25 @@
   white-space: nowrap;
 }
 
+// The saved day stays visible text, as before the redesign.
+.screen-pill .pill-open {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.pill-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pill-when {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+}
+
 .screen-pill .pill-delete {
   justify-content: center;
   width: 30px;

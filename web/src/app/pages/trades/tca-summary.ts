@@ -94,6 +94,12 @@ const KEY_LABELS: Record<Grouping, string> = {
             message="Costs appear after the first filled order."
           />
         </div>
+        <!-- The shortfall line shows before the first trade too (old tca-summary.ts:50). -->
+        <p class="lead">
+          Shortfall is the gap between the price when the order was decided and the price actually
+          paid, fees included. Positive figures are costs. A negative figure means the price moved
+          in your favour.
+        </p>
       }
     </section>
 

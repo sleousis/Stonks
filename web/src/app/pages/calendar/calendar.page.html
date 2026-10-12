@@ -128,6 +128,14 @@
               <span class="count">{{ eventCount() }}</span>
             }
           </h2>
+          @if (tab() !== 'all') {
+            <app-segmented
+              label="View"
+              [options]="views"
+              [value]="view()"
+              (valueChange)="pickView($any($event))"
+            />
+          }
         </header>
         <div class="section-body">
           @if (!query()) {
@@ -178,6 +186,78 @@
                     title="Nothing coming up in these days"
                     [message]="emptyMessage()"
                   />
+                }
+              }
+            } @else if (tableView()) {
+              @let v = shown().value()!;
+              @switch (tab()) {
+                @case ('earnings') {
+                  <app-data-table
+                    caption="Earnings reports"
+                    [rows]="v.earnings"
+                    [columns]="earningsColumns"
+                    [rowKey]="earningsKey"
+                    [initialSort]="{ key: 'report_date', dir: 'asc' }"
+                    [pageSize]="50"
+                  >
+                    <ng-template appCell="ticker" [appCellOf]="v.earnings" let-e>
+                      <a class="ticker-link" [routerLink]="['/charts', e.ticker]">{{ e.ticker }}</a>
+                    </ng-template>
+                  </app-data-table>
+                }
+                @case ('dividends') {
+                  <app-data-table
+                    caption="Ex-dividend dates"
+                    [rows]="v.dividends"
+                    [columns]="dividendColumns"
+                    [rowKey]="dividendKey"
+                    [initialSort]="{ key: 'ex_date', dir: 'asc' }"
+                    [pageSize]="50"
+                  >
+                    <ng-template appCell="ticker" [appCellOf]="v.dividends" let-d>
+                      <a class="ticker-link" [routerLink]="['/charts', d.ticker]">{{ d.ticker }}</a>
+                    </ng-template>
+                  </app-data-table>
+                }
+                @case ('economic') {
+                  <app-data-table
+                    caption="Economic releases"
+                    [rows]="v.economic"
+                    [columns]="economicColumns"
+                    [rowKey]="economicKey"
+                    [initialSort]="{ key: 'event_time', dir: 'asc' }"
+                    [pageSize]="50"
+                  />
+                }
+                @case ('filings') {
+                  @let filings = v.filings ?? [];
+                  <app-data-table
+                    caption="SEC filings"
+                    [rows]="filings"
+                    [columns]="filingColumns"
+                    [rowKey]="filingKey"
+                    [initialSort]="{ key: 'accepted_at', dir: 'desc' }"
+                    [pageSize]="50"
+                  >
+                    <ng-template appCell="ticker" [appCellOf]="filings" let-f>
+                      <a class="ticker-link" [routerLink]="['/charts', f.ticker]">{{ f.ticker }}</a>
+                    </ng-template>
+                    <ng-template appCell="url" [appCellOf]="filings" let-f>
+                      @if (safeUrl(f.url); as href) {
+                        <a
+                          class="filing-link text-link"
+                          [href]="href"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          >Open on SEC<span class="visually-hidden">
+                            : {{ f.form }} of {{ f.ticker }}, opens in a new tab</span
+                          ></a
+                        >
+                      } @else {
+                        <span class="muted">No link</span>
+                      }
+                    </ng-template>
+                  </app-data-table>
                 }
               }
             } @else {

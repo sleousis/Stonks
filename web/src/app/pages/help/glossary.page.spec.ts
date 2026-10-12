@@ -61,6 +61,8 @@ describe('GlossaryPage', () => {
     expect(terms.length).toBeGreaterThan(0);
     expect(terms.length).toBeLessThan(METRIC_KEYS.length);
     expect(terms).toContain(GLOSSARY.max_drawdown.term);
+    // The five sentences stay while filtering, as before the redesign.
+    expect(el.querySelectorAll('.steps li').length).toBe(5);
   });
 
   it('says so when nothing matches', () => {

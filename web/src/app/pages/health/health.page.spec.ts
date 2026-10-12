@@ -115,6 +115,8 @@ describe('HealthPage', () => {
     const overall = el.querySelector('.overall')!;
     expect(overall.getAttribute('data-level')).toBe('warning');
     expect(overall.textContent).toContain('2 of 5 checks failed');
+    // The urgency words sit beside the headline again (old health.page.html:46).
+    expect(overall.querySelector('h2 .overall-count')?.textContent).toBe('Needs a look soon');
     expect(overall.textContent).toContain('needs a look soon');
     expect(overall.textContent).toContain('API 1.2.3');
   });

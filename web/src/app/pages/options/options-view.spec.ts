@@ -11,6 +11,7 @@ import {
   legText,
   paramLabel,
   payoffGeometry,
+  sortChainRows,
   splitTickers,
   structureLabel,
 } from './options-view';
@@ -43,6 +44,18 @@ describe('options view helpers', () => {
       'Open interest',
     ]);
     expect(puts.puts[0].show(CHAIN.rows[0])).not.toBe('');
+  });
+
+  it('sorts the chain by any column, as the old sortable table did', () => {
+    const { calls, puts } = chainLayout('both');
+    const cells = [...calls, ...puts];
+    const strikes = (rows: typeof CHAIN.rows) => rows.map((r) => r.strike);
+    expect(strikes(sortChainRows(CHAIN.rows, null, cells))).toEqual(strikes(CHAIN.rows));
+    const down = sortChainRows(CHAIN.rows, { key: 'strike', dir: 'desc' }, cells);
+    expect(strikes(down)).toEqual([...strikes(CHAIN.rows)].sort((a, b) => b - a));
+    const byBid = sortChainRows(CHAIN.rows, { key: 'call:bid', dir: 'desc' }, cells);
+    const bids = byBid.map((r) => r.call?.bid ?? null).filter((b): b is number => b !== null);
+    expect(bids).toEqual([...bids].sort((a, b) => b - a));
   });
 
   it('marks calls below the price and puts above it as in the money', () => {

@@ -161,3 +161,9 @@ app-page-header.kill-on {
 .past-note {
   padding-top: var(--space-4);
 }
+
+// Sort the active halts, as the old table's column headers could.
+.halt-sort {
+  max-width: 14rem;
+  margin-bottom: var(--space-3);
+}

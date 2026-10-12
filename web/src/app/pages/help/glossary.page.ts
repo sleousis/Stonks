@@ -61,37 +61,35 @@ import { PageHeader } from '../../shared/ui/page-header';
       </p>
     </div>
 
-    @if (!query().trim()) {
-      <!-- The product in five sentences (F21), in the words of docs/design/vocabulary.md. -->
-      <section class="page-section intro" aria-labelledby="how-title">
-        <div class="section-head">
-          <h2 id="how-title">How Stonks works</h2>
-        </div>
-        <ol class="steps">
-          <li>
-            Stonks runs <strong>strategies</strong>: rules that read prices after each close and
-            decide what to buy and sell.
-          </li>
-          <li>
-            You <strong>follow</strong> a strategy in one of your <strong>portfolios</strong>, first
-            as alerts only or on paper, so you see how it does without risk.
-          </li>
-          <li>
-            After enough paper days you may let it trade <strong>real money</strong> at your broker,
-            approving each trade yourself or letting it trade automatically, always within the
-            amount you set.
-          </li>
-          <li>
-            <strong>Today</strong> shows what your money is doing, what your strategies want next
-            and anything waiting for you.
-          </li>
-          <li>
-            If anything looks wrong, <strong>Stop trading</strong> at the top of every page stops
-            new orders at once, and nothing starts again until you say so.
-          </li>
-        </ol>
-      </section>
-    }
+    <!-- The product in five sentences (F21), in the words of docs/design/vocabulary.md. -->
+    <section class="page-section intro" aria-labelledby="how-title">
+      <div class="section-head">
+        <h2 id="how-title">How Stonks works</h2>
+      </div>
+      <ol class="steps">
+        <li>
+          Stonks runs <strong>strategies</strong>: rules that read prices after each close and
+          decide what to buy and sell.
+        </li>
+        <li>
+          You <strong>follow</strong> a strategy in one of your <strong>portfolios</strong>, first
+          as alerts only or on paper, so you see how it does without risk.
+        </li>
+        <li>
+          After enough paper days you may let it trade <strong>real money</strong> at your broker,
+          approving each trade yourself or letting it trade automatically, always within the amount
+          you set.
+        </li>
+        <li>
+          <strong>Today</strong> shows what your money is doing, what your strategies want next and
+          anything waiting for you.
+        </li>
+        <li>
+          If anything looks wrong, <strong>Stop trading</strong> at the top of every page stops new
+          orders at once, and nothing starts again until you say so.
+        </li>
+      </ol>
+    </section>
 
     @if (entries().length === 0) {
       <p class="empty callout" data-tone="neutral">

@@ -141,6 +141,17 @@ describe('OptionsPage', () => {
     const headers = [...chain.querySelectorAll('th')].map((th) => th.textContent!.trim());
     expect(headers).toContain('Call bid');
     expect(headers).toContain('Put delta');
+    // Every header sorts the chain; the strike order comes first.
+    const strikeHead = chain.querySelector('th.strike')!;
+    expect(strikeHead.getAttribute('aria-sort')).toBe('ascending');
+    const bid = [...chain.querySelectorAll('thead th')].find(
+      (th) => th.textContent!.trim() === 'Call bid',
+    )!;
+    bid.querySelector<HTMLButtonElement>('button.sort')!.click();
+    fixture.detectChanges();
+    expect(bid.getAttribute('aria-sort')).toBe('descending');
+    expect(strikeHead.getAttribute('aria-sort')).toBeNull();
+    expect(chain.querySelector('.spot-row')).toBeNull();
     expect(chain.textContent).toContain('Barone-Adesi Whaley (American)');
     expect(chainQueries).toEqual(['']);
   });

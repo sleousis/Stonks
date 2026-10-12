@@ -46,6 +46,16 @@
         message="Halts appear here when someone uses Stop trading, a circuit breaker trips, or health finds stale data."
       />
     } @else {
+      @if (active().length > 1) {
+        <div class="field halt-sort">
+          <label for="halt-sort">Sort by</label>
+          <select id="halt-sort" class="input" (change)="activeSort.set($any($event.target).value)">
+            @for (o of sortOptions; track o.value) {
+              <option [value]="o.value" [selected]="activeSort() === o.value">{{ o.label }}</option>
+            }
+          </select>
+        </div>
+      }
       <ul class="halt-list" aria-label="Active halts">
         @for (h of active(); track h.id) {
           <li class="halt" [attr.data-kind]="h.kind">

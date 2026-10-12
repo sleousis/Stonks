@@ -18,13 +18,13 @@
           <button
             type="button"
             class="pill-open"
-            [attr.aria-label]="'Open ' + s.name"
+            [attr.aria-label]="'Open ' + s.name + ', changed ' + day(s.updated_at)"
             [attr.aria-pressed]="open()?.id === s.id"
-            [title]="'Changed ' + day(s.updated_at)"
             [disabled]="!metrics.hasValue()"
             (click)="openScreen(s)"
           >
-            {{ s.name }}
+            <span class="pill-name">{{ s.name }}</span>
+            <span class="pill-when" aria-hidden="true">Changed {{ day(s.updated_at) }}</span>
           </button>
           <button
             type="button"

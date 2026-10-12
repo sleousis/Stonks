@@ -143,6 +143,11 @@ export class NavState {
     return item.path === TICKETS ? this.tickets.waiting() : 0;
   }
 
+  /** The go-to shortcut of an item, "g s", or null when it has none (old nav.ts:136). */
+  hint(item: NavItem): string | null {
+    return item.key ? `g ${item.key}` : null;
+  }
+
   /** The link's accessible name when it carries a badge, else null (its text). */
   spoken(item: NavItem): string | null {
     const n = this.badge(item);

@@ -53,6 +53,9 @@ export function aboveText(a: Breadth['above_50']): string {
             </div>
             <p class="split-labels num" aria-hidden="true">
               <span class="gain">{{ upWord() }}</span>
+              @if (ratio(); as r) {
+                <span class="ratio">{{ r }}</span>
+              }
               <span class="loss">{{ downWord() }}</span>
             </p>
             <p class="visually-hidden">{{ upDown() }}. {{ ratio() }}</p>
@@ -144,6 +147,10 @@ export function aboveText(a: Breadth['above_50']): string {
       justify-content: space-between;
       margin-top: calc(var(--space-2) * -1);
       font-size: var(--text-xs);
+    }
+    .ratio {
+      color: var(--muted);
+      text-align: center;
     }
     /* The four figures: a 2x2 grid on hairlines. */
     .figures {

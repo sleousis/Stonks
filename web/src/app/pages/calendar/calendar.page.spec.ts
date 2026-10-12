@@ -12,7 +12,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { isoDay } from '../../core/format/format';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { CalendarPage } from './calendar.page';
+import { CALENDAR_VIEW_KEY, CalendarPage } from './calendar.page';
 import { addDays } from './calendar-view';
 import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 
@@ -157,6 +157,34 @@ describe('CalendarPage', () => {
     // The tabs count each calendar.
     expect(radio(el, 'Earnings').textContent).toContain('(1)');
     expect(radio(el, 'Ex-dividend').textContent).toContain('(1)');
+  });
+
+  it('shows one kind as the sortable table it was, 50 a page (old calendar.page.ts:248)', async () => {
+    localStorage.removeItem(CALENDAR_VIEW_KEY);
+    const fixture = await render();
+    (await nextRequest(http, '/api/calendars')).flush(view());
+    await settle(fixture);
+    const el: HTMLElement = fixture.nativeElement;
+    radio(el, 'Economic').click();
+    fixture.detectChanges();
+    expect(el.querySelector('table')).toBeNull();
+    radio(el, 'Table').click();
+    fixture.detectChanges();
+    const heads = [...el.querySelectorAll('thead th')];
+    expect(heads.map((th) => th.textContent?.trim())).toEqual(
+      expect.arrayContaining(['Time', 'Release', 'Country', 'Importance']),
+    );
+    // Sortable column headers, first sorted by time.
+    expect(heads[0].querySelector('button.sort')).not.toBeNull();
+    expect(heads[0].getAttribute('aria-sort')).toBe('ascending');
+    expect(el.querySelectorAll('tbody tr').length).toBe(3);
+    expect(localStorage.getItem(CALENDAR_VIEW_KEY)).toBe('table');
+    // All stays the agenda.
+    radio(el, 'All').click();
+    fixture.detectChanges();
+    expect(el.querySelector('table')).toBeNull();
+    expect(el.querySelectorAll('.day-row').length).toBe(4);
+    localStorage.removeItem(CALENDAR_VIEW_KEY);
   });
 
   it('shows SEC filings of the last 30 days with a link to each document', async () => {

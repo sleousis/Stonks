@@ -33,7 +33,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
     mobile: 'figure',
     value: (f) => f.quantity * f.price,
   },
-  { key: 'fee', label: 'Fee', format: 'money', mobile: 'hide' },
+  { key: 'fee', label: 'Fee', format: 'money' },
   { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
   { key: 'order_client_id', label: 'Order', sortable: false, mobile: 'hide' },
   { key: 'filled_at', label: 'Filled', format: 'datetime' },

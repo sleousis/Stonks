@@ -40,7 +40,10 @@
   >
     <span class="glyph" aria-hidden="true"></span>
     <div class="overall-text">
-      <h2 id="overall-title"><span class="visually-hidden">Overall: </span>{{ headline() }}</h2>
+      <h2 id="overall-title">
+        <span class="visually-hidden">Overall: </span>{{ headline() }}
+        <span class="overall-count">{{ levelUrgency[level()] }}</span>
+      </h2>
       <p>{{ advice() }}</p>
     </div>
     @if (version.hasValue()) {

@@ -22,11 +22,11 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 const COLUMNS: TableColumn<DemoPositionView>[] = [
   { key: 'ticker', label: 'Ticker', mobile: 'title' },
   { key: 'name', label: 'Name', mobile: 'inline' },
-  { key: 'quantity', label: 'Shares', format: 'number', mobile: 'hide' },
-  { key: 'price', label: 'Price', format: 'money', mobile: 'hide' },
+  { key: 'quantity', label: 'Shares', format: 'number' },
+  { key: 'price', label: 'Price', format: 'money' },
   { key: 'value', label: 'Value', format: 'money', mobile: 'figure' },
-  { key: 'weight', label: 'Weight', format: 'percent', mobile: 'hide' },
-  { key: 'pnl', label: 'P&L', format: 'signedMoney', tone: true, mobile: 'hide' },
+  { key: 'weight', label: 'Weight', format: 'percent' },
+  { key: 'pnl', label: 'P&L', format: 'signedMoney', tone: true },
   { key: 'pnl_pct', label: 'Return', format: 'signedPercent', tone: true, mobile: 'figure' },
 ];
 

@@ -118,6 +118,17 @@ import { lastPreview } from './preview-memory';
             Stage now: {{ s }} <app-help-tip term="Portfolio stage" />
           }
         </p>
+        <!-- The steps done as a bar, as before the stage path (old going-live.page.ts:105). -->
+        <div
+          class="bar"
+          role="progressbar"
+          aria-label="Steps done"
+          aria-valuemin="0"
+          [attr.aria-valuemax]="total()"
+          [attr.aria-valuenow]="doneCount()"
+        >
+          <span [style.width.%]="total() ? (doneCount() / total()) * 100 : 0"></span>
+        </div>
       </div>
 
       @if (readError(); as err) {
@@ -290,6 +301,23 @@ import { lastPreview } from './preview-memory';
       color: var(--ink-2);
       font-size: var(--text-lead);
       overflow-wrap: anywhere;
+    }
+    .bar {
+      height: 6px;
+      border-radius: var(--r-pill);
+      background: var(--sunk);
+      overflow: hidden;
+    }
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--up);
+      transition: width var(--dur-menu) var(--ease-out);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bar span {
+        transition: none;
+      }
     }
     /* The gates: rows on a 2px ink rule, a hairline between. No box. */
     .steps {

@@ -68,6 +68,8 @@ describe('BreadthCard', () => {
     expect(text).toContain('300 of 500');
     // Rises against falls, as a split bar with words for screen readers.
     expect(el.querySelector('.split')?.getAttribute('aria-label')).toBe('320 up, 160 down');
+    // The up per down ratio is visible again (old breadth-card.ts:46).
+    expect(el.querySelector('.split-labels .ratio')?.textContent).toBe('2 up per down');
     expect(text).toContain('25 highs, 4 lows');
     expect(text).toContain('Distribution days');
     expect(text).toContain('Down days on heavy volume on SPY');

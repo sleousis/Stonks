@@ -3,6 +3,7 @@ import type { ComponentFixture } from '@angular/core/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { formatDate } from '../../core/format/format';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { JobsService } from '../../core/jobs/jobs.service';
@@ -82,7 +83,7 @@ describe('ScreenerPage', () => {
 
   /** A saved screen pill's button, found by its accessible name. */
   function labelled(root: HTMLElement, name: string): HTMLButtonElement {
-    const b = root.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+    const b = root.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
     if (!b) throw new Error(`no "${name}" button`);
     return b;
   }
@@ -263,6 +264,16 @@ describe('ScreenerPage', () => {
     update.flush({ ...SAVED, spec: { limit: 10 } });
     (await nextRequest(http, '/api/screener/screens')).flush(page([SAVED]));
     await settle(fixture);
+  });
+
+  it('shows the day a saved screen changed as visible text (old screener.page.html:322)', async () => {
+    const root = el(await render());
+    const pill = labelled(root, 'Open Cheap payers');
+    const when = `Changed ${formatDate(SAVED.updated_at)}`;
+    expect(pill.querySelector('.pill-when')?.textContent?.trim()).toBe(when);
+    expect(pill.getAttribute('aria-label')).toBe(
+      `Open Cheap payers, changed ${formatDate(SAVED.updated_at)}`,
+    );
   });
 
   it('opens a saved screen into the form', async () => {

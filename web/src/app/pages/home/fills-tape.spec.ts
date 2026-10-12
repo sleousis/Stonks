@@ -1,5 +1,5 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import type { FillView, OrderView } from '../../api/models';
@@ -65,8 +65,10 @@ describe('FillsTape', () => {
 
   afterEach(() => controller.verify());
 
+  let fixture: ComponentFixture<FillsTape>;
+
   async function render(fills: FillView[], orders: OrderView[]) {
-    const fixture = TestBed.createComponent(FillsTape);
+    fixture = TestBed.createComponent(FillsTape);
     TestBed.inject(HomeStore);
     fixture.detectChanges();
     (await nextRequest(controller, '/api/portfolios')).flush(
@@ -104,6 +106,13 @@ describe('FillsTape', () => {
     const el = await render(fills, []);
     expect(el.querySelectorAll('.run li')).toHaveLength(PHONE_FILLS + 2);
     expect(el.querySelectorAll('.run li.extra')).toHaveLength(2);
+    // Show more lists the rest on Today, as the old tape carried every fill.
+    const more = el.querySelector<HTMLButtonElement>('button.more')!;
+    expect(more.textContent?.trim()).toBe('Show 2 more');
+    more.click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.run li.extra')).toHaveLength(0);
+    expect(el.querySelector('button.more')).toBeNull();
   });
 
   it('says so when nothing filled this week', async () => {

@@ -3,7 +3,13 @@ import { RouterLink } from '@angular/router';
 
 import { SessionService } from '../../core/auth/session.service';
 import { dayChangeFrom, sessionPhrase } from '../../core/format/day-change';
-import { formatPercent, formatTime, formatWeekday, isoDay } from '../../core/format/format';
+import {
+  formatLongDay,
+  formatPercent,
+  formatTime,
+  formatWeekday,
+  isoDay,
+} from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextTradingRun } from '../../core/schedule/job-labels';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
@@ -84,7 +90,7 @@ export function standfirst(f: StandfirstFacts): string {
     BreadthCard,
   ],
   template: `
-    <app-page-header title="Today" [description]="standfirst()">
+    <app-page-header [title]="greeting()" [description]="dateLine()">
       <app-watchlist-filter actions class="show" ariaLabel="Show fills and signals for" />
     </app-page-header>
 
@@ -181,4 +187,15 @@ export class HomePage {
       nextRun,
     });
   });
+
+  /** "Hello, Ann", or Today when there is no name to greet. */
+  protected readonly greeting = computed(() => {
+    const name = this.session.me()?.display_name;
+    return name ? `Hello, ${name}` : 'Today';
+  });
+
+  /** "Monday 12 October" in the trader's locale, then the standfirst. */
+  protected readonly dateLine = computed(
+    () => `${formatLongDay(new Date())}. ${this.standfirst()}`,
+  );
 }

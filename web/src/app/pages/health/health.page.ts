@@ -37,6 +37,7 @@ import {
   type HealthLevel,
   LEVEL_LABEL,
   LEVEL_TONE,
+  LEVEL_URGENCY,
   checkLevel,
   checkMeaning,
   checkPill,
@@ -124,6 +125,8 @@ export class HealthPage {
 
   protected readonly levelTone = LEVEL_TONE;
   protected readonly levelLabel = LEVEL_LABEL;
+  /** How urgent the overall state is, beside the headline (old health.page.html:46). */
+  protected readonly levelUrgency = LEVEL_URGENCY;
   protected readonly checkTitle = checkTitle;
   protected readonly checkMeaning = checkMeaning;
   protected readonly checkPill = checkPill;

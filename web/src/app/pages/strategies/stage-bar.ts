@@ -237,17 +237,18 @@ interface NextStep {
       align-items: center;
       min-height: var(--touch-min);
     }
-    /* Phones: the four nodes stay on one track without detail lines: the
-       next step under the track says the same in a sentence. */
+    /* Phones: two by two, each stage keeping its detail line, as before the
+       redesign (old stage-bar.ts:219). The track runs only within a row. */
     @include bp.phone {
-      .stages li {
-        padding-right: var(--space-1);
+      .stages {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+      .stages li:nth-child(2n)::before {
+        display: none;
       }
       .stage-label {
         font-size: var(--text-sm);
-      }
-      .stage-detail {
-        display: none;
       }
       .next .btn {
         width: 100%;

@@ -76,8 +76,12 @@ import { WorkspaceIcon } from './workspace-icon';
                     [attr.aria-current]="state.isActive(item) ? 'page' : null"
                     [attr.aria-label]="state.spoken(item)"
                     (click)="close()"
-                    >{{ item.label }}</a
                   >
+                    {{ item.label }}
+                    @if (state.hint(item); as hint) {
+                      <kbd aria-hidden="true">{{ hint }}</kbd>
+                    }
+                  </a>
                 </li>
               }
             </ul>
@@ -180,6 +184,19 @@ import { WorkspaceIcon } from './workspace-icon';
       font-size: var(--text-sm);
       text-decoration: none;
     }
+    /* The go-to shortcut shows on hover and focus, never on touch (old nav.ts:290). */
+    .pages kbd {
+      margin-left: var(--space-1);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--muted);
+      opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease-out);
+    }
+    .pages a:hover kbd,
+    .pages a:focus-visible kbd {
+      opacity: 1;
+    }
     .pages a:hover,
     .pages a[aria-current='page'] {
       color: var(--ink);
@@ -206,10 +223,16 @@ import { WorkspaceIcon } from './workspace-icon';
       .pages a {
         min-height: var(--touch-min);
       }
+      .pages kbd {
+        display: none;
+      }
     }
     @include bp.coarse {
       .pages a {
         min-height: var(--touch-min);
+      }
+      .pages kbd {
+        display: none;
       }
     }
   `,

@@ -61,6 +61,34 @@ export function endedText(h: HaltView, meId: string | null, names?: ReadonlyMap<
   return h.cleared_at ? `${who}, ${formatDateTime(h.cleared_at)}` : who;
 }
 
+export type HaltSort = 'newest' | 'oldest' | 'kind' | 'scope' | 'stops';
+
+export const HALT_SORTS: readonly { value: HaltSort; label: string }[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'kind', label: 'Kind' },
+  { value: 'scope', label: 'Scope' },
+  { value: 'stops', label: 'What it stops' },
+];
+
+/** Orders halts the way the old sortable table could (old halts table, initialSort tripped_at desc). */
+export function sortHalts<H extends Pick<HaltView, 'kind' | 'halt' | 'tripped_at'>>(
+  rows: readonly H[],
+  by: HaltSort,
+  scope: (h: H) => string,
+): H[] {
+  const newest = (a: H, b: H) => Date.parse(b.tripped_at) - Date.parse(a.tripped_at);
+  const text = (f: (h: H) => string) => (a: H, b: H) => f(a).localeCompare(f(b)) || newest(a, b);
+  const cmp: Record<HaltSort, (a: H, b: H) => number> = {
+    newest,
+    oldest: (a, b) => -newest(a, b),
+    kind: text((h) => HALT_KIND_LABEL[h.kind] ?? h.kind),
+    scope: text(scope),
+    stops: text((h) => HALT_STOPS_LABEL[h.halt] ?? h.halt),
+  };
+  return [...rows].sort(cmp[by]);
+}
+
 /**
  * Halts stop new orders before they reach the broker. Shows the active
  * ones with their way out (resume a kill switch, clear the others), opens
@@ -112,9 +140,16 @@ export class HaltsPage {
 
   /** Every halt, cleared ones included; split into active and past below. */
   protected readonly halts = resource({ loader: () => this.api.list(true) });
-  protected readonly active = computed(() =>
-    this.halts.hasValue() ? this.halts.value().filter((h) => h.active) : [],
-  );
+  /**
+   * How the active halts are ordered. Newest first by default, as the old
+   * table's initial sort, and by kind, scope or what they stop on demand.
+   */
+  protected readonly activeSort = signal<HaltSort>('newest');
+  protected readonly sortOptions = HALT_SORTS;
+  protected readonly active = computed(() => {
+    const rows = this.halts.hasValue() ? this.halts.value().filter((h) => h.active) : [];
+    return sortHalts(rows, this.activeSort(), (h) => this.scopeText(h));
+  });
   protected readonly past = computed(() =>
     this.halts.hasValue() ? this.halts.value().filter((h) => !h.active) : [],
   );

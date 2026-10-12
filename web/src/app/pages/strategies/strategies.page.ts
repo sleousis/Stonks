@@ -201,6 +201,21 @@ export class StrategiesPage {
   });
 
   /**
+   * When the one read was cut off at FETCH_LIMIT, a picked status is read
+   * on its own, as before the redesign, so the cap counts per status and
+   * no strategy of that status goes missing.
+   */
+  protected readonly byStatus = resource({
+    params: () => {
+      const status = this.statusFilter();
+      if (!status || !this.strategies.hasValue()) return undefined;
+      const all = this.strategies.value();
+      return all.total > all.items.length ? { status } : undefined;
+    },
+    loader: ({ params }) => this.strategiesApi.list({ status: params.status, limit: FETCH_LIMIT }),
+  });
+
+  /**
    * Paper return, drawdown and days of every paper book. Its own read, so
    * the list still shows when it fails (the columns stay empty).
    */
@@ -263,7 +278,16 @@ export class StrategiesPage {
     const paper = this.paper.hasValue() ? this.paper.value().items : [];
     const curves = this.curves.hasValue() ? this.curves.value() : null;
     const following = this.following();
-    return withPerformance(this.strategies.value().items, paper).map((r) => ({
+    const status = this.statusFilter();
+    const own = this.byStatus.hasValue() ? this.byStatus.value() : null;
+    // The status read, while it answers for the picked status, adds the
+    // rows the cut-off read left out.
+    const items = this.strategies.value().items;
+    const merged =
+      own && status && own.items.every((s) => s.status === status)
+        ? [...items.filter((s) => s.status !== status), ...own.items]
+        : items;
+    return withPerformance(merged, paper).map((r) => ({
       ...r,
       curve: curves?.get(r.id) ?? null,
       following: following.get(r.id) ?? null,
@@ -357,6 +381,7 @@ export class StrategiesPage {
       help: false,
       value: (s) => s.following?.words ?? null,
     },
+    { key: 'kind', label: 'Kind', mobile: 'hide', help: false },
     { key: 'created_at', label: 'Added', format: 'date', mobile: 'hide' },
     { key: 'open', label: 'Open', sortable: false, mobile: 'hide', help: false },
   ];
@@ -370,6 +395,7 @@ export class StrategiesPage {
 
   protected refresh(): void {
     this.strategies.reload();
+    this.byStatus.reload();
     this.paper.reload();
     this.subscriptions.reload();
   }

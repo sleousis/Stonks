@@ -248,6 +248,16 @@ describe('SessionStrip', () => {
     expect(el.textContent).not.toMatch(/\btick\b/i);
   });
 
+  it('names the next run with its own job label (old session-strip.ts:207)', async () => {
+    vi.setSystemTime(Date.parse('2026-09-28T12:00:00Z'));
+    overview.mockResolvedValue({
+      ...schedule(),
+      jobs: [{ ...job('tick', '2026-09-28T16:45:00Z'), name: 'briefing_pre_open' }],
+    });
+    const el = await renderEl();
+    expect(el.querySelector('a.next .job')!.textContent).toBe('Morning briefing');
+  });
+
   it('keeps system jobs out of the trading-day spine, even for admins (p3)', async () => {
     me.set(ADMIN);
     vi.setSystemTime(Date.parse('2026-09-28T12:00:00Z'));

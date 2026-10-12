@@ -13,7 +13,7 @@ import { OrdersTabs } from './orders-tabs';
 
 /**
  * Orders and the trading runs that produce them. New order is a view tab,
- * so the header keeps Rebalance and the list's CSV. The header and view tabs
+ * so the header keeps Rebalance and the two CSV downloads. The header and view tabs
  * (shared with Trade costs) stay put; the child routes (orders, fills, runs,
  * runs/:id) render below and report their freshness to the header through
  * RefreshStatus. With no portfolio, Orders and Fills point at opening one.
@@ -41,12 +41,9 @@ import { OrdersTabs } from './orders-tabs';
       <ng-container ngProjectAs="[actions]">
         @if (book() !== 'none') {
           <a class="btn" routerLink="/orders/rebalance">Rebalance</a>
-          @if (exportKind(); as kind) {
-            @if (kind === 'orders') {
-              <app-export-button class="csv" kind="orders" label="Orders CSV" [ghost]="true" />
-            } @else {
-              <app-export-button class="csv" kind="fills" label="Fills CSV" [ghost]="true" />
-            }
+          @if (showExports()) {
+            <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
+            <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
           }
         }
       </ng-container>
@@ -62,17 +59,6 @@ import { OrdersTabs } from './orders-tabs';
       />
     } @else {
       <app-loading-state label="Loading your portfolios" [rows]="4" />
-    }
-  `,
-  styles: `
-    @use 'breakpoints' as bp;
-
-    /* Phones: Rebalance and the list's CSV share one row of the header grid. */
-    @include bp.phone {
-      /* Beats the header rule that spans a last even action. */
-      .csv.csv.csv.csv.csv.csv.csv {
-        grid-column: auto;
-      }
     }
   `,
 })
@@ -91,10 +77,12 @@ export class OrdersPage {
   );
   /** On the runs tab the CSV downloads give way to the runner. */
   protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
-  /** The CSV for the list on screen: orders on Orders, fills on Fills, none elsewhere. */
-  protected readonly exportKind = computed<'orders' | 'fills' | null>(() => {
+  /**
+   * Both CSV downloads on the orders and fills lists, as before the
+   * redesign: a trader on either list can take both files.
+   */
+  protected readonly showExports = computed(() => {
     const path = this.url().split(/[?#]/)[0];
-    if (path === '/orders') return 'orders';
-    return path.startsWith('/orders/fills') ? 'fills' : null;
+    return path === '/orders' || path.startsWith('/orders/fills');
   });
 }
