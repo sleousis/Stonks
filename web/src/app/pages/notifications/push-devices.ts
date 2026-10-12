@@ -136,7 +136,7 @@ export function isThisBrowser(
     .lead {
       max-width: 70ch;
       padding: var(--space-4) var(--space-4) var(--space-1);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .devices {
@@ -151,7 +151,7 @@ export function isThisBrowser(
       justify-content: space-between;
       gap: var(--space-2) var(--space-3);
       padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     li:last-child {
       border-bottom: 0;

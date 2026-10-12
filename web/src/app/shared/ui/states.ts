@@ -56,9 +56,9 @@ import { errorMessage } from '../../core/http/api-error';
         linear-gradient(
             90deg,
             transparent 0%,
-            var(--color-hover) 40%,
-            var(--color-pressed) 50%,
-            var(--color-hover) 60%,
+            var(--hover) 40%,
+            var(--pressed) 50%,
+            var(--hover) 60%,
             transparent 100%
           )
           0 0 / 200% 100% no-repeat,

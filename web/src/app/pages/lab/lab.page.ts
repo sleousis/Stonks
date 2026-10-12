@@ -49,7 +49,7 @@ import { testLabel } from '../../shared/lab-results/survival-tests';
 import { type LabRunForm, SUITES, formFromRequest, strategyTitle } from './lab-requests';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { SweepResult } from '../../shared/lab-results/sweep-result';
-import { ColumnsPicker, visibleColumns } from './columns-picker';
+import { ColumnsPicker, visibleColumns } from '../../shared/ui/columns-picker';
 import { LabNav } from './lab-nav';
 import { type StrategyPreset, presetFromStrategy, presetTickers } from './strategy-preset';
 import { WatchlistsService } from '../../api/watchlists.service';

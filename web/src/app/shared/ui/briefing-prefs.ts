@@ -81,7 +81,7 @@ export const BRIEFING_KINDS: readonly { value: Kind; label: string; help: string
       gap: var(--space-2);
     }
     .lead {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .switch {
       display: flex;
@@ -95,9 +95,9 @@ export const BRIEFING_KINDS: readonly { value: Kind; label: string; help: string
     }
     .note {
       padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
+      border-left: 3px solid var(--accent);
       border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
+      background: var(--accent-soft);
       font-size: var(--text-sm);
     }
   `,

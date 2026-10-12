@@ -159,10 +159,10 @@ interface Open {
     }
     .hint {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .hint.error {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .failure {
       overflow-wrap: anywhere;

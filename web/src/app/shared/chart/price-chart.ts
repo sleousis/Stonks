@@ -98,16 +98,16 @@ import { readChartTheme } from './chart-theme';
       min-height: 22px;
       margin-bottom: var(--space-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .time {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .ohlc {
       display: inline-flex;
       flex-wrap: wrap;
       gap: 0 var(--space-3);
-      color: var(--color-ink);
+      color: var(--ink);
     }
     .item {
       display: inline-flex;
@@ -115,34 +115,34 @@ import { readChartTheme } from './chart-theme';
       gap: 6px;
     }
     strong {
-      color: var(--color-ink);
+      color: var(--ink);
       font-weight: var(--weight-semibold);
     }
     .swatch {
       width: 10px;
       height: 3px;
       border-radius: var(--radius-xs);
-      background: var(--color-ink-3);
+      background: var(--muted);
     }
     .swatch[data-color='primary'] {
-      background: var(--color-primary);
+      background: var(--accent);
     }
     .swatch[data-color='info'] {
-      background: var(--color-info);
+      background: var(--accent);
     }
     .swatch[data-color='violet'] {
       background: var(--chart-violet);
     }
     .swatch[data-color='ink'] {
-      background: var(--color-ink-2);
+      background: var(--ink-2);
     }
     .failed {
       display: grid;
       gap: var(--space-2);
       padding: var(--space-4);
-      border: 1px dashed var(--color-border-strong);
+      border: 1px dashed var(--rule-control);
       border-radius: var(--radius-md);
-      background: var(--color-surface-2);
+      background: var(--sunk);
       font-size: var(--text-sm);
     }
     .plot {

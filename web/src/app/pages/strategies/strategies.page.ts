@@ -22,8 +22,8 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { DaysRing } from './days-ring';
-import { Sparkline } from './sparkline';
+import { DaysRing } from '../../shared/ui/days-ring';
+import { Sparkline } from '../../shared/chart/sparkline';
 import { STATUS_FILTERS, asStatus, strategyDisplayName, strategyKindName } from './strategy-format';
 
 /** Enough for any realistic registry; filters, search and paging then run in the browser. */

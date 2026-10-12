@@ -186,13 +186,13 @@ export function groupDecisions(items: TradeDecisionView[], showAll: boolean): De
       flex: none;
       padding: 2px var(--space-2);
       border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
+      background: var(--accent-soft);
       font-size: var(--text-sm);
     }
     .day {
       margin: var(--space-3) 0 var(--space-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .day:first-of-type {
       margin-top: 0;
@@ -202,7 +202,7 @@ export function groupDecisions(items: TradeDecisionView[], showAll: boolean): De
       min-height: var(--touch-min);
     }
     .chip[data-outcome='kept_out'] {
-      background: var(--color-warn-soft);
+      background: var(--warn-soft);
     }
   `,
 })

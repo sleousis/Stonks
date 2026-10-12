@@ -173,7 +173,7 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
     }
     .rule {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .controls {

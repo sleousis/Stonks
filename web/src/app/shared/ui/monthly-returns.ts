@@ -187,7 +187,7 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
       font-weight: var(--weight-semibold);
     }
     .year-total {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .year-total .total {
       padding: 0 var(--space-1);
@@ -206,11 +206,11 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
       gap: var(--space-2);
       padding: var(--space-2);
       border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      background: var(--sunk);
       font-size: var(--text-sm);
     }
     .year-months dt {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .year-months dd {
       margin: 0;
@@ -227,43 +227,43 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
     }
     th {
       padding: var(--space-1) var(--space-2);
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-weight: var(--weight-medium);
       text-align: right;
     }
     th[scope='row'] {
       text-align: left;
-      color: var(--color-ink);
+      color: var(--ink);
     }
     td {
       padding: var(--space-1) var(--space-2);
-      border: 1px solid var(--color-surface);
+      border: 1px solid var(--raise);
       text-align: right;
       white-space: nowrap;
     }
     .cell[data-tone='gain'],
     .total[data-tone='gain'] {
-      background: var(--color-gain-soft);
-      color: var(--color-gain);
+      background: var(--up-soft);
+      color: var(--up);
     }
     .cell[data-tone='loss'],
     .total[data-tone='loss'] {
-      background: var(--color-loss-soft);
-      color: var(--color-loss);
+      background: var(--down-soft);
+      color: var(--down);
     }
     .cell[data-tone='gain'][data-strength='2'] {
-      background: color-mix(in srgb, var(--color-gain) 22%, var(--color-gain-soft));
+      background: color-mix(in srgb, var(--up) 22%, var(--up-soft));
     }
     .cell[data-tone='gain'][data-strength='3'] {
-      background: color-mix(in srgb, var(--color-gain) 40%, var(--color-gain-soft));
-      color: var(--color-ink);
+      background: color-mix(in srgb, var(--up) 40%, var(--up-soft));
+      color: var(--ink);
     }
     .cell[data-tone='loss'][data-strength='2'] {
-      background: color-mix(in srgb, var(--color-loss) 22%, var(--color-loss-soft));
+      background: color-mix(in srgb, var(--down) 22%, var(--down-soft));
     }
     .cell[data-tone='loss'][data-strength='3'] {
-      background: color-mix(in srgb, var(--color-loss) 40%, var(--color-loss-soft));
-      color: var(--color-ink);
+      background: color-mix(in srgb, var(--down) 40%, var(--down-soft));
+      color: var(--ink);
     }
     .total {
       font-weight: var(--weight-semibold);

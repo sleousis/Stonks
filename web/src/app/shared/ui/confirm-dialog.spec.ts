@@ -80,6 +80,8 @@ describe('ConfirmDialog', () => {
     const values = [...ticket.querySelectorAll('dd')].map((d) => d.textContent?.trim());
     expect(values).toEqual(['AAPL.US', '10']);
     expect(ticket.querySelector('dd')?.classList).toContain('num');
+    expect(button('Place order').classList).toContain('btn-live');
+    expect(button('Place order').classList).not.toContain('btn-danger');
 
     button('Place order').click();
     await expect(answer).resolves.toBe(true);

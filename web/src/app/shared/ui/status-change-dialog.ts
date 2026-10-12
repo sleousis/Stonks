@@ -213,19 +213,19 @@ let nextId = 0;
   `,
   styles: `
     .note {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .golive {
       display: grid;
       gap: var(--space-2);
       padding: var(--space-3);
-      border-left: 3px solid var(--color-gain);
+      border-left: 3px solid var(--up);
       border-radius: var(--radius-sm);
-      background: var(--color-gain-soft);
+      background: var(--up-soft);
     }
     .golive.failed {
-      border-left-color: var(--color-loss);
-      background: var(--color-loss-soft);
+      border-left-color: var(--down);
+      background: var(--down-soft);
     }
     .golive-head {
       display: flex;
@@ -259,7 +259,7 @@ let nextId = 0;
       font-weight: var(--weight-semibold);
     }
     .check-detail {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .reason {
@@ -268,7 +268,7 @@ let nextId = 0;
       font: inherit;
     }
     .hint.error {
-      color: var(--color-loss);
+      color: var(--down);
     }
   `,
 })

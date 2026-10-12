@@ -1386,7 +1386,7 @@ flowchart LR
 - **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. Show picks All (the default: earnings, ex-dividend dates and economic releases together), one kind, Filings or News, and counts each. Events read as an agenda grouped by day (`groupByDay()` in `calendar-view.ts`): a sticky mono date row (Today, Tomorrow or Yesterday beside it), then one row per event with its time, a type chip (Earnings, Ex-dividend, Economic, Filing), the ticker or release, a meta line and its figures on the right. The filters sit in a 380px column on the right (first on phones and tablets). Countries shows on the All and Economic views. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. The Filings tab lists the SEC current reports (8-K) in `CalendarView.filings`: when filed, the ticker, the form, what it announces in words (`filingItemsLabel()`, "Item 5.02" when the name is unknown) and "Open on SEC" in a new tab, over http or https only. The link is 44px tall on phones. Filings are past events and follow named companies, so the empty state says to pick an earlier From date, or a narrower scope than Everything. Pure helpers live in `calendar-view.ts`.
 - **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a cell in a hairline strip (the 30-day score weighted by articles, in words, a shape and a signed number). Articles are rows: the age in mono on the left, the title, then the ticker tag, source and mood. They link out only over http or https, in a new tab.
 - **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
-- **Event alerts.** Alert settings has an Upcoming events row in the channel grid (where they reach you) and an Upcoming events panel with one switch per kind (earnings, dividends, economic releases) plus the economic release importance and countries. A kind switched off sends nothing, not even to the Feed.
+- **Event alerts.** Alert settings has an Upcoming events row in the channel grid (where they reach you) and an Upcoming events panel with one switch per kind (earnings, dividends, economic releases) plus the economic release importance and countries. A kind switched off sends nothing, not even to the Inbox.
 - **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
 - **Layout.** The builder is a 320px column on the left with the matches and screen alerts on the right (stacked on phones, the builder first). Screen alerts are rows: the screen and its state on the left, the When select on the right, and the new names found as ticker tags.
 - **Saved screens.** Your screens are filter pills above the builder, the open one filled with ink. A pill opens the screen ("Open <name>") and its small cross deletes it ("Delete <name>"). Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
@@ -1754,7 +1754,7 @@ and Resume, disconnecting a broker.
 
 ### Page pattern
 
-Some pages put it together like this. Insights has a summary strip, the money as a split bar plus a table, returns and risk as mono fact rows in a 380px side column, look-through as a table and the behaviour report as a summary strip, a What stands out callout and rows. Charts open on the last close as a headline figure, then one toolbar row (ticker search, range, what to draw) and the chart at full width with no box. Watchlists are an underline tab row, each list a table of last close, day change and a 60-day sparkline (`pages/watchlists/sparkline.ts`) with the new-list form in a side column. Universes have a summary strip and kind pills over the table, and a detail page with a facts strip and membership history first. Data opens on a summary of the last update and a warning band when updates had failed tickers, with Update data, Refresh and Universes in the header.
+Some pages put it together like this. Insights has a summary strip, the money as a split bar plus a table, returns and risk as mono fact rows in a 380px side column, look-through as a table and the behaviour report as a summary strip, a What stands out callout and rows. Charts open on the last close as a headline figure, then one toolbar row (ticker search, range, what to draw) and the chart at full width with no box. Watchlists are an underline tab row, each list a table of last close, day change and a 60-day sparkline (`shared/chart/sparkline.ts`, shared with Today and Strategies) with the new-list form in a side column. Universes have a summary strip and kind pills over the table, and a detail page with a facts strip and membership history first. Data opens on a summary of the last update and a warning band when updates had failed tickers, with Update data, Refresh and Universes in the header.
 
 
 - **Header** (`app-page-header`): the H1 (34px, 26 on phones), actions on
@@ -1848,9 +1848,8 @@ under `prefers-reduced-motion`.
 ### Tokens
 
 Tokens live in `styles/_tokens.scss`, always used via `var(--…)`. Light
-and dark each define every colour. The older `--color-*`, `--radius-*` and
-`--z-drawer` names stay as aliases of the new ones until every page has
-moved over; new code uses the new names.
+and dark each define every colour. The older `--color-*` names are gone.
+A few `--radius-*` and type aliases remain, and new code uses the new names.
 
 | Group | Tokens |
 |---|---|
@@ -1949,11 +1948,11 @@ automate it.
   its own live region (alert for errors, status otherwise). The table
   announces sort changes.
 - Colour pairs meet WCAG AA (4.5:1 text, 3:1 focus and UI) in both themes.
-  Checked for every text token on `bg`, `surface`, `surface-2`, `surface-3`
-  and each `-soft` background: all at least 4.5:1. Brass (`--color-live`)
+  Checked for every text token on `bg`, `raise`, `sunk` and `rule`
+  and each `-soft` background: all at least 4.5:1. Brass (`--brass`)
   is at least 4.5:1 on surfaces in both themes, so the LIVE stamp and a
-  live headline figure can be text. Text fields use `--color-control-border` (at least 3:1); buttons are
-  identified by their label, so they keep `--color-border-strong`.
+  live headline figure can be text. Text fields use `--rule-control` (at least 3:1); buttons are
+  identified by their label, so they keep `--rule-control` too.
 - Targets: 44px on phones and coarse pointers, at least 24px elsewhere (WCAG
   2.2, 2.5.8), including the help tip, whose button itself grows to 44px
   there (negative margins keep the line height). The sticky chrome bar and rail never

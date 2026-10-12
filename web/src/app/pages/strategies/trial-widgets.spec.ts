@@ -1,9 +1,9 @@
 import type { Type } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { DaysRing, TRIAL_DAYS_TARGET } from './days-ring';
-import { Sparkline, sparkPath } from './sparkline';
-import { METER_TICKS, TrialMeter } from './trial-meter';
+import { DaysRing, TRIAL_DAYS_TARGET } from '../../shared/ui/days-ring';
+import { Sparkline, sparkPath } from '../../shared/chart/sparkline';
+import { METER_TICKS, TrialMeter } from '../../shared/ui/trial-meter';
 import {
   bestReturn,
   followingByStrategy,

@@ -160,12 +160,12 @@ export function botLink(username: string | null | undefined): string | null {
     }
     .lead {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .hint {
       max-width: 70ch;
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-sm);
     }
     .steps {

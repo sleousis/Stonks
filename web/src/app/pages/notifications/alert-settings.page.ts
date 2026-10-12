@@ -107,7 +107,7 @@ import { TelegramLink } from './telegram-link';
     }
     .lead {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
   `,

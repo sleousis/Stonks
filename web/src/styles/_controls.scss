@@ -198,7 +198,7 @@ fieldset.group {
   padding: 0;
   border: 0;
 
-  > legend {
+  > legend:not(.visually-hidden) {
     display: block;
     width: 100%;
     margin-bottom: var(--space-4);

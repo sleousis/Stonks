@@ -93,7 +93,7 @@ let nextId = 0;
       border: 0;
       border-radius: 50%;
       background: none;
-      color: var(--color-ink-3);
+      color: var(--muted);
       cursor: help;
     }
     /* Phones and touch screens: padding grows the hit box to 44px (M12)
@@ -108,22 +108,22 @@ let nextId = 0;
     }
     .trigger:hover,
     .trigger[aria-expanded='true'] {
-      color: var(--color-ink);
+      color: var(--ink);
     }
     .panel-tip:popover-open {
       display: block;
     }
     .panel-tip {
       position: fixed;
-      z-index: var(--z-overlay);
+      z-index: var(--z-sheet);
       inset: auto;
       margin: 0;
       width: min(300px, calc(100vw - 32px));
       padding: var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border-strong);
+      border: 1px solid var(--rule-control);
       border-radius: var(--radius-md);
-      background: var(--color-surface);
-      color: var(--color-ink);
+      background: var(--raise);
+      color: var(--ink);
       box-shadow: var(--shadow-overlay);
       font-size: var(--text-sm);
       font-weight: var(--weight-regular);
@@ -140,12 +140,12 @@ let nextId = 0;
     }
     .text {
       margin-top: var(--space-1);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .more {
       display: inline-block;
       margin-top: var(--space-2);
-      color: var(--color-link);
+      color: var(--accent);
     }
   `,
 })

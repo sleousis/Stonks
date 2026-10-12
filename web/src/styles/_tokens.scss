@@ -14,10 +14,8 @@
 // user has not forced light (`html[data-theme='light']`), or when the user
 // forces dark (`html[data-theme='dark']`). ThemeService sets the attribute.
 //
-// Older names (`--color-*`, `--radius-*`, ...) stay below as aliases of the
-// new ones, so pages that are not migrated yet still render. Page batches
-// move to the new names. The last batch removes the aliases once grep shows
-// no use. See docs/ui.md ("Tokens") for the map.
+// A few older names (`--radius-*`, type sizes) stay below as aliases of the
+// new ones. The `--color-*` aliases are gone. See docs/ui.md ("Tokens").
 
 :root {
   color-scheme: light;
@@ -149,6 +147,8 @@
   --chrome-ink: #e8ebf0;
   --chrome-muted: #9aa3b1;
   --chrome-accent: #8d9bff;
+  // The brand mark and avatars on the chrome bar. Same in both themes.
+  --brand: #4f61ff;
   --chrome-stop: #ff8a8a;
   --chrome-stop-line: #c4434a;
 
@@ -175,60 +175,10 @@
   --dur: 200ms;
   --dur-slow: 420ms;
   --tape-speed: 40s;
-  --ease: var(--ease-out);
-  --z-drawer: var(--z-sheet);
-  --z-overlay: var(--z-sheet);
 
-  --color-bg: var(--bg);
-  --color-surface: var(--raise);
-  --color-surface-2: var(--sunk);
-  --color-surface-3: var(--rule);
-  --color-border: var(--rule);
-  --color-border-strong: var(--rule-control);
-  --color-control-border: var(--rule-control);
-  --color-ink: var(--ink);
-  --color-ink-2: var(--ink-2);
-  --color-ink-3: var(--muted);
-  --color-primary: var(--accent);
-  --color-primary-ink: var(--on-accent);
-  --color-primary-hover: color-mix(in srgb, var(--accent) 86%, var(--ink));
-  --color-primary-soft: var(--accent-soft);
-  --color-link: var(--accent);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-live: var(--brass);
-  --color-live-ink: var(--on-brass);
-  --color-live-soft: var(--brass-soft);
-  --color-paper: var(--ink-2);
-  --color-paper-soft: var(--sunk);
-  --color-gain: var(--up);
-  --color-gain-soft: var(--up-soft);
-  --color-loss: var(--down);
-  --color-loss-soft: var(--down-soft);
-  --color-loss-ink: var(--on-down);
-  --color-warn: var(--warn);
-  --color-warn-soft: var(--warn-soft);
-  --color-info: var(--accent);
-  --color-info-soft: var(--accent-soft);
-  --color-neutral-soft: var(--sunk);
-  --color-focus: var(--accent);
-  --color-scrim: var(--scrim);
-  --color-hover: color-mix(in srgb, var(--ink) 5%, transparent);
-  --color-pressed: color-mix(in srgb, var(--ink) 9%, transparent);
-  --color-rail: var(--chrome);
-  --color-rail-2: var(--chrome-2);
-  --color-rail-ink: var(--chrome-ink);
-  --color-rail-ink-2: var(--chrome-muted);
-  --color-rail-accent: var(--chrome-accent);
-  --color-slab: var(--ink);
-  --color-slab-ink: var(--bg);
-  --color-brass: var(--brass);
-  --color-brass-soft: var(--brass-soft);
-  --shadow-0: none;
-  --shadow-1: none;
-  --shadow-2: var(--shadow-overlay);
-  --shadow-ticket: none;
-  --ring-live: 0 0 0 2px var(--brass-fill);
+  // Row and control hover and press washes.
+  --hover: color-mix(in srgb, var(--ink) 5%, transparent);
+  --pressed: color-mix(in srgb, var(--ink) 9%, transparent);
 
   // Chart palette (read by the chart engine at runtime)
   --chart-line: var(--accent);
@@ -273,8 +223,8 @@
   --chrome-2: #12151b;
   --chrome-rule: #1d222b;
   --shadow-overlay: inset 0 0 0 1px rgb(255 255 255 / 4%), 0 20px 48px -12px rgb(0 0 0 / 65%);
-  --color-hover: color-mix(in srgb, var(--ink) 6%, transparent);
-  --color-pressed: color-mix(in srgb, var(--ink) 10%, transparent);
+  --hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --pressed: color-mix(in srgb, var(--ink) 10%, transparent);
   --chart-violet: #b9a0e8;
 }
 

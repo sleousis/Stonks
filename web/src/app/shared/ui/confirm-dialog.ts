@@ -65,8 +65,9 @@ import { SideTag } from './side-tag';
             <button
               type="submit"
               class="btn"
-              [class.btn-danger]="req.tone === 'danger'"
-              [class.btn-primary]="req.tone !== 'danger'"
+              [class.btn-live]="liveOrder()"
+              [class.btn-danger]="!liveOrder() && req.tone === 'danger'"
+              [class.btn-primary]="!liveOrder() && req.tone !== 'danger'"
               [disabled]="!canConfirm()"
             >
               {{ req.confirmLabel }}
@@ -85,6 +86,12 @@ export class ConfirmDialog {
   protected readonly canConfirm = computed(() => {
     const req = this.request();
     return !!req && typedMatches(req.typedConfirmation, this.typed());
+  });
+
+  /** A real-money order (a live ticket with a side): the brass confirm, never red. */
+  protected readonly liveOrder = computed(() => {
+    const t = this.request()?.ticket;
+    return !!t && t.live && !!t.side;
   });
 
   protected answer(confirmed: boolean): void {

@@ -25,7 +25,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { TrialMeter } from '../strategies/trial-meter';
+import { TrialMeter } from '../../shared/ui/trial-meter';
 import { type ShadowComparison, compareToReal, comparisonSeries } from './shadow-compare';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 

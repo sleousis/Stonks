@@ -8,6 +8,9 @@ import {
   model,
 } from '@angular/core';
 
+/** Labels up to this long (1W, 3M, All) fit five to a phone row. */
+const SHORT_LABEL = 4;
+
 export interface SegmentOption<T extends string = string> {
   value: T;
   label: string;
@@ -27,6 +30,7 @@ export interface SegmentOption<T extends string = string> {
  *
  * On phones, more than three options form an equal two-column grid (a last
  * odd option takes the whole row), so no option is left alone on a line.
+ * Short labels (a chart range: 1W, 1M, 3M, 1Y, All) stay on one row.
  */
 @Component({
   selector: 'app-segmented',
@@ -37,7 +41,7 @@ export interface SegmentOption<T extends string = string> {
       role="radiogroup"
       [attr.aria-label]="label()"
       [attr.data-emphasis]="emphasis()"
-      [attr.data-many]="options().length > 3 ? '' : null"
+      [attr.data-many]="wraps() ? '' : null"
     >
       @for (o of options(); track o.value; let i = $index) {
         <button
@@ -142,6 +146,12 @@ export class Segmented<T extends string = string> {
   readonly emphasis = input<'subtle' | 'strong'>('subtle');
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** On phones: a two-column grid for four or more options, unless every label is short. */
+  protected readonly wraps = computed(() => {
+    const opts = this.options();
+    return opts.length > 3 && opts.some((o) => o.label.length > SHORT_LABEL);
+  });
 
   /** The picked option takes the tab stop; the first one when none is picked. */
   protected readonly focusIndex = computed(() =>

@@ -150,15 +150,7 @@
   overflow-wrap: anywhere;
 }
 
-// The global field-group legend (2px rule, full width) must not touch the
-// hidden legend of a condition group.
+// Keeps the hidden legend of a condition group inside its fieldset.
 fieldset.group {
   position: relative;
-}
-
-fieldset.group > legend.visually-hidden {
-  width: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
 }

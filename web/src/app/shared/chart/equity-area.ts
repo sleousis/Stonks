@@ -1,6 +1,20 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-import { linePath } from './sparkline';
+/** The SVG path of a line through `values`, scaled to a `w` by `h` box. */
+export function linePath(values: readonly number[], w: number, h: number, pad = 2): string {
+  if (values.length < 2) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const step = w / (values.length - 1);
+  return values
+    .map((v, i) => {
+      const x = i * step;
+      const y = pad + (h - 2 * pad) * (1 - (v - min) / span);
+      return `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(' ');
+}
 
 export interface EquityPoint {
   day: string;

@@ -59,17 +59,17 @@ import { ErrorState } from '../../shared/ui/states';
     /* Sums in one divided strip: the page's one headline figure stays in My portfolio. */
     .tiles {
       grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     .line {
       margin: 0;
       padding: 0 var(--space-1);
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .hint {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

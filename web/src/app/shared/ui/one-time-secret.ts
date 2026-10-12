@@ -54,10 +54,10 @@ import { copyText, downloadText } from './copy-button';
       display: grid;
       gap: var(--space-3);
       padding: var(--space-4);
-      border: 1px solid var(--color-border-strong);
-      border-left: 3px solid var(--color-warn);
+      border: 1px solid var(--rule-control);
+      border-left: 3px solid var(--warn);
       border-radius: var(--radius-md);
-      background: var(--color-warn-soft);
+      background: var(--warn-soft);
       min-width: 0;
     }
     .warn {
@@ -69,7 +69,7 @@ import { copyText, downloadText } from './copy-button';
       overflow-wrap: anywhere;
       padding: var(--space-2) var(--space-3);
       border-radius: var(--radius-sm);
-      background: var(--color-surface);
+      background: var(--raise);
       font-size: var(--text-md);
       user-select: all;
     }

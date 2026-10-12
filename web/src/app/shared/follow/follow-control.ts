@@ -222,10 +222,10 @@ let nextId = 0;
     .help,
     .why {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .why {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .note {
       padding: var(--space-2) var(--space-3);

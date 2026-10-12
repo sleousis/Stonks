@@ -16,7 +16,7 @@ import { brokerName, isRealMoneyBroker } from '../../shared/governance';
 import { rowStrategyName, strategyKindName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { StatTile } from '../../shared/ui/stat-tile';
-import { DaysRing } from '../strategies/days-ring';
+import { DaysRing } from '../../shared/ui/days-ring';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';

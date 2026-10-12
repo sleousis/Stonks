@@ -122,8 +122,8 @@ export class JobResult<T> {
       display: grid;
       gap: var(--space-2);
       padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-border);
-      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--rule);
+      background: var(--sunk);
     }
     .job-line {
       display: flex;
@@ -140,7 +140,7 @@ export class JobResult<T> {
     .job-message {
       min-width: 0;
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     progress {
@@ -150,17 +150,17 @@ export class JobResult<T> {
       border: 0;
       border-radius: var(--radius-pill);
       overflow: hidden;
-      background: var(--color-surface-3);
-      accent-color: var(--color-accent);
+      background: var(--rule);
+      accent-color: var(--accent);
     }
     progress::-webkit-progress-bar {
-      background: var(--color-surface-3);
+      background: var(--rule);
     }
     progress::-webkit-progress-value {
-      background: var(--color-accent);
+      background: var(--accent);
     }
     progress::-moz-progress-bar {
-      background: var(--color-accent);
+      background: var(--accent);
     }
   `,
 })

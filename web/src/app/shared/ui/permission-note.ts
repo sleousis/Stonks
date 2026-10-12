@@ -35,7 +35,7 @@ import type { Permission } from '../../core/auth/permissions';
       gap: var(--space-1);
       margin: var(--space-1) 0 0;
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     svg {
       flex: none;

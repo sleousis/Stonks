@@ -37,7 +37,7 @@ import { WatchlistContextService } from '../../core/watchlists/watchlist-context
       max-width: 100%;
     }
     .label {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       white-space: nowrap;
     }

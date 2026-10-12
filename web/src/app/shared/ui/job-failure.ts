@@ -36,11 +36,11 @@ import { SessionService } from '../../core/auth/session.service';
     .error {
       margin: 0;
       font-size: var(--text-sm);
-      color: var(--color-loss);
+      color: var(--down);
     }
     .job-error-details {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     summary {
       display: flex;

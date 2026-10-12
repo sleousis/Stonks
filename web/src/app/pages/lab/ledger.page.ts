@@ -21,7 +21,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { robustnessWords } from '../../shared/lab-results/robustness';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { ColumnsPicker, visibleColumns } from './columns-picker';
+import { ColumnsPicker, visibleColumns } from '../../shared/ui/columns-picker';
 import { LabNav } from './lab-nav';
 import { strategyTitle } from './lab-requests';
 

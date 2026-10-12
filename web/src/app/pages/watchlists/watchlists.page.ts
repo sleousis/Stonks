@@ -23,7 +23,7 @@ import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { parseTickerText } from '../welcome/welcome-steps';
-import { Sparkline } from './sparkline';
+import { Sparkline } from '../../shared/chart/sparkline';
 
 /** A ticker's last close, its day change and the last 60 closes. */
 export interface TickerQuote {

@@ -18,7 +18,7 @@ import { NoBook } from '../../shared/ui/no-book';
 import { isReadOnly } from '../../shared/ui/portfolio-picker';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
-import { type EquityPoint, EquityArea } from './equity-area';
+import { type EquityPoint, EquityArea } from '../../shared/chart/equity-area';
 import { HomeStore } from './home-store';
 
 /** A yearly rate means little before about three months of history (NB-14). */
@@ -261,12 +261,6 @@ export function splitMoney(text: string): [string, string] {
 
       @include bp.phone {
         justify-self: stretch;
-      }
-    }
-    /* The range labels are short: all five stay on one line on a phone. */
-    @include bp.phone {
-      .range ::ng-deep .segmented[data-many] {
-        display: flex;
       }
     }
     /* Facts: rows on hairlines, then the paper-days meter. */

@@ -113,7 +113,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
       margin: 0;
       padding: 0;
       list-style: none;
-      transition: opacity var(--dur) var(--ease);
+      transition: opacity var(--dur) var(--ease-out);
     }
     .alerts.busy {
       opacity: 0.55;
@@ -122,7 +122,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
       display: grid;
       gap: var(--space-1);
       padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
       min-width: 0;
     }
     .top {
@@ -140,7 +140,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
       overflow-wrap: anywhere;
     }
     .message {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }

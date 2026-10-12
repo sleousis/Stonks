@@ -98,28 +98,28 @@ import { StatusPill } from './status-pill';
       gap: var(--space-3);
     }
     .lead {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       max-width: 70ch;
     }
     .note {
       padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
+      border-left: 3px solid var(--accent);
       border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
+      background: var(--accent-soft);
       font-size: var(--text-sm);
     }
     .note.ok {
-      border-left-color: var(--color-gain);
-      background: var(--color-gain-soft);
+      border-left-color: var(--up);
+      background: var(--up-soft);
     }
     .note.error {
-      border-left-color: var(--color-loss);
-      background: var(--color-loss-soft);
+      border-left-color: var(--down);
+      background: var(--down-soft);
     }
     .hint {
       margin-top: calc(-1 * var(--space-2));
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

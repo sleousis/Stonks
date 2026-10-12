@@ -12,7 +12,7 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { HomeStore } from './home-store';
-import { Sparkline } from './sparkline';
+import { Sparkline } from '../../shared/chart/sparkline';
 
 interface Row {
   sub: SubscriptionView;
