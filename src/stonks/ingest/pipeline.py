@@ -34,6 +34,7 @@ from stonks.ingest.quality import (
     splits_frame,
 )
 from stonks.ingest.redact import format_exception
+from stonks.ingest.reference_schemas import TreasuryCurve
 from stonks.ingest.schemas import (
     DefiTvlRow,
     FinancialStatementsBundle,
@@ -65,6 +66,9 @@ _PRICE_COLUMNS = ("open", "high", "low", "close")
 #: The calendars :meth:`IngestPipeline.run_calendars` can pull.
 CalendarKind = Literal["earnings", "dividends", "economic"]
 CALENDAR_KINDS: tuple[CalendarKind, ...] = ("earnings", "dividends", "economic")
+#: The market-wide listing calendars (lake migration 026).
+ListingCalendarKind = Literal["ipos", "splits"]
+LISTING_CALENDAR_KINDS: tuple[ListingCalendarKind, ...] = ("ipos", "splits")
 
 
 @dataclass(frozen=True)
@@ -361,6 +365,130 @@ class IngestPipeline:
             kind="calendars",
             event="calendar",
             units=[({"ticker": k, "calendar": k}, work[k]) for k in kinds],
+        )
+
+    # ---- reference data (lake migration 026) --------------------------------------
+
+    def run_index_components(self, codes: Sequence[str], as_of: date) -> IngestRunResult:
+        """Pull each index's members on ``as_of`` and its dated changes into
+        ``index_constituent_snapshots`` and ``index_constituent_changes``,
+        so a stored index universe can rebuild membership on any past day.
+        One index (the source's code) is one unit."""
+        from stonks.universes.base import IndexChange, IndexHistory
+        from stonks.universes.store import UniverseStore
+
+        store = UniverseStore(self._lake)
+        sid = self._source.source_id
+
+        def ingest(code: str) -> dict[str, Any]:
+            row = self._source.fetch_index_components(code, as_of)
+            if row.members or row.changes:
+                store.save_index_history(
+                    IndexHistory(
+                        index_id=row.index_id,
+                        as_of=row.as_of if row.members else None,
+                        constituents=row.members,
+                        changes=tuple(
+                            IndexChange(c.ticker, c.change_date, c.action) for c in row.changes
+                        ),
+                        source=sid,
+                    )
+                )
+            return {"index_id": row.index_id, "rows": len(row.members) + len(row.changes)}
+
+        return self._run_units(
+            kind="index_components",
+            event="index",
+            units=[({"ticker": c, "index": c}, partial(ingest, c)) for c in codes],
+        )
+
+    def run_exchange_details(
+        self, exchanges: Sequence[str], start: date, end: date
+    ) -> IngestRunResult:
+        """Pull each exchange's trading hours, time zone and the holidays
+        from ``start`` to ``end`` into ``exchange_details`` and
+        ``exchange_holidays``. One exchange is one unit."""
+        from stonks.store.reference import ReferenceStore
+
+        store = ReferenceStore(self._lake)
+        sid = self._source.source_id
+
+        def ingest(exchange: str) -> dict[str, Any]:
+            row = self._source.fetch_exchange_details(exchange, start, end)
+            store.upsert_exchange_details([row], source=sid)
+            return {"rows": 1 + len(row.holidays)}
+
+        return self._run_units(
+            kind="exchange_details",
+            event="exchange",
+            units=[({"ticker": e, "exchange": e}, partial(ingest, e)) for e in exchanges],
+        )
+
+    def run_treasury_rates(self, units: Sequence[tuple[TreasuryCurve, int]]) -> IngestRunResult:
+        """Pull US Treasury rates per ``(curve, year)`` into
+        ``treasury_rates`` with their versions. One curve-year is one unit."""
+        from stonks.store.reference import ReferenceStore
+
+        store = ReferenceStore(self._lake)
+        sid = self._source.source_id
+
+        def ingest(curve: TreasuryCurve, year: int) -> dict[str, Any]:
+            rows = list(self._source.fetch_treasury_rates(curve, year))
+            return {"rows": store.upsert_treasury_rates(rows, source=sid)}
+
+        return self._run_units(
+            kind="treasury",
+            event="curve",
+            units=[
+                ({"ticker": f"{c}:{y}", "curve": c, "year": y}, partial(ingest, c, y))
+                for c, y in units
+            ],
+        )
+
+    def run_listing_calendars(
+        self,
+        start: date,
+        end: date,
+        *,
+        kinds: Sequence[ListingCalendarKind] = LISTING_CALENDAR_KINDS,
+    ) -> IngestRunResult:
+        """Pull the IPO and split calendars dated ``start`` to ``end`` into
+        ``ipo_calendar`` and ``split_calendar``. Each calendar is one unit."""
+        from stonks.store.reference import ReferenceStore
+
+        store = ReferenceStore(self._lake)
+        sid = self._source.source_id
+
+        def ipos() -> dict[str, Any]:
+            rows = list(self._source.fetch_ipo_calendar(start, end))
+            return {"rows": store.upsert_ipos(rows, source=sid)}
+
+        def splits() -> dict[str, Any]:
+            rows = list(self._source.fetch_split_calendar(start, end))
+            return {"rows": store.upsert_splits(rows, source=sid)}
+
+        work = {"ipos": ipos, "splits": splits}
+        return self._run_units(
+            kind="listing_calendars",
+            event="calendar",
+            units=[({"ticker": k, "calendar": k}, work[k]) for k in kinds],
+        )
+
+    def run_identifiers(self, exchange: str, offset: int, limit: int) -> IngestRunResult:
+        """Pull one page of an exchange's identifiers (ISIN, CUSIP, CIK,
+        FIGI, LEI) onto the instruments the lake has. One page is one unit."""
+        from stonks.store.reference import ReferenceStore
+
+        store = ReferenceStore(self._lake)
+
+        def ingest() -> dict[str, Any]:
+            page = self._source.fetch_identifiers(exchange, offset, limit)
+            return {"rows": store.update_identifiers(list(page.rows))}
+
+        return self._run_units(
+            kind="identifiers",
+            event="page",
+            units=[({"ticker": f"{exchange}:{offset}", "exchange": exchange}, ingest)],
         )
 
     # ---- regulatory filings (roadmap 23.13) ---------------------------------------

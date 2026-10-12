@@ -118,6 +118,9 @@ class DefiLlamaSourceConfig(BaseModel):
     timeout_seconds: int = 30
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
+    #: Least time between two requests, so a backfill over every chain
+    #: stays polite to the free host.
+    min_request_interval_seconds: float = Field(default=0.5, ge=0.0, le=60.0)
 
 
 class IbkrBorrowSourceConfig(BaseModel):

@@ -30,6 +30,11 @@ def test_phases_run_in_the_documented_order():
         "daily_topup",
         "actions",
         "fundamentals",
+        "index_constituents",
+        "exchange_details",
+        "treasury",
+        "calendar_extra",
+        "id_mapping",
         "calendars",
         "macro",
         "fx",
@@ -37,7 +42,15 @@ def test_phases_run_in_the_documented_order():
         "intraday_1h",
         "intraday_5m",
         "intraday_1m",
+        "edgar",
+        "borrow",
+        "tvl",
     ]
+
+
+def test_only_the_free_source_phases_are_unmetered():
+    free = {p.phase_id for p in all_phases() if not p.metered}
+    assert free == {"edgar", "borrow", "tvl"}
 
 
 def test_select_phases_keeps_run_order_and_rejects_unknown_ids():

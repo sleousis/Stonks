@@ -26,6 +26,15 @@ from stonks.ingest.metadata_bundle import (
     MetadataBundle,
 )
 from stonks.ingest.option_schemas import OptionQuoteRow
+from stonks.ingest.reference_schemas import (
+    ExchangeDetailsRow,
+    IdentifierPage,
+    IndexComponentsRow,
+    IpoEventRow,
+    SplitEventRow,
+    TreasuryCurve,
+    TreasuryRateRow,
+)
 from stonks.ingest.schemas import (
     BorrowRateRow,
     DefiTvlRow,
@@ -53,6 +62,18 @@ class DataSourceError(RuntimeError):
 class QuotaExceededError(DataSourceError):
     """The vendor refused a request because the account used its allowance
     for the day. Retrying before the vendor's reset only fails again."""
+
+
+class UnknownSymbolError(DataSourceError):
+    """The source does not know this ticker or filer at all. Asking again
+    gives the same answer, so a backfill marks the unit done with nothing
+    stored, like an HTTP 404."""
+
+
+class RateLimitedError(DataSourceError):
+    """The source refused requests for going too fast (after its own
+    retries). Not the unit's fault: a backfill pauses and asks again later,
+    with no attempt counted."""
 
 
 class UnsupportedCapabilityError(DataSourceError):
@@ -322,6 +343,54 @@ class DataSource(ABC):
         ``countries`` (ISO alpha-2) or every country (``None``)."""
         del start, end, countries
         raise UnsupportedCapabilityError(f"{self.source_id} does not serve economic events")
+
+    # ---- reference data (lake migration 026) -----------------------------------
+    # Optional capabilities: the defaults raise UnsupportedCapabilityError.
+
+    def fetch_index_components(self, index_code: str, as_of: date) -> IndexComponentsRow:
+        """An index's members on ``as_of`` plus every dated change the
+        source knows (``index_code`` is the source's own code)."""
+        del as_of
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve index members ({index_code!r})"
+        )
+
+    def fetch_exchange_details(self, exchange: str, start: date, end: date) -> ExchangeDetailsRow:
+        """One exchange's trading hours, time zone, and the holidays from
+        ``start`` to ``end``."""
+        del start, end
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve exchange details ({exchange!r})"
+        )
+
+    def fetch_treasury_rates(self, curve: TreasuryCurve, year: int) -> Iterable[TreasuryRateRow]:
+        """Every US Treasury rate of ``curve`` in ``year``."""
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve Treasury rates ({curve} {year})"
+        )
+
+    def fetch_ipo_calendar(self, start: date, end: date) -> Iterable[IpoEventRow]:
+        """IPOs listing (or expected to list) ``start`` to ``end``."""
+        del start, end
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve an IPO calendar")
+
+    def fetch_split_calendar(self, start: date, end: date) -> Iterable[SplitEventRow]:
+        """Share splits dated ``start`` to ``end``, the whole market."""
+        del start, end
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve a split calendar")
+
+    def fetch_identifiers(self, exchange: str, offset: int, limit: int) -> IdentifierPage:
+        """One page of the domain identifiers (ISIN, CUSIP, CIK, FIGI, LEI)
+        of an exchange's tickers."""
+        del offset, limit
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve identifiers ({exchange!r})"
+        )
+
+    def list_tvl_chains(self) -> Sequence[str]:
+        """Every chain :meth:`fetch_chain_tvl` serves (canonical names).
+        Sources without TVL data inherit the empty default."""
+        return ()
 
 
 #: Bundle fields each metadata part fills.
