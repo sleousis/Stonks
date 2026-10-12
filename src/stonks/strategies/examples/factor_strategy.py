@@ -18,13 +18,17 @@ expression language (``$close / Ref($close, 20) - 1``). On each decision:
 
 A formula has no stated hypothesis of its own: write one in the lab trial
 before you trust it (P1).
+
+A named strategy that always holds one library factor (``low_vol_defensive``,
+``seasonality``) subclasses this one and sets ``fixed_factor``: the ``factor``
+param then leaves its spec and everything else is shared.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Order, Portfolio
@@ -74,13 +78,17 @@ class FactorStrategy(BaseStrategy):
     label_horizon_bars = 21
     required_history_bars = 253
     applicable_asset_classes = ("equity", "crypto", "commodity", "bond")
+    #: A library factor id a named subclass always holds; ``None`` reads the
+    #: ``factor`` param.
+    fixed_factor: ClassVar[str | None] = None
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)
+        name = self._factor_name()
         try:
-            self._factor: Factor = resolve_factor(str(self.params["factor"]))
+            self._factor: Factor = resolve_factor(name)
         except (ExpressionError, ValueError) as exc:
-            raise ValueError(f"factor {self.params['factor']!r}: {exc}") from None
+            raise ValueError(f"factor {name!r}: {exc}") from None
         if not 0.0 < float(self.params["top_pct"]) <= 1.0:
             raise ValueError("top_pct must be in (0, 1]")
         self.applicable_asset_classes = tuple(self._factor.asset_classes)  # type: ignore[assignment]
@@ -88,14 +96,17 @@ class FactorStrategy(BaseStrategy):
 
     def param_metadata(self) -> dict[str, int]:
         try:
-            factor = resolve_factor(str(self.params["factor"]))
+            factor = resolve_factor(self._factor_name())
         except (ExpressionError, ValueError):
             return {}  # __init__ reports the bad factor
         return {"required_history_bars": factor.lookback_bars + 1}
 
+    def _factor_name(self) -> str:
+        return self.fixed_factor or str(self.params["factor"])
+
     @classmethod
     def parameter_spec(cls):
-        return [
+        specs = [
             ParameterSpec(
                 name="factor",
                 kind="categorical",
@@ -128,6 +139,9 @@ class FactorStrategy(BaseStrategy):
                 description="Comma-separated tickers ranked together; empty = the lake's.",
             ),
         ]
+        if cls.fixed_factor:
+            return [s for s in specs if s.name != "factor"]
+        return specs
 
     @property
     def factor(self) -> Factor:

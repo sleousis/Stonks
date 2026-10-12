@@ -93,7 +93,7 @@ The CLI opens the stores itself and reuses the services for lab and registry wor
 | `store` | `DuckDBLake` (market data) and `SqliteState` (everything that changes), migrations, the `BarStore` seam. |
 | `features` | Optional indicator and scoring helpers that strategies call. |
 | `factors` | Factor registry and library, an expression language compiled to DuckDB SQL, cached panels, tear sheets and model datasets. See [factors](factors.md). |
-| `strategies` | `BaseStrategy`, 32 example strategies (three of them intraday), 6 wrappers, the rule-based Studio strategy. |
+| `strategies` | `BaseStrategy`, 38 example strategies (three of them intraday), 6 wrappers, the rule-based Studio strategy. |
 | `portfolio` | Constructors and optimisers that turn signals into a target book, covariance and factor risk models, and the shared construction pipeline. |
 | `lab`, `stats` | Tuning (grid, random, Optuna), survival tests, trial ledger, parallel pool, parameter heatmaps, signal research, statistics. |
 | `lifecycle` | Model versions: scheduled retraining into candidates and governed swaps. See [model lifecycle](model-lifecycle.md). |
@@ -122,7 +122,7 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 | `BarStore` | `store/bars.py` | DuckDB table, Parquet files |
 | `UniverseProvider` | `universes/providers/` (registry) | list, exchange, rule, index |
 | `IndexSource` | `universes/index_sources/` (registry) | wikipedia_sp500 |
-| `Strategy` | `core/protocols.py`, `strategies/base.py` | 39 catalogued: 33 strategies and 6 wrappers |
+| `Strategy` | `core/protocols.py`, `strategies/base.py` | 44 catalogued: 38 strategies and 6 wrappers |
 | `Factor` | `factors/base.py`, `factors/library/` (registry) | alpha158, classic, fundamentals |
 | `Tuner`, `Objective` | `lab/tuning/`, `lab/objectives.py` | Tuners grid, random, optuna. Objectives Sharpe, CAGR, final return, Sortino, Calmar, drawdown Sharpe, multi-metric, purged CV |
 | `SurvivalTest` | `lab/survival/` (registry) | 24 tests, presets `quick`, `standard`, `promotion` |
