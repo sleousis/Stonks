@@ -211,6 +211,10 @@ export function daySpine(
     .label[data-kind='run'] {
       color: var(--chrome-accent);
     }
+    /* On the red rail the labels need the halt band's own muted ink. */
+    :host(.halted) .label {
+      color: var(--on-halt-muted);
+    }
   `,
 })
 export class DaySpine {

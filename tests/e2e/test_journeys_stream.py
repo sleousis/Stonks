@@ -68,7 +68,7 @@ def test_the_admin_watches_the_live_engine(browse, stack, viewport):
     page = v.go("/live")
     expect(page.get_by_role("heading", level=1)).to_have_text("Intraday engine")
     expect(page.get_by_text("No intraday engine running")).to_be_visible()
-    expect(page.get_by_text("Intraday trading is off")).to_be_visible()
+    expect(page.get_by_text("Intraday trading is off, which is the default")).to_be_visible()
     expect(page.get_by_role("heading", name="Intraday P&L by portfolio")).to_have_count(0)
     v.check_page("live engine, none running")
 

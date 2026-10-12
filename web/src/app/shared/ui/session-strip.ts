@@ -356,6 +356,9 @@ function runTime(iso: string, now: number): string {
     .strip:not([data-tone='calm']) .clock {
       color: var(--on-halt);
     }
+    .strip:not([data-tone='calm']) .in {
+      color: var(--on-halt-muted);
+    }
     .in {
       color: var(--chrome-muted);
       font-weight: var(--weight-medium);
