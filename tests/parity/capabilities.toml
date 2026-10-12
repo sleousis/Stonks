@@ -357,6 +357,24 @@ cli = { limited = "stonks lab run --help names the tests" }
 mcp = "list_survival_tests"
 
 [[capability]]
+id = "lab.objectives"
+domain = "lab"
+title = "Objective catalog"
+routes = ["GET /api/lab/objectives"]
+console = "listLabObjectives"
+cli = "stonks lab objectives"
+mcp = "list_lab_objectives"
+
+[[capability]]
+id = "lab.tuners"
+domain = "lab"
+title = "Tuner catalog"
+routes = ["GET /api/lab/tuners"]
+console = "listLabTuners"
+cli = "stonks lab tuners"
+mcp = "list_lab_tuners"
+
+[[capability]]
 id = "lab.survival_presets"
 domain = "lab"
 title = "Survival presets"

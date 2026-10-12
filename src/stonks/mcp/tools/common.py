@@ -74,20 +74,26 @@ Confirm = Annotated[
 StrategyStatus = Literal["active", "shadow", "retired"]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 AssetClass = Literal["equity", "crypto", "commodity", "bond"]
-TunerName = Literal["grid", "random", "optuna"]
+#: A tuner name. Not a fixed list, so a new tuner (or a plugin) needs no
+#: edit here: ``list_lab_tuners`` names them and the API checks them.
+TunerName = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="a tuner: grid, random, optuna, prescreen or another from list_lab_tuners",
+    ),
+]
 #: The ``optuna`` tuner's sampler (``nsga2``: Pareto over ``multi``'s parts).
 SamplerName = Literal["tpe", "nsga2", "random"]
-ObjectiveName = Literal[
-    "sharpe",
-    "cagr",
-    "final_return",
-    "sortino",
-    "calmar",
-    "sharpe_dd",
-    "multi",
-    "cv_sharpe",
-    "cv_cagr",
-    "cv_final_return",
+#: An objective name, checked by the API against its registry like
+#: :data:`TunerName`.
+ObjectiveName = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, "
+        "multi, a cv_ variant or another from list_lab_objectives",
+    ),
 ]
 #: A survival test id. Not a fixed list, so the schema cannot drift from the
 #: API's registry: ``list_survival_tests`` names them and the API checks them.

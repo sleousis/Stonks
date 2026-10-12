@@ -165,6 +165,8 @@ READ_TOOLS = {
     "get_notification_preferences",
     "list_survival_tests",
     "list_survival_presets",
+    "list_lab_objectives",
+    "list_lab_tuners",
     "get_studio_capabilities",
     "get_chart",
     "compare_tickers",

@@ -5,6 +5,9 @@ Every public class in a ``stonks.lab.survival`` module that has a string
 a test means adding one module; no list is edited. Modules starting with
 ``_`` (helpers), ``base`` and this module are skipped.
 
+Outside packages add tests through the ``stonks.survival_tests`` entry
+point group (``lab.plugins``). A plugin never replaces a built-in id.
+
 A test class may declare an ``Options`` pydantic model and a
 ``build(options) -> SurvivalTest`` classmethod. Without them the registry
 calls the constructor with the options as keyword arguments.
@@ -135,14 +138,35 @@ def _default_tests() -> dict[str, type]:
     return discover_survival_tests(package)
 
 
+def _plugin_tests(builtin: Mapping[str, type]) -> dict[str, type]:
+    """The ``stonks.survival_tests`` entry points that look like a test
+    (a string ``id`` and a ``run`` method) and take no built-in id."""
+    from stonks.lab import plugins
+
+    found: dict[str, type] = {}
+    for plugin in plugins.plugin_objects(plugins.SURVIVAL_TESTS):
+        cls = plugin.obj
+        test_id = cls.__dict__.get("id") if isinstance(cls, type) else None
+        if not isinstance(test_id, str) or not callable(getattr(cls, "run", None)):
+            _log.warning("lab.plugin.not_a_survival_test", name=plugin.name)
+            continue
+        if test_id in builtin or test_id in found:
+            _log.warning("lab.plugin.name_taken", group=plugin.group, name=test_id)
+            continue
+        found[test_id] = cls
+    return found
+
+
 def survival_test_classes() -> dict[str, type]:
-    """``id -> class`` for every test in ``stonks.lab.survival``."""
-    return dict(_default_tests())
+    """``id -> class`` for every test in ``stonks.lab.survival`` and every
+    plugin test, sorted by id."""
+    builtin = _default_tests()
+    return dict(sorted({**builtin, **_plugin_tests(builtin)}.items()))
 
 
 def survival_test_names() -> list[str]:
     """Sorted ids of every registered survival test."""
-    return list(_default_tests())
+    return list(survival_test_classes())
 
 
 def build_survival_test(
@@ -153,7 +177,7 @@ def build_survival_test(
 ) -> SurvivalTest:
     """Instantiate test ``name`` with ``options``. Raises ``ValueError`` on
     an unknown name (listing the valid ones) or on options the test rejects."""
-    catalog = _default_tests() if tests is None else tests
+    catalog = survival_test_classes() if tests is None else tests
     cls = catalog.get(name)
     if cls is None:
         raise ValueError(f"unknown survival test {name!r}; choose from {sorted(catalog)}")
@@ -184,7 +208,7 @@ HIDDEN_OPTIONS = frozenset({"seed", "max_workers"})
 
 
 def _test_class(name: str) -> type:
-    cls = _default_tests().get(name)
+    cls = survival_test_classes().get(name)
     if cls is None:
         raise ValueError(f"unknown survival test {name!r}; choose from {survival_test_names()}")
     return cls

@@ -91,8 +91,12 @@ describe('ParamHeatmap', () => {
     expect(heatmapRows(HEATMAP)[1].cells[0].background).toContain('--down');
   });
 
-  it('names the metrics in words', () => {
-    expect(heatmapMetricText('sharpe_dd')).toBe('Sharpe less twice the drawdown');
+  it('names the metrics with the labels the server gives its objectives', () => {
+    const labels: Record<string, string> = { sharpe_dd: 'Sharpe less twice the drawdown' };
+    const label = (name: string) => labels[name] ?? null;
+    expect(heatmapMetricText('sharpe_dd', label)).toBe('Sharpe less twice the drawdown');
+    expect(heatmapMetricText('fast_sharpe', label)).toBe('Sharpe on the fast path');
+    // not loaded (or no such objective): the metric's own label
     expect(heatmapMetricText('calmar')).toBe('Calmar');
   });
 });

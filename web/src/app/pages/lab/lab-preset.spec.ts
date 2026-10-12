@@ -14,6 +14,7 @@ import type { StrategyDetail } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { JOB_FETCH, JOB_POLL_MS } from '../../core/jobs/jobs.service';
 import { LabPage } from './lab.page';
+import { LAB_OBJECTIVES, LAB_TUNERS } from './lab-test-fixtures';
 
 function registered(id: string, classPath: string): StrategyDetail {
   return {
@@ -69,6 +70,8 @@ describe('LabPage with ?strategy=', () => {
     if (path === '/api/jobs') return req.flush({ items: [], total: 0, limit: 20, offset: 0 });
     if (path === '/api/lab/survival-tests') return req.flush([]);
     if (path === '/api/lab/survival-presets') return req.flush([]);
+    if (path === '/api/lab/objectives') return req.flush(LAB_OBJECTIVES);
+    if (path === '/api/lab/tuners') return req.flush(LAB_TUNERS);
     if (path === '/api/universes') return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
     if (path === '/api/watchlists' || path === '/api/strategies')
       return req.flush({ items: [], total: 0, limit: 200, offset: 0 });

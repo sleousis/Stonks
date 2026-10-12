@@ -231,15 +231,9 @@
               class="input"
               (change)="setChoice('tuner', $any($event.target).value)"
             >
-              <option value="random" [selected]="form().tuner === 'random'">
-                Random: samples the space
-              </option>
-              <option value="grid" [selected]="form().tuner === 'grid'">
-                Grid: tries every combination
-              </option>
-              <option value="optuna" [selected]="form().tuner === 'optuna'">
-                Bayesian (Optuna): learns where good settings are
-              </option>
+              @for (t of tuners(); track t.name) {
+                <option [value]="t.name" [selected]="form().tuner === t.name">{{ t.label }}</option>
+              }
             </select>
           </div>
           <div class="field">
@@ -249,8 +243,10 @@
               class="input"
               (change)="setChoice('objective', $any($event.target).value)"
             >
-              @for (o of objectives; track o.id) {
-                <option [value]="o.id" [selected]="form().objective === o.id">{{ o.label }}</option>
+              @for (o of objectives(); track o.name) {
+                <option [value]="o.name" [selected]="form().objective === o.name">
+                  {{ o.label }}
+                </option>
               }
             </select>
           </div>
@@ -263,15 +259,11 @@
                 aria-describedby="lr-sampler-hint"
                 (change)="setChoice('sampler', $any($event.target).value)"
               >
-                <option value="tpe" [selected]="form().sampler === 'tpe'">
-                  TPE: the usual Bayesian search
-                </option>
-                <option value="nsga2" [selected]="form().sampler === 'nsga2'">
-                  NSGA-II: balances the parts of the combined score
-                </option>
-                <option value="random" [selected]="form().sampler === 'random'">
-                  Random: no learning
-                </option>
+                @for (s of samplers(); track s.name) {
+                  <option [value]="s.name" [selected]="form().sampler === s.name">
+                    {{ s.label }}
+                  </option>
+                }
               </select>
               <span class="hint" id="lr-sampler-hint">
                 @if (form().sampler === 'nsga2' && form().objective !== 'multi') {

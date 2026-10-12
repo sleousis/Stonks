@@ -16,12 +16,19 @@ from stonks.core.protocols import Objective, Strategy, TunerResult
 from stonks.lab.dataset import LabDataset
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.tuning.base import best_of, evaluate_candidates, merge_with_defaults
+from stonks.lab.tuning.registry import register_tuner
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.tuning.random")
 
 
+@register_tuner("random")
 class RandomTuner:
+    """Random search.
+
+    ``budget`` parameter sets drawn uniformly from the space with a fixed
+    seed."""
+
     def __init__(self, seed: int = 0, parallel: ParallelSettings | None = None) -> None:
         # Fixed default seed so a lab run is reproducible unless the caller
         # explicitly asks for a different draw.

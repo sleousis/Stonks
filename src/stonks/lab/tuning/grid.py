@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import random
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from stonks.core.params import ParamSpace
 from stonks.core.protocols import Objective, Strategy, TunerResult
 from stonks.lab.dataset import LabDataset
@@ -26,12 +28,26 @@ from stonks.lab.tuning.base import (
     merge_with_defaults,
     sample_grid,
 )
+from stonks.lab.tuning.registry import register_tuner
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.tuning.grid")
 
 
+@register_tuner("grid")
 class GridTuner:
+    """Grid search.
+
+    Every point of a grid with ``grid_size`` points per numeric axis, or a
+    seeded sample of distinct points when the grid is larger than the
+    budget."""
+
+    class Options(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        #: Points per numeric axis.
+        grid_size: int = Field(default=5, ge=1, le=50)
+
     def __init__(
         self, grid_size: int = 5, seed: int = 0, parallel: ParallelSettings | None = None
     ) -> None:
