@@ -7,6 +7,8 @@ import {
   getLedgerRun,
   getSweepResult,
   listCostModels,
+  listLabObjectives,
+  listLabTuners,
   listLedgerRuns,
   listSurvivalPresets,
   listSurvivalTests,
@@ -54,6 +56,16 @@ export class LabService {
   /** The named suites (quick, standard, promotion) and the tests in each. */
   survivalPresets() {
     return unwrap(listSurvivalPresets());
+  }
+
+  /** Every objective a lab run can name, with its label (the API's registry). */
+  objectives() {
+    return unwrap(listLabObjectives());
+  }
+
+  /** Every tuner a lab run can name, with its label and options schema. */
+  tuners() {
+    return unwrap(listLabTuners());
   }
 
   costModels() {

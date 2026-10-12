@@ -80,17 +80,27 @@ def sortino(returns: Series, periods_per_year: float, risk_free_rate: float = 0.
 
 
 def drawdowns(curve: Series) -> list[float]:
-    """Per-bar drawdown from the running peak, as a fraction <= 0."""
+    """Per-bar drawdown from the running peak, as a fraction <= 0. A NaN
+    value poisons the peak, so it and every later drawdown are NaN: a bad
+    mark shows up instead of reading as no drawdown."""
     out: list[float] = []
     peak = -math.inf
     for v in curve:
+        if math.isnan(v) or math.isnan(peak):
+            peak = math.nan
+            out.append(math.nan)
+            continue
         peak = max(peak, v)
         out.append((v - peak) / peak if peak > 0 else 0.0)
     return out
 
 
 def max_drawdown(curve: Series) -> float:
-    return min(drawdowns(curve), default=0.0)
+    """The deepest drawdown; NaN when the curve has a NaN."""
+    dd = drawdowns(curve)
+    if any(math.isnan(v) for v in dd):
+        return math.nan
+    return min(dd, default=0.0)
 
 
 def max_drawdown_duration_bars(curve: Series) -> int:

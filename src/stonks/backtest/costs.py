@@ -267,6 +267,73 @@ class CostModelSettings(BaseModel):
     def build(self) -> AssetClassCostModel:
         return AssetClassCostModel(self)
 
+    def scaled(self, multiplier: float) -> CostModelSettings:
+        """A copy with every cost scaled by ``multiplier`` (the cost stress,
+        P19). It scales ``fee_flat``, ``fee_bps`` and ``half_spread_bps`` per
+        class, the impact coefficients (``impact_bps``, ``impact_gamma`` and
+        ``istar.a1``) and ``commissions.commission_multiplier``, which the
+        commission schedules and the US regulatory fees read. Every other
+        setting (impact model, spread model, windows, schedules, exec algo)
+        is kept. ``max_impact_bps`` scales too, but stays below the bound
+        that keeps sell fills at a positive price. ``scaled(1.0)`` costs
+        exactly what ``self`` costs."""
+        m = float(multiplier)
+        if m < 0:
+            raise ValueError(f"a cost multiplier must be >= 0, got {m}")
+        if m == 1.0:
+            return self
+
+        def scale(c: AssetClassCosts) -> AssetClassCosts:
+            return c.model_copy(
+                update={
+                    "fee_flat": c.fee_flat * m,
+                    "fee_bps": c.fee_bps * m,
+                    "half_spread_bps": c.half_spread_bps * m,
+                }
+            )
+
+        default = scale(self.default)
+        classes = {k: scale(v) for k, v in self.asset_classes.items()}
+        widest = max(c.half_spread_bps for c in (default, *classes.values()))
+        if self.half_spread_model != "class":
+            widest = max(widest, self.max_half_spread_bps)
+        if widest >= _BPS:
+            raise ValueError(f"a {m:g}x half spread reaches 100% of the price")
+        headroom = (_BPS - widest) * 0.999
+        return self.model_copy(
+            update={
+                "default": default,
+                "asset_classes": classes,
+                "impact_bps": self.impact_bps * m,
+                "max_impact_bps": min(self.max_impact_bps * m, headroom),
+                "impact_gamma": self.impact_gamma * m,
+                "istar": self.istar.model_copy(update={"a1": self.istar.a1 * m}),
+                "commissions": self.commissions.model_copy(
+                    update={"commission_multiplier": self.commissions.commission_multiplier * m}
+                ),
+            }
+        )
+
+    def charges_nothing(self) -> bool:
+        """True when no trade can cost anything: no fee, spread, impact,
+        commission, regulatory fee or exec algo cost. A commission schedule
+        or ``us_sell_fees`` alone is a cost."""
+        algo = _algo_assumption(self.exec_algo)
+        if algo is not None and algo.timing_bps != 0:
+            return False
+        commissions_off = self.commissions.commission_multiplier == 0
+        for c in (self.default, *self.asset_classes.values()):
+            if c.fee_flat > 0 or c.fee_bps > 0 or c.half_spread_bps > 0:
+                return False
+            if not commissions_off and (c.commission != "none" or c.us_sell_fees):
+                return False
+        if self.half_spread_model != "class" and self.max_half_spread_bps > 0:
+            return False
+        if self.impact_bps > 0:
+            return False
+        # the volume-aware models pay the cap on a zero ADV
+        return self.impact_model == "sqrt" or self.max_impact_bps == 0
+
     @classmethod
     def realistic(cls) -> CostModelSettings:
         """Retail-broker-ish defaults: commission-free equities with a tight
@@ -326,7 +393,9 @@ class AssetClassCostModel:
         if costs.commission != "none":
             fee += commission_fee(costs.commission, trade, fill_price, rates)
         if costs.us_sell_fees:
-            fee += regulatory_fee(trade, fill_price, rates.us_regulatory)
+            fee += regulatory_fee(
+                trade, fill_price, rates.us_regulatory, rates.commission_multiplier
+            )
         return TradeCost(fill_price=fill_price, fee=fee)
 
     def impact_components(self, trade: Trade) -> tuple[float, float]:

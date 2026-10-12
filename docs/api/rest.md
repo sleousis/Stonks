@@ -251,6 +251,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/lab/ensure/{job_id}/result` | Get Lab Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
 | GET | `/api/lab/ledger` | List Ledger Runs | `lab.run` |  | [Page_LedgerRunView_](#page_ledgerrunview_) |
 | GET | `/api/lab/ledger/{run_id}` | Get Ledger Run | `lab.run` |  | [LedgerRunDetail](#ledgerrundetail) |
+| GET | `/api/lab/objectives` | List Lab Objectives | sign-in |  | list[[ObjectiveInfo](#objectiveinfo)] |
 | POST | `/api/lab/runs` | Start Lab Run | `lab.run` | [LabRunRequest](#labrunrequest) | [Job](#job) |
 | GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | sign-in |  | [LabRunView](#labrunview) |
 | POST | `/api/lab/signal-ic` | Start Signal Ic | `lab.run` | [SignalICRequest](#signalicrequest) | [Job](#job) |
@@ -259,6 +260,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
 | POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
 | GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
+| GET | `/api/lab/tuners` | List Lab Tuners | sign-in |  | list[[TunerInfo](#tunerinfo)] |
 | POST | `/api/lab/verify` | Start Verify | `lab.run` | [VerifyRequest](#verifyrequest) \| null | [Job](#job) |
 | GET | `/api/lab/verify/jobs/{job_id}/result` | Get Verify Result | sign-in |  | [VerifyResultView](#verifyresultview) |
 
@@ -1347,6 +1349,7 @@ Which CSV column holds which field. Only ``date`` is required, plus either a ``t
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `commission_multiplier` | number | no |  |
 | `ibkr_fixed` | [IbkrFixedFees](#ibkrfixedfees) | no |  |
 | `ibkr_tiered` | [IbkrTieredFees](#ibkrtieredfees) | no |  |
 | `us_regulatory` | [UsRegulatoryFees](#usregulatoryfees) | no |  |
@@ -1657,7 +1660,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
-| `grid_size` | integer | no |  |
+| `grid_size` | integer \| null | no | Deprecated: use tuner_options.grid_size |
 | `heatmap` | [HeatmapOptions](#heatmapoptions) \| null | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
@@ -1666,17 +1669,18 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
-| `prune` | boolean | no |  |
+| `prune` | boolean \| null | no | Deprecated: use tuner_options.prune |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
-| `sampler` | "tpe" \| "nsga2" \| "random" | no |  |
+| `sampler` | string \| null | no | Deprecated: use tuner_options.sampler |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
-| `tuner` | "grid" \| "random" \| "optuna" | no |  |
+| `tuner` | "grid" \| "optuna" \| "prescreen" \| "random" | no |  |
+| `tuner_options` | object \| null | no |  |
 | `universe` | list[string] | yes |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
 
@@ -2831,7 +2835,7 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `ensure_data` | boolean | no |  |
-| `grid_size` | integer | no |  |
+| `grid_size` | integer \| null | no | Deprecated: use tuner_options.grid_size |
 | `heatmap` | [HeatmapOptions](#heatmapoptions) \| null | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
@@ -2840,10 +2844,10 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
-| `prune` | boolean | no |  |
+| `prune` | boolean \| null | no | Deprecated: use tuner_options.prune |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
-| `sampler` | "tpe" \| "nsga2" \| "random" | no |  |
+| `sampler` | string \| null | no | Deprecated: use tuner_options.sampler |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
@@ -2851,7 +2855,8 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
-| `tuner` | "grid" \| "random" \| "optuna" | no |  |
+| `tuner` | "grid" \| "optuna" \| "prescreen" \| "random" | no |  |
+| `tuner_options` | object \| null | no |  |
 | `universe` | list[string] | no |  |
 | `universe_id` | string \| null | no |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
@@ -3565,6 +3570,16 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `note` | string | yes |  |
+
+### ObjectiveInfo
+
+An objective a lab request can name in ``objective``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | yes |  |
+| `label` | string | yes |  |
+| `name` | string | yes |  |
 
 ### OnboardingStepView
 
@@ -6450,7 +6465,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `exclude` | list[string] | no |  |
-| `grid_size` | integer | no |  |
+| `grid_size` | integer \| null | no | Deprecated: use tuner_options.grid_size |
 | `heatmap` | [HeatmapOptions](#heatmapoptions) \| null | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
@@ -6459,10 +6474,10 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
-| `prune` | boolean | no |  |
+| `prune` | boolean \| null | no | Deprecated: use tuner_options.prune |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
-| `sampler` | "tpe" \| "nsga2" \| "random" | no |  |
+| `sampler` | string \| null | no | Deprecated: use tuner_options.sampler |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategies` | list[string] \| null | no |  |
@@ -6470,7 +6485,8 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
-| `tuner` | "grid" \| "random" \| "optuna" | no |  |
+| `tuner` | "grid" \| "optuna" \| "prescreen" \| "random" | no |  |
+| `tuner_options` | object \| null | no |  |
 | `universe` | list[string] | no |  |
 | `universe_id` | string \| null | no |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
@@ -7018,6 +7034,17 @@ Whether a portfolio trades paper or live money, and through what.
 | `name` | string | yes |  |
 | `portfolio_id` | string | yes |  |
 | `trading` | "paper" \| "live" | yes | paper: simulated fills or a paper broker account. live: real money. |
+
+### TunerInfo
+
+A tuner a lab request can name in ``tuner``, with the JSON Schema of what ``tuner_options`` may set for it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | yes |  |
+| `label` | string | yes |  |
+| `name` | string | yes |  |
+| `options_schema` | object | yes |  |
 
 ### TurnView
 

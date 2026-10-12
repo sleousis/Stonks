@@ -37,6 +37,7 @@ Usage::
 from __future__ import annotations
 
 import calendar
+import functools
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import ClassVar
@@ -267,7 +268,30 @@ def visible_cutoff(at: datetime, interval: Interval, decision: Interval | None) 
     """The latest stamp of an ``interval`` bar that is complete at a decision
     on the bar starting at ``at`` (``at + L - I``). With no decision interval
     an intraday read keeps every bar stamped on or before ``at`` (the bar
-    the decision stands on). Months and years use calendar months."""
+    the decision stands on). Months and years use calendar months.
+
+    Memoised (:func:`cutoff_cache`): it is pure and ``Interval`` is frozen,
+    and a backtest asks the same question for every ticker of a decision
+    bar. The cache keys on the type and time zone of ``at`` as well, since a
+    ``pd.Timestamp`` equals a ``datetime`` and two zones can name one instant,
+    so each caller gets back the type and zone it passed."""
+    return _cached_cutoff(at, at.tzinfo, interval, decision)
+
+
+@functools.lru_cache(maxsize=65_536, typed=True)
+def _cached_cutoff(
+    at: datetime, tz: object, interval: Interval, decision: Interval | None
+) -> datetime:
+    return _visible_cutoff(at, interval, decision)
+
+
+def cutoff_cache() -> tuple[int, int]:
+    """``(hits, misses)`` of the :func:`visible_cutoff` memo."""
+    info = _cached_cutoff.cache_info()
+    return info.hits, info.misses
+
+
+def _visible_cutoff(at: datetime, interval: Interval, decision: Interval | None) -> datetime:
     if decision is None and interval.is_intraday:
         return at
     reach = decision_reach(at, decision)

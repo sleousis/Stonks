@@ -48,6 +48,7 @@ class FilingEvents(BaseStrategy):
     alpha_family = "sentiment"
     premise = "none"
     label_horizon_bars = 5
+    data_tables = ("corporate_filings",)
 
     @classmethod
     def parameter_spec(cls):

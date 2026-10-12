@@ -9,7 +9,7 @@ import type { LabRunRequest, MeView, SurvivalPresetInfo, UniverseView } from '..
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { LabRunFormView } from './lab-run-form';
-import { SURVIVAL_TEST_CATALOG } from './lab-test-fixtures';
+import { LAB_OBJECTIVES, LAB_TUNERS, SURVIVAL_TEST_CATALOG } from './lab-test-fixtures';
 
 describe('LabRunFormView', () => {
   let fixture: ComponentFixture<LabRunFormView>;
@@ -44,6 +44,8 @@ describe('LabRunFormView', () => {
     else
       req.flush({ title: 'x', status: catalogStatus }, { status: catalogStatus, statusText: 'x' });
     (await nextRequest(controller, '/api/lab/survival-presets')).flush(presets);
+    (await nextRequest(controller, '/api/lab/objectives')).flush(LAB_OBJECTIVES);
+    (await nextRequest(controller, '/api/lab/tuners')).flush(LAB_TUNERS);
     await tick();
     fixture.detectChanges();
   }
@@ -222,11 +224,33 @@ describe('LabRunFormView', () => {
     expect(emitted).toHaveLength(1);
     expect(emitted[0]).toMatchObject({
       tuner: 'optuna',
-      sampler: 'tpe',
-      prune: true,
+      tuner_options: { sampler: 'tpe', prune: true },
       objective: 'calmar',
       heatmap: { x: 'lookback_days', y: null, grid_size: 5, fast: true },
     });
+  });
+
+  it("lists the server's tuners and objectives with their labels", async () => {
+    await create();
+    const tuner = el.querySelector<HTMLSelectElement>('#lr-tuner')!;
+    expect([...tuner.options].map((o) => o.value)).toEqual([
+      'grid',
+      'optuna',
+      'prescreen',
+      'random',
+    ]);
+    expect(tuner.selectedOptions[0].value).toBe('random');
+    const objective = el.querySelector<HTMLSelectElement>('#lr-objective')!;
+    expect([...objective.options].map((o) => o.textContent!.trim())).toContain(
+      'Sharpe on purged folds',
+    );
+    tuner.value = 'prescreen';
+    tuner.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    fillBasics();
+    submit();
+    expect(emitted[0]).toMatchObject({ tuner: 'prescreen' });
+    expect(emitted[0]).not.toHaveProperty('tuner_options');
   });
 
   it('opens Advanced for a bad heatmap grid', async () => {

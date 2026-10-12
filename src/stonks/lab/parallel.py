@@ -57,10 +57,16 @@ in the worker.
   ``bars``, see ``lab.lake_copy``), rebuilt in the worker as a private
   in-memory lake: one DuckDB connection per worker, none shared.
 
-``max_workers=None`` means :func:`default_max_workers`: the
+``max_workers=None`` means the run's cap when one is set
+(:func:`run_max_workers`), else :func:`default_max_workers`: the
 ``STONKS_LAB_MAX_WORKERS`` environment variable when set, else
 ``os.cpu_count()``. :class:`ParallelSettings` is the settings-model form
 (``max_workers=0`` for all cores, capped at :data:`MAX_AUTO_WORKERS`).
+
+A lab run sets its ``[lab.parallel]`` worker count as the run's cap
+(``LabRunner`` does this): inside it no pool, in the tuner, the heatmap or
+any survival test, uses more workers than the cap, whatever the test's
+own options say. With a cap of 1 nothing in the run starts a pool.
 
 Workers start with single-threaded BLAS/OpenMP (``OPENBLAS_NUM_THREADS``
 etc. set to ``ParallelSettings.blas_threads``, default 1, unless the user
@@ -82,6 +88,7 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Future, ProcessPoolExecutor
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -111,6 +118,8 @@ _THREAD_ENV = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
 _WORKER_STATE: Any = None
 # True in pool workers: ``run_tasks`` then never starts a nested pool.
 _IN_WORKER = False
+#: The running lab run's worker cap (``None`` outside a capped run).
+_RUN_MAX_WORKERS: ContextVar[int | None] = ContextVar("stonks_lab_run_max_workers", default=None)
 
 
 class ParallelSettings(BaseModel):
@@ -126,8 +135,23 @@ class ParallelSettings(BaseModel):
 
     def resolved_workers(self) -> int:
         if self.max_workers == 0:
-            return min(MAX_AUTO_WORKERS, default_max_workers())
+            return min(MAX_AUTO_WORKERS, resolve_max_workers(None))
         return self.max_workers
+
+
+@contextmanager
+def run_max_workers(cap: int | None) -> Iterator[None]:
+    """Cap every pool started inside the block at ``cap`` workers (``None``
+    lifts any cap). The default worker count inside the block is ``cap``
+    too. Scoped to the current context, so concurrent runs in other
+    threads keep their own cap."""
+    if cap is not None and cap < 1:
+        raise ValueError("cap must be >= 1")
+    token = _RUN_MAX_WORKERS.set(cap)
+    try:
+        yield
+    finally:
+        _RUN_MAX_WORKERS.reset(token)
 
 
 def default_max_workers() -> int:
@@ -139,8 +163,11 @@ def default_max_workers() -> int:
 
 
 def resolve_max_workers(max_workers: int | None) -> int:
+    """``max_workers``, or for ``None`` the run's cap when set, else
+    :func:`default_max_workers`."""
     if max_workers is None:
-        return default_max_workers()
+        cap = _RUN_MAX_WORKERS.get()
+        return cap if cap is not None else default_max_workers()
     if max_workers < 1:
         raise ValueError("max_workers must be >= 1")
     return max_workers
@@ -157,6 +184,9 @@ def planned_workers(
         requested = settings.resolved_workers()
     else:
         requested = resolve_max_workers(max_workers)
+    cap = _RUN_MAX_WORKERS.get()
+    if cap is not None:
+        requested = min(requested, cap)
     if _IN_WORKER:
         requested = 1
     return min(requested, n_tasks)
@@ -178,6 +208,7 @@ def run_tasks[T, R](
     settings: ParallelSettings | None = None,
     root_seed: int | None = None,
     checkpoint: Callable[[], None] | None = None,
+    on_result: Callable[[int, R], None] | None = None,
 ) -> list[R]:
     """``[task_fn(state, t) for t in tasks]`` with ``state = setup(payload)``
     built once per worker (``payload`` itself when ``setup`` is None).
@@ -185,7 +216,9 @@ def run_tasks[T, R](
     ``max_workers`` wins over ``settings``; with neither, every core. With
     ``root_seed`` each task runs with the global RNGs seeded from
     :func:`task_seeds`. ``checkpoint`` is the cancellation hook (see the
-    module doc).
+    module doc). ``on_result(i, result)`` runs in this process as each
+    result arrives, in task order, so a caller can keep finished work even
+    when a later task, or a cancel, stops the run.
 
     ``task_fn`` and ``setup`` must be module-level functions and, in the
     parallel case, ``payload``, the tasks and the results picklable.
@@ -200,10 +233,12 @@ def run_tasks[T, R](
         with _blas_limit(blas):
             state = setup(payload) if setup is not None else payload
             results: list[R] = []
-            for task, seed in zip(tasks, seeds, strict=True):
+            for i, (task, seed) in enumerate(zip(tasks, seeds, strict=True)):
                 if checkpoint is not None:
                     checkpoint()
                 results.append(_call_seeded(task_fn, state, task, seed))
+                if on_result is not None:
+                    on_result(i, results[-1])
         return results
     with (
         _pinned_thread_env(blas),
@@ -219,8 +254,10 @@ def run_tasks[T, R](
         ]
         try:
             out: list[R] = []
-            for future in futures:
+            for i, future in enumerate(futures):
                 out.append(future.result())
+                if on_result is not None:
+                    on_result(i, out[-1])
                 if checkpoint is not None:
                     checkpoint()
             return out

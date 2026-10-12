@@ -338,6 +338,8 @@ CASES: dict[str, Case] = {
     ),
     "list_survival_tests": _c("GET", "/api/lab/survival-tests"),
     "list_survival_presets": _c("GET", "/api/lab/survival-presets"),
+    "list_lab_objectives": _c("GET", "/api/lab/objectives"),
+    "list_lab_tuners": _c("GET", "/api/lab/tuners"),
     "get_studio_capabilities": _c("GET", "/api/studio/capabilities"),
     "list_shadow_decisions": _c("GET", "/api/shadow/decisions"),
     "list_shadow_pnl": _c("GET", "/api/shadow/pnl"),

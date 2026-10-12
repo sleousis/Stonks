@@ -1987,6 +1987,10 @@ export type ColumnMapping = {
  * asset class picks its schedule with ``commission``.
  */
 export type CommissionSettings = {
+    /**
+     * Commission Multiplier
+     */
+    commission_multiplier?: number;
     ibkr_fixed?: IbkrFixedFees;
     ibkr_tiered?: IbkrTieredFees;
     us_regulatory?: UsRegulatoryFees;
@@ -2834,8 +2838,12 @@ export type DraftLabRunRequest = {
     end: string;
     /**
      * Grid Size
+     *
+     * Deprecated: use tuner_options.grid_size
+     *
+     * @deprecated
      */
-    grid_size?: number;
+    grid_size?: number | null;
     heatmap?: HeatmapOptions | null;
     /**
      * Hypothesis
@@ -2864,8 +2872,12 @@ export type DraftLabRunRequest = {
     preset?: 'promotion' | 'quick' | 'standard' | null;
     /**
      * Prune
+     *
+     * Deprecated: use tuner_options.prune
+     *
+     * @deprecated
      */
-    prune?: boolean;
+    prune?: boolean | null;
     /**
      * Register If Passes
      */
@@ -2876,8 +2888,12 @@ export type DraftLabRunRequest = {
     register_strategy?: boolean;
     /**
      * Sampler
+     *
+     * Deprecated: use tuner_options.sampler
+     *
+     * @deprecated
      */
-    sampler?: 'tpe' | 'nsga2' | 'random';
+    sampler?: string | null;
     /**
      * Seed
      */
@@ -2909,7 +2925,13 @@ export type DraftLabRunRequest = {
     /**
      * Tuner
      */
-    tuner?: 'grid' | 'random' | 'optuna';
+    tuner?: 'grid' | 'optuna' | 'prescreen' | 'random';
+    /**
+     * Tuner Options
+     */
+    tuner_options?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Universe
      */
@@ -6118,8 +6140,12 @@ export type LabRunRequest = {
     ensure_data?: boolean;
     /**
      * Grid Size
+     *
+     * Deprecated: use tuner_options.grid_size
+     *
+     * @deprecated
      */
-    grid_size?: number;
+    grid_size?: number | null;
     heatmap?: HeatmapOptions | null;
     /**
      * Hypothesis
@@ -6148,8 +6174,12 @@ export type LabRunRequest = {
     preset?: 'promotion' | 'quick' | 'standard' | null;
     /**
      * Prune
+     *
+     * Deprecated: use tuner_options.prune
+     *
+     * @deprecated
      */
-    prune?: boolean;
+    prune?: boolean | null;
     /**
      * Register If Passes
      */
@@ -6160,8 +6190,12 @@ export type LabRunRequest = {
     register_strategy?: boolean;
     /**
      * Sampler
+     *
+     * Deprecated: use tuner_options.sampler
+     *
+     * @deprecated
      */
-    sampler?: 'tpe' | 'nsga2' | 'random';
+    sampler?: string | null;
     /**
      * Seed
      */
@@ -6194,7 +6228,13 @@ export type LabRunRequest = {
     /**
      * Tuner
      */
-    tuner?: 'grid' | 'random' | 'optuna';
+    tuner?: 'grid' | 'optuna' | 'prescreen' | 'random';
+    /**
+     * Tuner Options
+     */
+    tuner_options?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Universe
      */
@@ -8175,6 +8215,26 @@ export type NoteRequest = {
      * Note
      */
     note: string;
+};
+
+/**
+ * ObjectiveInfo
+ *
+ * An objective a lab request can name in ``objective``.
+ */
+export type ObjectiveInfo = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -15951,8 +16011,12 @@ export type SweepRequest = {
     exclude?: Array<string>;
     /**
      * Grid Size
+     *
+     * Deprecated: use tuner_options.grid_size
+     *
+     * @deprecated
      */
-    grid_size?: number;
+    grid_size?: number | null;
     heatmap?: HeatmapOptions | null;
     /**
      * Hypothesis
@@ -15981,8 +16045,12 @@ export type SweepRequest = {
     preset?: 'promotion' | 'quick' | 'standard' | null;
     /**
      * Prune
+     *
+     * Deprecated: use tuner_options.prune
+     *
+     * @deprecated
      */
-    prune?: boolean;
+    prune?: boolean | null;
     /**
      * Register If Passes
      */
@@ -15993,8 +16061,12 @@ export type SweepRequest = {
     register_strategy?: boolean;
     /**
      * Sampler
+     *
+     * Deprecated: use tuner_options.sampler
+     *
+     * @deprecated
      */
-    sampler?: 'tpe' | 'nsga2' | 'random';
+    sampler?: string | null;
     /**
      * Seed
      */
@@ -16030,7 +16102,13 @@ export type SweepRequest = {
     /**
      * Tuner
      */
-    tuner?: 'grid' | 'random' | 'optuna';
+    tuner?: 'grid' | 'optuna' | 'prescreen' | 'random';
+    /**
+     * Tuner Options
+     */
+    tuner_options?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Universe
      */
@@ -17649,6 +17727,33 @@ export type TradingModeView = {
      * paper: simulated fills or a paper broker account. live: real money.
      */
     trading: 'paper' | 'live';
+};
+
+/**
+ * TunerInfo
+ *
+ * A tuner a lab request can name in ``tuner``, with the JSON Schema of
+ * what ``tuner_options`` may set for it.
+ */
+export type TunerInfo = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Options Schema
+     */
+    options_schema: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -24608,6 +24713,49 @@ export type GetLedgerRunResponses = {
 
 export type GetLedgerRunResponse = GetLedgerRunResponses[keyof GetLedgerRunResponses];
 
+export type ListLabObjectivesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/lab/objectives';
+};
+
+export type ListLabObjectivesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListLabObjectivesError = ListLabObjectivesErrors[keyof ListLabObjectivesErrors];
+
+export type ListLabObjectivesResponses = {
+    /**
+     * Response Listlabobjectives
+     *
+     * Successful Response
+     */
+    200: Array<ObjectiveInfo>;
+};
+
+export type ListLabObjectivesResponse = ListLabObjectivesResponses[keyof ListLabObjectivesResponses];
+
 export type StartLabRunData = {
     body: LabRunRequest;
     path?: never;
@@ -24954,6 +25102,49 @@ export type GetSweepResultResponses = {
 };
 
 export type GetSweepResultResponse = GetSweepResultResponses[keyof GetSweepResultResponses];
+
+export type ListLabTunersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/lab/tuners';
+};
+
+export type ListLabTunersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListLabTunersError = ListLabTunersErrors[keyof ListLabTunersErrors];
+
+export type ListLabTunersResponses = {
+    /**
+     * Response Listlabtuners
+     *
+     * Successful Response
+     */
+    200: Array<TunerInfo>;
+};
+
+export type ListLabTunersResponse = ListLabTunersResponses[keyof ListLabTunersResponses];
 
 export type StartLabVerifyData = {
     /**

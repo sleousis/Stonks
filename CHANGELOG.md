@@ -4,6 +4,22 @@ All notable changes to Stonks. Versions follow [Semantic Versioning](https://sem
 
 Each release section is written by hand from the merge commits and pull request titles, grouped by area. `git cliff --unreleased` (with `cliff.toml`) lists the commits since the last tag to start from. The release workflow publishes the section of the tagged version, and falls back to the `git cliff` list when there is none.
 
+## [Unreleased]
+
+### Backtest results that change
+
+These fix proven bugs. Backtests that hit none of the cases below give the same results as before.
+
+- Delisted holdings now leave the book (P14). Before, a name that stopped trading sat frozen at its last mark to the end of the run and its lot never closed. Now it settles for cash at its last close on the first bar after its last bar, once it is past `instruments.delisted_date` or past the end of its universe membership with no later bar. The new `[backtest.delisting] return` (default 0.0) applies a haircut, for example -0.3. Backtests that held such a name change.
+- Mixed-calendar universes no longer drop queued orders. Before, an equity order decided on Friday was replaced by Saturday's rebalance on a crypto bar and never filled. Now an order whose ticker has had no bar since its decision stays queued unless a new decision names the same ticker. Universes that mix crypto with other classes change. Paper books (`production/paper_fills.py`) still cancel such an order at the next tick, a parity gap left for a later change.
+- `cost_stress` keeps the whole cost model (P19). Before, its scaled copies dropped broker commissions, US regulatory fees, the impact model (`sqrt_vol`, `istar`), the spread model and the execution algo, so its 1x level was cheaper than the backtest it stressed, and settings with only a commission counted as no costs. Now every level scales the dataset's own model (`CostModelSettings.scaled`), and the 1x level costs what the backtest paid. Cost stress verdicts for datasets with commissions or a non-default impact model change.
+- A bar with a NULL, NaN or non-positive close is now skipped, so the last valid mark carries forward. Before, it turned Sharpe into NaN while max drawdown showed 0. Drawdowns now report NaN when an equity curve has one, instead of hiding it.
+
+### Faster backtests, same results
+
+- A `single_winner` pipeline backtest with no risk policy no longer builds its daily history (about 11x faster on 30 tickers over 1,500 days).
+- `core.interval.visible_cutoff` is memoised (a plain Momentum backtest on 30 tickers runs in about 0.8 s instead of 1.3 s).
+
 ## [1.0.0] - 2026-09-28
 
 The first tagged release. It covers everything merged to `main` up to pull request #24. The biggest new parts since pull request #23 are the Interactive Brokers path to real money, the complete trader product, the intraday engine and deeper research tools. Live trading, intraday, options and the assistant are all off by default.

@@ -151,6 +151,8 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
                 "cancel_job",
                 "list_survival_tests",
                 "list_survival_presets",
+                "list_lab_objectives",
+                "list_lab_tuners",
                 "list_cost_models",
                 "list_ledger_runs",
                 "get_ledger_run",

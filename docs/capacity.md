@@ -53,11 +53,15 @@ About 0.1 s per strategy on 30 tickers, and about 0.04 s per extra portfolio. St
 
 | Preset | Survival tests | Seconds (1 process) |
 |--------|----------------|---------------------|
-| quick | 2 | 1.4 |
-| standard | 7 | 8.9 |
-| promotion | 14 | 43.7 |
+| quick | 2 | 3.8 |
+| standard | 7 | 15.7 |
+| promotion | 15 | 241 |
 
-Run time grows with tickers, bars and trials. A promotion run on 100 tickers over 5 years with 50 trials is more than 100 times the work of the row above, over an hour on one core (estimate). With 4 processes these small runs were no faster, because starting the pool costs as much as it saves. The pool pays off once one trial takes seconds.
+These rows are one process from start to end. Earlier rows here were lower because `--workers 1` only held the tuner to one process: the survival tests still started pools on every core. Now `[lab.parallel] max_workers` caps every pool in the run.
+
+With pools of 4 processes for the survival tests, the same promotion run took 82 s. The quick and standard runs were no faster with a pool, because starting it costs as much as it saves. The pool pays off once one task takes seconds.
+
+Run time grows with tickers, bars and trials. A promotion run on 100 tickers over 5 years with 50 trials is more than 100 times the work of the promotion row, many hours on one core (estimate). Give lab work several cores.
 
 ### Memory and API latency
 

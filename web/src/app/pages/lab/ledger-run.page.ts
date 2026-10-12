@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { LabChoices } from '../../api/lab-choices.service';
 import { LabService } from '../../api/lab.service';
 import type { LedgerTrialView } from '../../api/models';
 import { formatDateTime, formatNumber } from '../../core/format/format';
@@ -23,7 +24,7 @@ import { SystemService } from '../../api/system.service';
 import { humanize } from '../../shared/ui/param-form/param-spec';
 import { LabNav } from './lab-nav';
 import { className, scoreText } from './ledger.page';
-import { OBJECTIVES, strategyTitle } from './lab-requests';
+import { strategyTitle } from './lab-requests';
 import { FAILED_RUN_TEXT } from '../../shared/lab-results/job-error';
 import { JobFailure } from '../../shared/ui/job-failure';
 
@@ -188,6 +189,7 @@ export function searchName(tuner: string): string {
 export class LedgerRunPage {
   private readonly lab = inject(LabService);
   private readonly system = inject(SystemService);
+  private readonly choices = inject(LabChoices);
 
   readonly runId = input.required<string>();
 
@@ -222,7 +224,7 @@ export class LedgerRunPage {
   protected readonly objectiveName = computed(() => {
     if (!this.run.hasValue()) return null;
     const o = this.run.value().objective;
-    return o ? (OBJECTIVES.find((x) => x.id === o)?.label ?? o) : null;
+    return o ? (this.choices.objectiveLabel(o) ?? o) : null;
   });
   protected readonly best = computed(() =>
     this.run.hasValue() ? scoreText(this.run.value().best_score) : '',

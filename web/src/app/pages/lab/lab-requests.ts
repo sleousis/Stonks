@@ -57,8 +57,10 @@ export interface BacktestForm extends WindowForm, BenchmarkForm, CostForm {
   rebalanceEveryBars: number | null;
 }
 
-export type TunerChoice = NonNullable<LabRunRequest['tuner']>;
-export type SamplerChoice = NonNullable<LabRunRequest['sampler']>;
+/** A tuner name from the server's registry (`GET /api/lab/tuners`). */
+export type TunerChoice = string;
+/** The Optuna tuner's sampler (its `tuner_options.sampler`). */
+export type SamplerChoice = string;
 
 /** Heatmap grid bounds (points per axis), as the API checks them. */
 export const HEATMAP_GRID_MIN = 2;
@@ -80,7 +82,8 @@ export interface LabRunForm extends WindowForm, BenchmarkForm {
   heatmapFull: boolean;
   budget: number | null;
   seed: number | null;
-  objective: NonNullable<LabRunRequest['objective']>;
+  /** An objective name from the server's registry (`GET /api/lab/objectives`). */
+  objective: string;
   trainRatio: number | null;
   /** Blank = the server's default gap (raised to the strategy's horizon). */
   embargoBars: number | null;
@@ -456,10 +459,10 @@ export function buildLabRunRequest(
     start: f.start,
     end: f.end,
     interval: f.interval,
-    tuner: f.tuner,
+    tuner: f.tuner as LabRunRequest['tuner'],
     budget: f.budget ?? 20,
     seed: f.seed ?? 0,
-    objective: f.objective,
+    objective: f.objective as LabRunRequest['objective'],
     train_ratio: f.trainRatio ?? 0.7,
   };
   if (f.universeId) {
@@ -469,8 +472,7 @@ export function buildLabRunRequest(
     body.universe = parseTickers(f.tickers);
   }
   if (f.tuner === 'optuna') {
-    body.sampler = f.sampler;
-    if (f.prune) body.prune = true;
+    body.tuner_options = f.prune ? { sampler: f.sampler, prune: true } : { sampler: f.sampler };
   }
   if (f.heatmap) {
     body.heatmap = {
@@ -528,22 +530,15 @@ export function buildLabRunRequest(
 type WfMetric = NonNullable<WalkForwardConfig['metric']>;
 const WF_METRICS: readonly WfMetric[] = ['sharpe', 'cagr', 'final_return'];
 
-/** Every objective the lab-run form offers, in menu order. */
-export const OBJECTIVES: readonly {
-  id: NonNullable<LabRunRequest['objective']>;
-  label: string;
-}[] = [
-  { id: 'sharpe', label: 'Sharpe' },
-  { id: 'cagr', label: 'CAGR' },
-  { id: 'final_return', label: 'Total return' },
-  { id: 'sortino', label: 'Sortino' },
-  { id: 'calmar', label: 'Calmar' },
-  { id: 'sharpe_dd', label: 'Sharpe less twice the drawdown' },
-  { id: 'multi', label: 'Sharpe, Calmar and drawdown together' },
-  { id: 'cv_sharpe', label: 'Sharpe on purged folds' },
-  { id: 'cv_cagr', label: 'CAGR on purged folds' },
-  { id: 'cv_final_return', label: 'Total return on purged folds' },
-];
+/** What each Optuna sampler does, for its menu (the names come from the API). */
+export const SAMPLER_TEXT: Readonly<Record<string, string>> = {
+  tpe: 'TPE: the usual Bayesian search',
+  nsga2: 'NSGA-II: balances the parts of the combined score',
+  random: 'Random: no learning',
+};
+
+/** A registry name as the API spells it (objectives, tuners, samplers). */
+const NAME = /^[a-z][a-z0-9_]{0,63}$/;
 
 /**
  * The form fields a stored lab-run request (a job's `params`) fills, for a
@@ -571,11 +566,16 @@ export function formFromRequest(
   } else if (Array.isArray(r['universe'])) {
     f.tickers = r['universe'].filter(str).join(', ');
   }
-  if (r['tuner'] === 'grid' || r['tuner'] === 'random' || r['tuner'] === 'optuna')
-    f.tuner = r['tuner'];
-  if (r['sampler'] === 'tpe' || r['sampler'] === 'nsga2' || r['sampler'] === 'random')
-    f.sampler = r['sampler'];
-  if (r['prune'] === true) f.prune = true;
+  // The server checks names against its registries: any well-formed name is kept.
+  const name = (v: unknown): v is string => str(v) && NAME.test(v);
+  if (name(r['tuner'])) f.tuner = r['tuner'];
+  const opts = r['tuner_options'];
+  const tunerOptions: Record<string, unknown> =
+    opts && typeof opts === 'object' ? (opts as Record<string, unknown>) : {};
+  // tuner_options, else the deprecated flat fields of older requests
+  const sampler = tunerOptions['sampler'] ?? r['sampler'];
+  if (name(sampler)) f.sampler = sampler;
+  if ((tunerOptions['prune'] ?? r['prune']) === true) f.prune = true;
   const heatmap = r['heatmap'];
   if (heatmap && typeof heatmap === 'object') {
     const h = heatmap as Record<string, unknown>;
@@ -589,9 +589,7 @@ export function formFromRequest(
   if (num(r['seed'])) f.seed = r['seed'];
   if (num(r['train_ratio'])) f.trainRatio = r['train_ratio'];
   if (num(r['embargo_bars'])) f.embargoBars = r['embargo_bars'];
-  const objectives: readonly string[] = OBJECTIVES.map((o) => o.id);
-  if (str(r['objective']) && objectives.includes(r['objective']))
-    f.objective = r['objective'] as LabRunForm['objective'];
+  if (name(r['objective'])) f.objective = r['objective'];
   const preset = r['preset'];
   if (preset === 'quick' || preset === 'standard' || preset === 'promotion') {
     f.suite = preset;

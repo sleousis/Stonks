@@ -6,7 +6,15 @@ strategy (:func:`suite_dataset`). With a
 :class:`~stonks.lab.trials.TrialLedger` the run is pre-registered (hypothesis,
 premortem, tuner, budget, dataset, manifest) **before** tuning, every trial
 is recorded after it, and the verdict at the end (``error`` when it
-crashes). Before any of that the BL-37 preflight
+crashes). Trials reach the ledger as they finish, through a run-scoped
+trial sink (:func:`~stonks.lab.tuning.base.trial_sink`), so a cancel or a
+crash cannot hide trials that already ran (P2). A search where every trial
+failed ends the run with :class:`~stonks.lab.tuning.base.TuningFailed`
+(verdict ``error``), never a best score of 0.0. The run's ``parallel``
+worker count caps every pool in the run
+(:func:`~stonks.lab.parallel.run_max_workers`), and the ledger row gets a
+heartbeat while the run is alive, so the reaper only closes runs whose
+process is gone. Before any of that the BL-37 preflight
 (:func:`~stonks.lab.preflight.run_preflight`) checks data coverage, audit
 flags and universe membership: its errors stop the run, its warnings are
 logged and stored in the manifest. A dataset with a ``universe_id`` and no
@@ -18,15 +26,19 @@ tickers first gets that universe's members over the window, and with a
 With ``heatmap`` options the runner sweeps two parameters around the
 tuned set right after tuning (:mod:`stonks.lab.heatmap`, 22.5). Every
 cell joins the run's trials before the suite sees the count (P2), the
-winner stays the tuner's, and the plateau report is laid over the map.
+winner stays the tuner's (the ledger stores its trial index and params),
+and the plateau report is laid over the map.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Mapping
+import threading
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from stonks.config import Settings, configured_secrets
@@ -39,8 +51,9 @@ from stonks.core.protocols import (
 from stonks.ingest.redact import format_exception
 from stonks.lab.dataset import LabDataset
 from stonks.lab.heatmap import HeatmapOptions, ParameterHeatmap, pick_axes, plateau_overlay
-from stonks.lab.manifest import build_manifest, collect_seeds
-from stonks.lab.parallel import ParallelSettings
+from stonks.lab.manifest import build_manifest, build_recipe, collect_seeds
+from stonks.lab.offload.settings import LabOffloadSettings
+from stonks.lab.parallel import ParallelSettings, run_max_workers
 from stonks.lab.preflight import (
     PreflightError,
     PreflightReport,
@@ -51,6 +64,7 @@ from stonks.lab.survival.base import SurvivalSuite, TuningSetup
 from stonks.lab.survival.forecast_skill import ForecastSkillTest
 from stonks.lab.survival.plateau import PlateauOptions
 from stonks.lab.trials import (
+    LAB_RUN_STOPPED_MESSAGE,
     LabRunContext,
     LabRunSpec,
     TrialLedger,
@@ -59,9 +73,10 @@ from stonks.lab.trials import (
     new_run_id,
     trials_from_tuning,
 )
-from stonks.lab.tuning.base import fix_params, tune_and_fit
+from stonks.lab.tuning.base import TuningFailed, fix_params, trial_sink, tune_and_fit
 from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
+from stonks.store.state import SqliteState
 from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.runner")
@@ -72,26 +87,32 @@ LAB_RUN_CRASH_MESSAGE = (
     "The run stopped because of a problem on our side. Try again. "
     "If it happens again, ask an admin to look at the details."
 )
-#: What the ledger says of a run stopped before it finished (a cancel).
-LAB_RUN_STOPPED_MESSAGE = "The run was stopped before it finished."
+#: What everyone reads when every trial of the search failed. The first
+#: trial error is kept in ``lab_runs.error_detail`` for admins.
+LAB_RUN_TUNING_FAILED_MESSAGE = (
+    "Every trial of the search failed, so the run has no result. "
+    "Ask an admin to look at the details."
+)
+
+__all__ = [
+    "LAB_RUN_CRASH_MESSAGE",
+    "LAB_RUN_STOPPED_MESSAGE",
+    "LAB_RUN_TUNING_FAILED_MESSAGE",
+    "LabRunResult",
+    "LabRunner",
+    "costs_are_zero",
+    "suite_dataset",
+    "with_strategy_references",
+]
 
 
 def costs_are_zero(costs: Any) -> bool:
-    """True when a ``CostModelSettings`` (or ``None``) charges nothing: no
-    impact and no fee or spread for any asset class (BL-13)."""
+    """True when a ``CostModelSettings`` (or ``None``) charges nothing
+    (``CostModelSettings.charges_nothing``, BL-13)."""
     if costs is None:
         return True
-    if getattr(costs, "impact_bps", 0.0):
-        return False
-    classes = [costs.default, *getattr(costs, "asset_classes", {}).values()]
-    return not any(
-        c.fee_flat
-        or c.half_spread_bps
-        or c.fee_bps
-        or getattr(c, "commission", "none") != "none"
-        or getattr(c, "us_sell_fees", False)
-        for c in classes
-    )
+    charges_nothing = getattr(costs, "charges_nothing", None)
+    return bool(charges_nothing()) if callable(charges_nothing) else False
 
 
 def with_strategy_references(
@@ -151,6 +172,9 @@ class LabRunResult:
     preflight: PreflightReport | None = None
     #: The parameter heatmap around the tuned set (22.5), when asked for.
     heatmap: ParameterHeatmap | None = None
+    #: Index (in ``trials``) of the tuner's winner, ``None`` when no trial
+    #: matches it (a tuner that reports a winner it did not try).
+    best_trial_index: int | None = None
 
     @property
     def artifact_meta(self) -> dict[str, Any]:
@@ -254,13 +278,14 @@ class LabRunner:
             strategy_cls, dataset, class_path, fixed_params
         )
         seeds = collect_seeds(self._tuner, self._suite.tests)
-        manifest = self._manifest(dataset, seeds)
+        manifest = self._manifest(dataset, seeds, strategy_cls, fixed_params)
         if ensured is not None:
             manifest["ensure"] = ensured.model_dump(mode="json")
         if preflight_record is not None:
             manifest["preflight"] = preflight_record
         run_id = new_run_id()
         if self._ledger is not None:
+            self._reap_stale_runs()
             tuner_seed = seeds.get("tuner")
             self._ledger.start_run(
                 LabRunSpec(
@@ -287,10 +312,12 @@ class LabRunner:
                 hint="every backtest of this run ignores fees, spread and impact; "
                 "configure [backtest.costs] or pass a cost model",
             )
+        cap = self._parallel.resolved_workers() if self._parallel is not None else None
         try:
-            result = self._run(
-                strategy_cls, dataset, fixed_params, run_id, class_path, manifest, family
-            )
+            with run_max_workers(cap), self._alive(run_id):
+                result = self._run(
+                    strategy_cls, dataset, fixed_params, run_id, class_path, manifest, family
+                )
         except BaseException as exc:
             if self._ledger is not None:
                 try:
@@ -302,7 +329,12 @@ class LabRunner:
         result.hypothesis, result.premortem = hypothesis, premortem
         result.preflight = preflight
         if self._ledger is not None:
-            self._ledger.finish_run(run_id, "pass" if result.verdict == "pass" else "fail")
+            self._ledger.finish_run(
+                run_id,
+                "pass" if result.verdict == "pass" else "fail",
+                best_trial_index=result.best_trial_index,
+                best_params=result.best_params,
+            )
         return result
 
     def _failure(self, exc: BaseException) -> tuple[str, str | None]:
@@ -312,7 +344,47 @@ class LabRunner:
         if not isinstance(exc, Exception):
             return LAB_RUN_STOPPED_MESSAGE, None
         secrets = configured_secrets(self._settings) if isinstance(self._settings, Settings) else []
-        return LAB_RUN_CRASH_MESSAGE, format_exception(exc, secrets)
+        message = (
+            LAB_RUN_TUNING_FAILED_MESSAGE
+            if isinstance(exc, TuningFailed)
+            else LAB_RUN_CRASH_MESSAGE
+        )
+        return message, format_exception(exc, secrets)
+
+    def _lease_seconds(self) -> float:
+        if isinstance(self._settings, Settings):
+            return float(self._settings.lab.offload.lease_seconds)
+        return LabOffloadSettings().lease_seconds
+
+    def _reap_stale_runs(self) -> None:
+        """Close ledger runs left without a verdict past the lease (their
+        process died), so their budget counts before this run is judged."""
+        assert self._ledger is not None
+        try:
+            reaped = self._ledger.reap_unfinished(self._lease_seconds())
+        except Exception as exc:  # the reaper must never block a run
+            _log.warning("lab.reap.failed", error=str(exc))
+            return
+        if reaped:
+            _log.info("lab.reap.done", runs=reaped)
+
+    @contextmanager
+    def _alive(self, run_id: str) -> Iterator[None]:
+        """Touch the run's ledger row every quarter lease while the block
+        runs, on a thread with its own connection, so the reaper never
+        closes a run that is still going."""
+        path = getattr(getattr(self._ledger, "state", None), "_path", None)
+        if self._ledger is None or not isinstance(path, Path):
+            yield
+            return
+        stop = threading.Event()
+        beat = _Heartbeat(path, run_id, self._lease_seconds() / 4, stop)
+        beat.start()
+        try:
+            yield
+        finally:
+            stop.set()
+            beat.join(timeout=5)
 
     def _run(
         self,
@@ -330,13 +402,25 @@ class LabRunner:
             budget=self._budget,
             fixed_params=dict(fixed_params or {}),
         )
-        strategy, tuned = tune_and_fit(strategy_cls, dataset, setup, setup.fixed_params)
+        sink = _TrialCollector(self._ledger, run_id)
+        try:
+            with trial_sink(sink):
+                strategy, tuned = tune_and_fit(
+                    strategy_cls, dataset, setup, setup.fixed_params, require_score=True
+                )
+        except TuningFailed as exc:
+            sink.store(*sink.records(exc.tuned))
+            raise
+        trials, matrix = sink.records(tuned)
+        sink.store(trials, matrix)
+        best_index = _winner_index(trials, tuned.best_params, tuned.best_score)
         heatmap: ParameterHeatmap | None = None
         if self._heatmap is not None:
             tuned, heatmap = self._sweep(strategy_cls, dataset, setup, tuned, run_id)
-        trials, matrix = trials_from_tuning(tuned)
+            if heatmap is not None:  # the cells join the trials after the sweep
+                trials, matrix = sink.records(tuned)
+                sink.store(trials, matrix)
         if self._ledger is not None:
-            self._ledger.record_trials(run_id, trials, matrix)
             n_class = self._ledger.n_trials(class_path)
             n_family = self._ledger.n_trials_family(family) if family else 0
             n_searched = self._ledger.n_trials_searched(class_path, family)
@@ -376,6 +460,10 @@ class LabRunner:
             bind_run = getattr(test, "bind_run", None)
             if callable(bind_run):
                 bind_run(ctx)
+        # the seeds the tests use now that they know the run (BL-06)
+        manifest["seeds"] = collect_seeds(self._tuner, suite.tests)
+        if self._ledger is not None:
+            self._ledger.update_seeds(run_id, manifest["seeds"])
 
         reports = suite.run(strategy, suite_dataset(dataset, strategy))
         if heatmap is not None:
@@ -406,6 +494,7 @@ class LabRunner:
             n_trials_family=n_family,
             manifest=manifest,
             heatmap=heatmap,
+            best_trial_index=best_index,
         )
 
     def _sweep(
@@ -505,9 +594,110 @@ class LabRunner:
             raise PreflightError(report)
         return report, report.to_dict()
 
-    def _manifest(self, dataset: LabDataset, seeds: dict[str, Any]) -> dict[str, Any]:
+    def _manifest(
+        self,
+        dataset: LabDataset,
+        seeds: dict[str, Any],
+        strategy_cls: type[Strategy] | None = None,
+        fixed_params: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         try:
-            return build_manifest(self._settings, dataset, seeds)
+            recipe = build_recipe(
+                self._tuner,
+                self._objective,
+                self._suite.tests,
+                budget=self._budget,
+                heatmap=self._heatmap,
+                fixed_params=fixed_params,
+            )
+            return build_manifest(
+                self._settings,
+                dataset,
+                seeds,
+                strategy=strategy_cls,
+                params=fixed_params,
+                recipe=recipe,
+            )
         except Exception as exc:  # provenance must never block a lab run
             _log.warning("lab.manifest.failed", error=str(exc))
             return {"seeds": seeds, "error": str(exc)}
+
+
+class _TrialCollector:
+    """The run's trial sink: writes each finished trial to the ledger at
+    once (P2) and keeps its seed, so the final trial list carries seeds."""
+
+    def __init__(self, ledger: TrialLedger | None, run_id: str) -> None:
+        self._ledger = ledger
+        self._run_id = run_id
+        self._seeds: dict[int, int | None] = {}
+        self._written = 0
+
+    def __call__(self, outcomes: Sequence[Any], seeds: Sequence[int | None]) -> None:
+        records = []
+        for outcome, seed in zip(outcomes, seeds, strict=True):
+            self._seeds[id(outcome)] = seed
+            n_bars = getattr(outcome, "n_bars", None)
+            records.append(
+                TrialRecord(
+                    trial_index=self._written + len(records),
+                    params=dict(outcome.params),
+                    score=float(outcome.score),
+                    n_bars=int(n_bars) if n_bars is not None else None,
+                    seed=seed,
+                )
+            )
+        self._written += len(records)
+        if self._ledger is None:
+            return
+        try:
+            self._ledger.record_trials(self._run_id, records)
+        except Exception as exc:  # the final write tries again
+            _log.warning("lab.trials.record_failed", run_id=self._run_id, error=str(exc))
+
+    def records(self, tuned: Any) -> tuple[list[TrialRecord], TrialMatrix | None]:
+        """``trials_from_tuning(tuned)`` with the seed of each trial the
+        sink saw (matched by identity, so a tuner's reordering is fine)."""
+        trials, matrix = trials_from_tuning(tuned)
+        outcomes = getattr(tuned, "trials", None)
+        if outcomes is not None and len(outcomes) == len(trials):
+            trials = [
+                dataclasses.replace(t, seed=self._seeds.get(id(o)))
+                for t, o in zip(trials, outcomes, strict=True)
+            ]
+        return trials, matrix
+
+    def store(self, trials: list[TrialRecord], matrix: TrialMatrix | None) -> None:
+        """Make ``trials`` the run's whole list in the ledger (each once)."""
+        if self._ledger is not None:
+            self._ledger.replace_trials(self._run_id, trials, matrix)
+
+
+def _winner_index(
+    trials: Sequence[TrialRecord], best: Mapping[str, Any], score: float
+) -> int | None:
+    """The first scored trial with the tuner's best score whose params
+    match the winner's (the winner may add pinned params), else the first
+    with that score, else ``None``."""
+    scored = [t for t in trials if t.status == "ok" and t.score == score]
+    for t in scored:
+        if all(best.get(k) == v for k, v in t.params.items()):
+            return t.trial_index
+    return scored[0].trial_index if scored else None
+
+
+class _Heartbeat(threading.Thread):
+    """Touches a lab run's ledger row every ``interval`` seconds until
+    ``stop`` is set (a daemon thread with its own SQLite connection)."""
+
+    def __init__(self, path: Path, run_id: str, interval: float, stop: threading.Event) -> None:
+        super().__init__(name=f"lab-heartbeat-{run_id}", daemon=True)
+        self._path, self._run_id, self._interval, self._halt = path, run_id, interval, stop
+
+    def run(self) -> None:
+        while not self._halt.wait(self._interval):
+            try:
+                with SqliteState(self._path) as state:
+                    TrialLedger(state, self._path.parent).touch(self._run_id)
+            except Exception as exc:  # a missed beat only risks a later reap
+                _log.warning("lab.heartbeat.failed", run_id=self._run_id, error=str(exc))

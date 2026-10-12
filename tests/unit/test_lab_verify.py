@@ -71,3 +71,9 @@ def test_fingerprint_changes_cover_statement_versions() -> None:
     assert fingerprint_changes(before, after) == ["A", "B"]
     assert restated_tickers(before, after) == ["A", "B"]
     assert restated_tickers({"tickers": {}}, {"tickers": {}}) == []
+
+
+def test_the_report_names_changed_tables() -> None:
+    report = VerifyReport(**{**_report(1.0, 1.0).__dict__, "changed_tables": ["macro_indicators"]})
+    assert report.as_dict()["changed_tables"] == ["macro_indicators"]
+    assert report.moved is False  # changed data alone is reported, not judged

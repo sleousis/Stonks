@@ -12,11 +12,16 @@ Execution convention (no look-ahead)
 ------------------------------------
 Signals at bar ``t`` see data up to and including bar ``t``'s close, so
 orders decided at bar ``t`` are queued and fill at the **open of the next
-bar** in which that ticker has a bar. Orders still queued when the next
-rebalance decides are replaced by the fresh decisions; orders still queued
-after the last bar are never filled. Per bar the engine:
+bar** in which that ticker has a bar. When the next rebalance decides, the
+fresh decisions replace the queue, with one exception: an order whose
+ticker has had no bar since its decision (an equity order decided on
+Friday, with a crypto bar on Saturday) stays queued unless a fresh order
+names the same ticker. So a mixed-calendar universe fills an order exactly
+as the single-calendar one does. Orders still queued after the last bar are
+never filled. Per bar the engine:
 
-0. applies corporate actions whose ex-date has arrived (see below),
+0. applies corporate actions whose ex-date has arrived (see below), then
+   settles delisted holdings (see below),
 1. fills queued orders at this bar's opens (``broker.set_prices(opens)``),
 2. sets the broker's prices to closes (carried forward per ticker from its
    last bar when it has no bar at this timestamp, e.g. equities on a
@@ -26,7 +31,10 @@ after the last bar are never filled. Per bar the engine:
 
 All bar prices for the universe / interval / window are loaded with one
 query up front, joined to ``instruments`` for each ticker's asset class
-(missing row or NULL -> ``equity``). The broker receives those asset
+(missing row or NULL -> ``equity``) and delisted date. A bar whose close is
+NULL, NaN or not positive is skipped (logged once as
+``bars_skipped_bad_close``), so the ticker's last valid mark carries
+forward and the equity curve stays finite. The broker receives those asset
 classes and, when filling, each fill bar's open, high, low and volume, so
 its ``FillModel`` can cap participation and honour limit / stop orders and
 its ``CostModel`` can charge per-asset-class fees and volume-aware
@@ -76,7 +84,9 @@ equal by default), diffed into orders with the no-trade buffer and passed
 through every registered risk rule when ``BacktestConfig.risk`` is set, with
 a ``RiskContext`` from the engine's own equity curve, daily history and
 the entry date of each held position (from the broker's fills, so
-``max_holding`` works in a backtest). The history a decision sees ends at
+``max_holding`` works in a backtest). That daily history is loaded and
+sliced only when a decision reads it: for any constructor but
+``single_winner``, or when a risk policy is set. The history a decision sees ends at
 its bar (daily) or the day before (intraday), never later. That history is
 adjusted with the vendor's ``adj_close``, which already folds in splits and
 dividends after the decision, so each slice is rebased to the raw close of
@@ -105,6 +115,17 @@ that day. Buys of any other ticker are dropped, and a holding that is no
 longer a member is sold in full (client id ``universe:<bar>:<ticker>:sell``).
 A universe ticker with no span in that universe never trades. Without a
 ``universe_id`` every universe ticker trades on every bar, as before.
+
+Delistings (P14)
+----------------
+A holding whose name stops trading settles for cash on the first bar after
+its last bar, once the name is on or past ``instruments.delisted_date`` or
+past the end of its membership with no later bar. It settles at
+``last_close x (1 + BacktestConfig.delisting_return)`` (``[backtest.delisting]
+return``), its queued orders are dropped, and the event is listed in
+``BacktestReport.delistings`` so the trade ledger closes the lot. A name
+with no such evidence keeps its last mark, as before. See
+``stonks.backtest.delisting``.
 
 Short selling (roadmap 16.1)
 ----------------------------
@@ -166,6 +187,7 @@ from stonks.backtest.corporate_actions import (
     adjust_orders_for_split,
     apply_to_portfolio,
 )
+from stonks.backtest.delisting import DelistingReason, DelistingRecord
 from stonks.backtest.fills import (
     MarketStats,
     MarketStatsSpec,
@@ -230,12 +252,17 @@ class BacktestConfig:
     allow_short: bool = False
     #: ``[backtest.lots]``: round order sizes to lots (``None``: fractional).
     lots: LotSettings | None = None
+    #: ``[backtest.delisting] return``: a delisted holding settles at its last
+    #: close times ``1 + delisting_return`` (P14, see the module doc).
+    delisting_return: float = 0.0
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
             raise ValueError(
                 f"dividend_withholding_rate must be in [0, 1], got {self.dividend_withholding_rate}"
             )
+        if self.delisting_return < -1.0:
+            raise ValueError(f"delisting_return must be >= -1, got {self.delisting_return}")
         if isinstance(self.construction, str):
             from stonks.portfolio.pipeline import ConstructionSettings
 
@@ -287,6 +314,12 @@ class Backtester:
         self._fill_seq = 0
         self._membership: dict[str, list[tuple[date, date | None]]] | None = None
         self._raw_closes: dict[str, dict[date, float]] = {}
+        # P14: each ticker's ``instruments.delisted_date`` and the tickers
+        # already settled as delisted in this run
+        self._delisted_on: dict[str, date] = {}
+        self._delisted: set[str] = set()
+        #: Holdings settled because their name delisted, in order.
+        self.delistings: list[DelistingRecord] = []
         # BL-49: strategies read the lake through a point-in-time view of
         # the current decision bar; the views of one run share a session.
         self._pit = PitSession(lake)
@@ -312,6 +345,7 @@ class Backtester:
         self.target_books = {}
         self.decision_prices = {}
         self.forced_orders = []
+        self.delistings, self._delisted = [], set()
         self._lot_stats = LotStats(self._config.lots or LotSettings())
         broker_short = bool(getattr(self._broker, "allow_short", False))
         if broker_short != self._config.allow_short:
@@ -338,6 +372,10 @@ class Backtester:
         last_close: dict[str, float] = {}
         pending: list[Order] = []
         exposure: list[ExposurePoint] = []
+        last_bar: dict[str, datetime] = {}
+        for as_of, bars in bars_by_ts.items():
+            for ticker in bars:
+                last_bar[ticker] = as_of
 
         bars_since_rebalance: int | None = None
         for as_of, bars in bars_by_ts.items():
@@ -349,6 +387,9 @@ class Backtester:
 
             # 0b. corporate actions going ex on this bar, before its fills
             pending = self._apply_corporate_actions(schedule, bars, as_of, pending, applied)
+
+            # 0c. holdings whose name delisted settle for cash (P14)
+            pending = self._settle_delisted(as_of, last_bar, last_close, pending)
 
             # 1. fill orders queued on a previous bar at this bar's open
             if pending:
@@ -366,8 +407,7 @@ class Backtester:
                 bars_since_rebalance is None
                 or bars_since_rebalance >= self._config.rebalance_every_bars
             ):
-                pending = self._decide(as_of, marks)
-                self._decided_at = {order.client_id: as_of for order in pending}
+                pending = self._replace_queue(pending, self._decide(as_of, marks), as_of)
                 for order in pending:
                     if order.ticker in marks:
                         self.decision_prices.setdefault(order.client_id, marks[order.ticker])
@@ -396,7 +436,7 @@ class Backtester:
             corporate_actions=applied,
             sessions_per_year=calendar_for_universe(set(asset_classes.values())).sessions_per_year,
         )
-        report = replace(report, lots=self._lot_stats.report())
+        report = replace(report, lots=self._lot_stats.report(), delistings=tuple(self.delistings))
         if not self._config.allow_short:
             return report
         return replace(
@@ -461,10 +501,19 @@ class Backtester:
             )
         out: dict[datetime, dict[str, _Bar]] = {}
         asset_classes: dict[str, AssetClass] = {}
+        self._delisted_on = {}
+        bad_closes = 0
         row: Any
         for row in df.itertuples(index=False):
             row_stats = next(stats) if stats is not None else None
             if not row.in_window:
+                continue
+            if row.delisted_date is not None and not pd.isna(row.delisted_date):
+                self._delisted_on[row.ticker] = _as_date(row.delisted_date)
+            if pd.isna(row.close) or row.close <= 0:
+                # a bad close would turn the equity curve to NaN: skip the
+                # bar, so the ticker's last valid mark carries forward
+                bad_closes += 1
                 continue
             asset_classes[row.ticker] = row.asset_class
             out.setdefault(as_datetime(row.timestamp), {})[row.ticker] = _Bar(
@@ -475,6 +524,8 @@ class Backtester:
                 low=_float(row.low),
                 stats=None if row_stats is None else market_stats_from_row(*row_stats),
             )
+        if bad_closes:
+            _log.warning("bars_skipped_bad_close", count=bad_closes)
         return out, asset_classes
 
     def _apply_corporate_actions(
@@ -513,6 +564,102 @@ class Backtester:
                     )
                     applied.append(record)
         return pending
+
+    def _replace_queue(
+        self, queued: list[Order], decided: list[Order], as_of: datetime
+    ) -> list[Order]:
+        """The queue after a rebalance: the fresh decisions, plus every
+        queued order that never had a bar to fill in (a weekday order on a
+        crypto weekend bar), unless a fresh order names its ticker. A
+        carried remainder had its bar and is replaced as before."""
+        fresh = {order.ticker for order in decided}
+        members = self._members_on(as_of)
+        positions = self._broker.fetch_portfolio().positions
+        kept = [
+            order
+            for order in queued
+            if order.ticker not in fresh
+            and order.client_id not in self._roots
+            and order.ticker not in self._delisted
+            and not (
+                members is not None
+                and order.ticker not in members
+                and order.side == "buy"
+                and positions.get(order.ticker, 0.0) >= 0
+            )
+        ]
+        decided_at = {
+            order.client_id: self._decided_at[order.client_id]
+            for order in kept
+            if order.client_id in self._decided_at
+        }
+        decided_at.update({order.client_id: as_of for order in decided})
+        self._decided_at = decided_at
+        return kept + [order for order in decided if order.ticker not in self._delisted]
+
+    def _settle_delisted(
+        self,
+        as_of: datetime,
+        last_bar: Mapping[str, datetime],
+        last_close: dict[str, float],
+        pending: list[Order],
+    ) -> list[Order]:
+        """Settle every holding whose name delisted before this bar for cash
+        at its last close (P14, see ``stonks.backtest.delisting``). Drop its
+        queued orders and return the rest."""
+        portfolio = self._broker.fetch_portfolio()
+        for ticker, quantity in sorted(portfolio.positions.items()):
+            if ticker in self._delisted or quantity == 0 or ticker not in last_close:
+                continue
+            last = last_bar.get(ticker)
+            if last is None or as_of <= last:
+                continue
+            reason = self._delisting_reason(ticker, as_of)
+            if reason is None:
+                continue
+            close = last_close.pop(ticker)
+            price = close * (1.0 + self._config.delisting_return)
+            dropped = tuple(o.client_id for o in pending if o.ticker == ticker)
+            pending = [o for o in pending if o.ticker != ticker]
+            del portfolio.positions[ticker]
+            portfolio.cash += quantity * price
+            self._delisted.add(ticker)
+            _log.info(
+                "holding_delisted",
+                ticker=ticker,
+                bar=as_of.isoformat(),
+                quantity=quantity,
+                price=price,
+                reason=reason,
+            )
+            self.delistings.append(
+                DelistingRecord(
+                    timestamp=as_of,
+                    ticker=ticker,
+                    quantity=quantity,
+                    last_close=close,
+                    delisting_return=self._config.delisting_return,
+                    price=price,
+                    cash_delta=quantity * price,
+                    reason=reason,
+                    dropped_orders=dropped,
+                )
+            )
+        return pending
+
+    def _delisting_reason(self, ticker: str, as_of: datetime) -> DelistingReason | None:
+        """Why ``ticker`` counts as delisted at ``as_of`` (the caller knows
+        it has had no bar since its last one), or ``None``."""
+        day = as_of.date()
+        delisted_on = self._delisted_on.get(ticker)
+        if delisted_on is not None and day >= delisted_on:
+            return "delisted_date"
+        spans = (self._membership or {}).get(ticker)
+        if not spans:
+            return None
+        member = any(start <= day and (end is None or day < end) for start, end in spans)
+        ended = any(end is not None and end <= day for _, end in spans)
+        return "membership" if ended and not member else None
 
     def _fill_pending(
         self, pending: list[Order], bars: dict[str, _Bar], as_of: datetime
@@ -820,7 +967,7 @@ class Backtester:
                     scores[ticker] = r
             signals[key] = scores
         portfolio = self._broker.fetch_portfolio()
-        history = self._history_until(as_of)
+        history = self._history_until(as_of) if self._needs_history() else {}
         market = MarketView(
             as_of=as_of,
             prices=prices,
@@ -902,8 +1049,8 @@ class Backtester:
     def _load_history(self, bars_by_ts: Mapping[datetime, object]) -> dict[str, pd.DataFrame]:
         """Daily adjusted history for the pipeline's volatilities and risk
         context: ``history_bars`` before the window plus the window itself.
-        Only loaded when the pipeline runs."""
-        if self._config.construction_settings is None or not bars_by_ts:
+        Only loaded when a decision reads it (``_needs_history``)."""
+        if not self._needs_history() or not bars_by_ts:
             return {}
         from stonks.production.prices import load_history
 
@@ -918,6 +1065,15 @@ class Backtester:
         )
         self._raw_closes = self._load_raw_closes(end)
         return history
+
+    def _needs_history(self) -> bool:
+        """Whether a pipeline decision reads the daily history: for the
+        volatilities of every constructor but ``single_winner``, and for the
+        risk context (its rules and style exposures) when a policy is set."""
+        construction = self._config.construction_settings
+        if construction is None:
+            return False
+        return not construction.is_single_winner or self._config.risk is not None
 
     def _load_raw_closes(self, end: date) -> dict[str, dict[date, float]]:
         """Unadjusted daily closes up to ``end``, per ticker, for rebasing
@@ -973,7 +1129,8 @@ class Backtester:
 
 
 _BAR_COLUMNS = """b.timestamp, b.ticker, b.open, b.high, b.low, b.close, b.adj_close,
-                   b.volume, COALESCE(i.asset_class, 'equity') AS asset_class"""
+                   b.volume, COALESCE(i.asset_class, 'equity') AS asset_class,
+                   i.delisted_date"""
 
 
 def _float(value) -> float | None:

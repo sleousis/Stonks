@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 
+import { LabChoices } from '../../api/lab-choices.service';
 import type { HeatmapView } from '../../api/models';
 import { formatNumber } from '../../core/format/format';
 import { formatMetric, metricLabel } from '../metrics';
@@ -33,24 +34,20 @@ export function axisText(v: unknown): string {
   return JSON.stringify(v);
 }
 
-/** The metric the cells were scored on, in words. */
-export function heatmapMetricText(metric: string): string {
-  return METRIC_WORDS[metric] ?? metricLabel(metric);
-}
+/** The fast path's score, which is no objective of the registry. */
+const FAST_METRIC = 'fast_sharpe';
 
-const METRIC_WORDS: Record<string, string> = {
-  fast_sharpe: 'Sharpe on the fast path',
-  sharpe: 'Sharpe',
-  cagr: 'CAGR',
-  final_return: 'Total return',
-  sortino: 'Sortino',
-  calmar: 'Calmar',
-  sharpe_dd: 'Sharpe less twice the drawdown',
-  multi: 'Sharpe, Calmar and drawdown together',
-  cv_sharpe: 'Sharpe on purged folds',
-  cv_cagr: 'CAGR on purged folds',
-  cv_final_return: 'Total return on purged folds',
-};
+/**
+ * The metric the cells were scored on, in words: the objective's label from
+ * the server's registry (`objectiveLabel`), else the metric's own label.
+ */
+export function heatmapMetricText(
+  metric: string,
+  objectiveLabel: (name: string) => string | null = () => null,
+): string {
+  if (metric === FAST_METRIC) return 'Sharpe on the fast path';
+  return objectiveLabel(metric) ?? metricLabel(metric);
+}
 
 function same(a: unknown, b: unknown): boolean {
   if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 1e-9;
@@ -373,10 +370,13 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
 })
 export class ParamHeatmap {
   readonly heatmap = input.required<HeatmapView>();
+  private readonly choices = inject(LabChoices);
 
   protected readonly xName = computed(() => humanize(this.heatmap().x));
   protected readonly yName = computed(() => humanize(this.heatmap().y));
-  protected readonly metric = computed(() => heatmapMetricText(this.heatmap().metric));
+  protected readonly metric = computed(() =>
+    heatmapMetricText(this.heatmap().metric, (name) => this.choices.objectiveLabel(name)),
+  );
   protected readonly caption = computed(
     () =>
       `${this.metric()} by ${this.xName()} (across) and ${this.yName()} (down). The tuned set is outlined.`,
