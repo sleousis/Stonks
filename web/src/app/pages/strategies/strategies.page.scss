@@ -137,12 +137,29 @@
   }
 
   // The last header names the chevron column for screen readers only.
+  th:last-child {
+    position: relative;
+  }
+
   th:last-child .th-inner {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip: rect(0 0 0 0);
+  }
+
+  // Tablets: the table fits its width without the trend line, the date
+  // added and the chevron (the name still opens the strategy).
+  @media (min-width: 768px) and (max-width: 1099.98px) {
+    th:nth-child(4),
+    td:nth-child(4),
+    th:nth-child(8),
+    td:nth-child(8),
+    th:nth-child(9),
+    td:nth-child(9) {
+      display: none;
+    }
   }
 
   @include bp.phone {

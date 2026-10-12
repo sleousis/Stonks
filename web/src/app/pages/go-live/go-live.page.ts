@@ -121,9 +121,11 @@ export class GoLivePage {
       ? `${ready} ready to approve, ${this.onTrial()} on trial. Approve one from its Review tab.`
       : `${this.onTrial()} on trial, none ready to approve yet.`;
   });
-  /** The go-live check as a chip: passed, failed, or not checked yet. */
-  protected checkStatus(r: LeaderboardRow): 'pass' | 'fail' | 'not_yet' {
-    return r.golive_passed === true ? 'pass' : r.golive_passed === false ? 'fail' : 'not_yet';
+  /** The go-live check as a chip: passed, failed (a warning once approved by override), or not checked yet. */
+  protected checkStatus(r: LeaderboardRow): 'pass' | 'fail' | 'warn' | 'not_yet' {
+    if (r.golive_passed === true) return 'pass';
+    if (r.golive_passed === false) return r.status === 'active' ? 'warn' : 'fail';
+    return 'not_yet';
   }
   protected readonly goliveLabel = reviewGoliveLabel;
 

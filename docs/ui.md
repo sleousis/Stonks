@@ -416,7 +416,7 @@ neighbourhood is bordered, with the plateau verdict above. On phones the
 table scrolls inside its own labelled box.
 
 The Lab's screens sit in one row of underline tabs (`pages/lab/lab-nav.ts`)
-that wrap onto two lines on phones: Test a strategy (`/lab`) and Lab history
+that scroll sideways in their own row on phones: Test a strategy (`/lab`) and Lab history
 (`/lab/ledger`), then **More tools**: Sweep (`/lab/sweeps`), Signal check
 (`/lab/signal-ic`), Factors (`/lab/factors`) and Research sessions
 (`/lab/research`). A sweep
@@ -847,6 +847,51 @@ flowchart LR
   and stepping back need `strategy.promote`, and for an admin the buttons
   there follow the strategy page (a reason, the go-live check, a hold to
   confirm).
+
+## Research pages: the layout
+
+The research pages follow the page pattern: a title with a standfirst built
+from the data, a summary strip, then sections on ink rules.
+
+- **Strategies** (`/strategies`). Actions: New strategy, Test a strategy,
+  Leaderboard. A summary strip (Approved, On trial, Best trial return, Worst
+  drop), filter pills with a count each (All, Approved, On trial, Retired,
+  filtered in the browser), a labelled search and a Refresh icon button.
+  Each row: the name and kind, a status chip, the trial return, a 60-day
+  trend line of its test book, the worst drop, days on trial beside a ring
+  (filling toward the 63 days the go-live check asks for by default), how
+  you follow it (Alerts only, Paper with a PAPER stamp, Approve each trade
+  or Automatic with LIVE only at a real-money portfolio), the date added and
+  a chevron. The whole row opens the strategy. Tablets drop the trend line,
+  date and chevron. Phones show list items: name and kind with the status
+  and the follow under it, the return and trend line on the right.
+- **Strategy page** (`/strategies/:id`). A back link to Strategies, the
+  status chip and the PAPER or LIVE stamp under the name, Test again and
+  Leaderboard beside the forward step. A summary strip (Trial return, Worst
+  drop, Days on trial, Go-live check), the status ladder as a stepper, then
+  the underline tabs. The verdict is the one callout, with each go-live check
+  as a row with a pass or fail glyph and its value.
+- **Build a strategy** (`/studio/:id`). Two panes from 1100px: the rules on
+  the left as field groups (indicators as numbered rows, condition groups as
+  an accent rule, no boxes) and a sticky Check column on the right (the
+  check on sample data, problems, and Show JSON for admins).
+- **Lab** (`/lab`). The form in a 440px column, the result and the jobs on
+  the right. Field groups on ink rules, starting points and test suites as
+  radio rows. On phones the run button stays at the bottom of the screen
+  above the bottom nav. Wide tables (Recent lab jobs, Lab history) have a
+  Columns menu instead of scrolling sideways, remembered in this browser.
+  Robustness tests are rows with a chip. The parameter heatmap mixes up and
+  down into the page colour.
+- **Trial results** (`/paper`). A summary strip, the comparison chart, and
+  the strategies with a trial-day meter (20 ticks toward the go-live days).
+- **Strategy review** (`/go-live`). A summary strip (Ready to approve, On
+  trial, Approved), the queue with the go-live check as a pass, fail or
+  warning chip, days on trial with a ring, and the broker in a side column.
+  Approving happens on the strategy's Review tab with a reason.
+- **Going live** (`/going-live`). The stage path as a horizontal stepper
+  (Simulated, Broker paper, Real money small, Real money full): the current
+  stage in accent, the real-money stages in brass. The steps are rows on an
+  ink rule.
 
 ## Judging a strategy (release polish)
 

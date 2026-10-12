@@ -98,14 +98,15 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     .desc {
       max-width: 70ch;
     }
-    /* The list is an inset well: no border, a hairline between rows, the
-       picked row a surface chip with an accent rule. */
+    /* The list scrolls inside a field edge: a hairline between rows, the
+       picked row accent soft with a 3px accent edge. */
     .list {
       max-height: 18rem;
       overflow-y: auto;
       overscroll-behavior: contain;
+      border: 1px solid var(--rule-control);
       border-radius: var(--r-ctl);
-      background: var(--sunk);
+      background: var(--raise);
     }
     .group + .group {
       border-top: 1px solid var(--rule);

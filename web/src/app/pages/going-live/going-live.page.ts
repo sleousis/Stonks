@@ -270,7 +270,7 @@ import { lastPreview } from './preview-memory';
     li[data-state='current'] .stage-label {
       color: var(--accent);
     }
-    li.live .stage-label {
+    li.live:not([data-state='todo']) .stage-label {
       color: var(--brass);
     }
     .stage-means {
@@ -533,15 +533,16 @@ export class GoingLivePage {
       state: i < at ? 'done' : i === at ? 'current' : 'todo',
     }));
   });
-  /** The standfirst, from the checklist: "3 of 8 steps done for Main. Stage now: Simulated." */
+  /** The standfirst, from the portfolio: "Main is at Broker paper. Each step below says where to do it." */
   protected readonly standfirst = computed(() => {
     const p = this.picked();
     if (!p || !this.steps().length) {
       return 'Every step from paper to real money for one portfolio, in order.';
     }
     const stage = this.stageLabel();
-    const head = `${this.doneCount()} of ${this.total()} steps done for ${p.name}.`;
-    return stage ? `${head} Stage now: ${stage}.` : head;
+    return stage
+      ? `${p.name} is at ${stage}. Each step below says where to do it.`
+      : `From paper to real money for ${p.name}. Each step below says where to do it.`;
   });
   protected readonly stageLabel = computed(() =>
     this.stageLoaded() ? stageWords(this.stage.value()?.stage ?? '').label : null,
