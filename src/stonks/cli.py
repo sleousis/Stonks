@@ -2426,6 +2426,12 @@ from stonks.cli_factors import app as factors_app  # noqa: E402
 
 app.add_typer(factors_app, name="factors")
 
+# ---- the resumable vendor backfill (docs/backfill.md) ------------------------
+
+from stonks.cli_backfill import app as backfill_app  # noqa: E402
+
+ingest_app.add_typer(backfill_app, name="backfill")
+
 # ---- event calendars and news (roadmap 20.7) --------------------------------
 
 from stonks.cli_calendars import app as calendars_app  # noqa: E402

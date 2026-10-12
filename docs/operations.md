@@ -286,6 +286,10 @@ A backup is one folder `stonks-<UTC time>Z` with the state DB, the lake, Parquet
 
 The lake must not be held by another writer: stop `stonks serve` or back up from the server's own copy. `[backup]` in the config sets the folder and the retention. Off-server encrypted copies (restic) are covered in [deploy.md](deploy.md#6-backups). Full steps: [runbooks/restore.md](runbooks/restore.md).
 
+## Full backfill
+
+On an EODHD All-in-one plan, `uv run stonks ingest backfill run` fills the lake with every exchange, every symbol (delisted too), daily history, splits and dividends, fundamentals, calendars, macro, FX, news and intraday bars. It runs for days inside a daily call budget and resumes where it stopped. `stonks ingest backfill status` shows the progress. Set `STONKS_EODHD_PLAN=all_in_one` first and stop `stonks serve` while it runs. Details: [backfill.md](backfill.md).
+
 ## Data quality
 
 Every `ingest prices` and `ingest intraday` batch is checked before it is stored:

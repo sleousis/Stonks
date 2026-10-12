@@ -34,7 +34,7 @@ domain = "data"
 title = "Ingest macro, DeFi TVL, exchanges, fund holdings, stock borrow rates and SEC EDGAR filings, derive intervals"
 routes = []
 console = { limited = "operator bulk jobs, run by the scheduler" }
-cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest funds", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest edgar", "stonks ingest aggregate", "stonks ingest all-intervals"]
+cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest funds", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest edgar", "stonks ingest aggregate", "stonks ingest all-intervals", "stonks ingest backfill run", "stonks ingest backfill status", "stonks ingest backfill retry"]
 mcp = { limited = "operator bulk jobs, run by the scheduler" }
 
 [[capability]]
