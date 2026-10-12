@@ -47,11 +47,13 @@ from optuna.distributions import (
     IntDistribution,
 )
 from optuna.trial import TrialState
+from pydantic import BaseModel, ConfigDict
 
 from stonks.core.params import ParameterSpec, ParamSpace, tunable_only
 from stonks.core.protocols import Objective, Strategy, TrialOutcome, TunerResult
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.tuning.base import best_of, evaluate_candidates, merge_with_defaults
+from stonks.lab.tuning.registry import register_tuner
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.tuning.optuna")
@@ -109,14 +111,29 @@ def _axes(space: ParamSpace) -> list[_Axis]:
     return out
 
 
+@register_tuner("optuna")
 class OptunaTuner:
-    """Optuna's samplers behind the ``Tuner`` protocol (module doc).
+    """Bayesian search (Optuna).
+
+    Optuna's samplers behind the ``Tuner`` protocol (module doc): ``tpe``
+    samples near the good trials, ``nsga2`` searches the parts of the
+    ``multi`` objective jointly, ``random`` is a baseline.
 
     ``batch_size`` trials are asked per round and evaluated in parallel;
     ``n_startup_trials`` random trials seed TPE (default: one batch, at
     least 5). ``prune`` turns on the median pruner on the fast score after
     ``prune_startup`` finished trials; ``prune_cost_bps`` charges that
     fast score a flat cost per unit turnover."""
+
+    class Options(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        #: ``tpe`` (default), ``nsga2`` (a Pareto search over the ``multi``
+        #: objective's parts) or ``random``.
+        sampler: SamplerName = "tpe"
+        #: Stop trials whose fast vectorised score trails, before their full
+        #: backtest. Pruned trials still count (P2).
+        prune: bool = False
 
     def __init__(
         self,

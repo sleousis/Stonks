@@ -118,6 +118,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
 | [`list_intraday_snapshots`](#list_intraday_snapshots) | read | no |
 | [`list_jobs`](#list_jobs) | read | no |
+| [`list_lab_objectives`](#list_lab_objectives) | read | no |
+| [`list_lab_tuners`](#list_lab_tuners) | read | no |
 | [`list_ledger_runs`](#list_ledger_runs) | read | no |
 | [`list_model_candidates`](#list_model_candidates) | read | no |
 | [`list_model_versions`](#list_model_versions) | read | no |
@@ -1262,6 +1264,22 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_lab_objectives`
+
+Every objective a lab run can score trials with (the names objective takes), with a label and what it measures.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_lab_tuners`
+
+Every tuner a lab run can search with (the names tuner takes), with a label and the options schema of each.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_ledger_runs`
 
 The trial ledger: every recorded lab run, newest first, with its
@@ -2211,8 +2229,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `exclude` | list[string] \| null | no | `null` | strategies to leave out |
 | `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite for every strategy, the server default when omitted |
-| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | string | no | `"random"` | a tuner: grid, random, optuna, prescreen or another from list_lab_tuners |
+| `objective` | string | no | `"sharpe"` | an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives |
 | `budget` | integer | no | `20` | tuner trials each |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -2573,8 +2591,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
-| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | string | no | `"random"` | a tuner: grid, random, optuna, prescreen or another from list_lab_tuners |
+| `objective` | string | no | `"sharpe"` | an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -2716,8 +2734,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
-| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | string | no | `"random"` | a tuner: grid, random, optuna, prescreen or another from list_lab_tuners |
+| `objective` | string | no | `"sharpe"` | an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -2756,10 +2774,10 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `preflight` | boolean \| null | no | `null` | check the data before tuning (missing bars, gaps). Default [lab] preflight |
 | `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors. Default [lab] strict_preflight |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
-| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
+| `tuner` | string | no | `"random"` | a tuner: grid, random, optuna, prescreen or another from list_lab_tuners |
 | `sampler` | "tpe" \| "nsga2" \| "random" | no | `"tpe"` | optuna tuner: tpe, nsga2 (Pareto over multi) or random |
 | `prune` | boolean | no | `false` | optuna tuner: stop trials whose fast score trails |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `objective` | string | no | `"sharpe"` | an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |

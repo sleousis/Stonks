@@ -177,6 +177,41 @@ uv run stonks options backtest covered_call --underlyings AAPL.US --start 2025-0
 
 - **`RuleStrategy`** (`strategies/rule_based.py`): a strategy defined by a JSON spec (indicators including efficiency ratio and KAMA, entry and exit rules, sizing, percentage stops and vol or ATR trailing stops). Built, backtested and put on trial from **Build a strategy** (the Studio) in the console.
 
+## Add your own
+
+The lab grows one module at a time. No list is edited anywhere.
+
+| To add | Write | It is found by |
+|---|---|---|
+| A strategy | a `BaseStrategy` subclass with an `id` in `strategies/examples/` | `lab/catalog.py` |
+| An objective | a class with `@register_objective("name")` in `lab/objectives.py` (or any module it imports). `cv=True` also offers `cv_name`, the same score on purged folds | `lab/objectives.py` |
+| A tuner | a class with `@register_tuner("name")` in a new `lab/tuning/` module, with an `Options` model for its settings | `lab/tuning/registry.py` |
+| A survival test | a class with an `id` and a `run` method in a new `lab/survival/` module | `lab/survival/registry.py` |
+
+The API, the CLI, MCP and the console then accept the new name with no other change. `GET /api/lab/objectives` and `GET /api/lab/tuners` (`stonks lab objectives`, `stonks lab tuners`) list them. The first line of a class's docstring is its label in the console, the next paragraph its description. A lab request sets a tuner's settings in `tuner_options`, checked by the tuner's `Options` model. The old flat `grid_size`, `sampler` and `prune` fields still work.
+
+### Plugins from a pip package
+
+An outside package can add the same four things without a change to Stonks. It names its classes under these entry point groups:
+
+| Group | Adds |
+|---|---|
+| `stonks.strategies` | strategies, keyed by their `id` |
+| `stonks.objectives` | objectives, named by the entry point (`cv = True` on the class adds the `cv_` variant) |
+| `stonks.tuners` | tuners, named by the entry point |
+| `stonks.survival_tests` | survival tests, keyed by their `id` |
+
+```toml
+# pyproject.toml of the outside package
+[project.entry-points."stonks.strategies"]
+my_trend = "my_pkg.trend:MyTrend"
+
+[project.entry-points."stonks.objectives"]
+omega = "my_pkg.objectives:OmegaObjective"
+```
+
+After `uv pip install my-pkg`, `stonks lab run my_trend ...` works. Each group is read once per process (`lab/plugins.py`) and every plugin is logged by name with its package. A plugin that fails to load is logged and skipped. A plugin never replaces a built-in of the same name. The catalog stays the allow-list: only classes named by an installed entry point are imported, never a `module:Class` sent in a request.
+
 ## Portfolio constructors
 
 A constructor turns the strategies' signals into target weights (`portfolio/`). Registered ones:

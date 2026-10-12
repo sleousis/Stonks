@@ -41,6 +41,18 @@ ROUTE_READS: tuple[RouteRead, ...] = (
         "it checks and its options schema (the keys test_options takes).",
     ),
     RouteRead(
+        "list_lab_objectives",
+        "/api/lab/objectives",
+        "Every objective a lab run can score trials with (the names objective takes), "
+        "with a label and what it measures.",
+    ),
+    RouteRead(
+        "list_lab_tuners",
+        "/api/lab/tuners",
+        "Every tuner a lab run can search with (the names tuner takes), with a label and "
+        "the options schema of each.",
+    ),
+    RouteRead(
         "list_survival_presets",
         "/api/lab/survival-presets",
         "The named survival suites (quick, standard, promotion) and the tests in each.",

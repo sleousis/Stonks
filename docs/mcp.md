@@ -152,6 +152,7 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `list_portfolios`, `list_trading_modes`, `list_subscriptions` | `GET /api/portfolios[/trading-modes]`, `GET /api/subscriptions` |
 | `list_universes`, `get_universe`, `get_universe_members` | `GET /api/universes/...` |
 | `list_survival_tests`, `list_survival_presets` | `GET /api/lab/survival-tests`, `GET /api/lab/survival-presets` |
+| `list_lab_objectives`, `list_lab_tuners` (the names `objective` and `tuner` take, with labels and tuner options) | `GET /api/lab/objectives`, `GET /api/lab/tuners` |
 | `get_broker` (kind, paper, allow_live, credentials configured; never keys) | `GET /api/brokers` |
 | `list_strategies`, `get_strategy` (with survival reports) | `GET /api/strategies[/{id}]` |
 | `list_shadow_decisions`, `list_shadow_pnl` | `GET /api/shadow/decisions`, `GET /api/shadow/pnl` |

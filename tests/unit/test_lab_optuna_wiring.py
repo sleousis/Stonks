@@ -3,17 +3,17 @@ the CLI and MCP (22.1)."""
 
 from __future__ import annotations
 
-from typing import get_args
+import pytest
+import typer
+from pydantic import TypeAdapter
 
 from stonks.app.lab import (
-    _OBJECTIVES,
     LabRunOptions,
-    ObjectiveName,
-    TunerName,
     _CancellableObjective,
     build_tuner,
+    lab_objectives,
 )
-from stonks.lab.objectives import MultiMetricObjective
+from stonks.lab.objectives import MultiMetricObjective, objective_names
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.tuning.optuna import OptunaTuner
 
@@ -29,19 +29,22 @@ def test_build_tuner_makes_the_optuna_tuner_from_the_options():
 
 def test_the_new_objectives_are_choices():
     for name in ("sortino", "calmar", "sharpe_dd", "multi"):
-        assert name in get_args(ObjectiveName)
-        assert _OBJECTIVES[name]().name == name
+        assert name in objective_names()
+        assert lab_objectives()[name]().name == name
         assert LabRunOptions(objective=name).objective == name
 
 
-def test_cli_and_mcp_offer_the_same_tuners_and_samplers():
-    from stonks.cli import _LAB_SAMPLERS, _LAB_TUNERS
-    from stonks.lab.tuning.optuna import SamplerName
-    from stonks.mcp.tools.common import SamplerName as McpSamplerName
+def test_cli_and_mcp_accept_every_registry_tuner():
+    from stonks.cli import _tuner_choice
+    from stonks.lab.tuning.registry import tuner_names
     from stonks.mcp.tools.common import TunerName as McpTunerName
 
-    assert set(_LAB_TUNERS) == set(get_args(TunerName)) == set(get_args(McpTunerName))
-    assert set(_LAB_SAMPLERS) == set(get_args(SamplerName)) == set(get_args(McpSamplerName))
+    adapter = TypeAdapter(McpTunerName)
+    for name in tuner_names():
+        assert _tuner_choice(name) == name
+        assert adapter.validate_python(name) == name
+    with pytest.raises(typer.BadParameter, match="--tuner"):
+        _tuner_choice("no_such_tuner")
 
 
 class _Ctx:

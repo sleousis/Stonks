@@ -39,14 +39,13 @@ from stonks.core.types import Portfolio
 from stonks.ingest.ensure import DataEnsurer, EnsureReport
 from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.cv import CVObjective
 from stonks.lab.dataset import LabDataset, scoring_window
 from stonks.lab.heatmap import HeatmapOptions
 from stonks.lab.objectives import (
-    OBJECTIVES,
-    CAGRObjective,
-    FinalReturnObjective,
-    SharpeObjective,
+    describe_objective,
+    objective_factories,
+    objective_label,
+    objective_names,
 )
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.preflight import PreflightError, PreflightReport
@@ -61,9 +60,7 @@ from stonks.lab.survival.registry import (
 )
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lab.trials import TrialLedger
-from stonks.lab.tuning.grid import GridTuner
-from stonks.lab.tuning.optuna import OptunaTuner, SamplerName
-from stonks.lab.tuning.random import RandomTuner
+from stonks.lab.tuning import registry as tuner_registry
 from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 from stonks.registry.artifact import update_meta
@@ -79,25 +76,40 @@ LAB_ENSURE_JOB = "lab_ensure"
 #: Many catalogued strategies through the lab on one basket.
 LAB_SWEEP_JOB = "lab_sweep"
 
-#: ``optuna`` is Bayesian search (``lab.tuning.optuna``, 22.1).
-TunerName = Literal["grid", "random", "optuna"]
-#: ``cv_*`` score each trial on purged folds of the train window
-#: (``lab.cv.CVObjective``), so the tuner stops picking on in-sample fit.
-#: ``sortino``, ``calmar``, ``sharpe_dd`` and ``multi`` weigh the downside
-#: (``lab.objectives``, 22.1).
-ObjectiveName = Literal[
-    "sharpe",
-    "cagr",
-    "final_return",
-    "sortino",
-    "calmar",
-    "sharpe_dd",
-    "multi",
-    "cv_sharpe",
-    "cv_cagr",
-    "cv_final_return",
+
+def _check_objective(name: str) -> str:
+    if name not in objective_names():
+        raise ValueError(f"unknown objective {name!r}; choose from {objective_names()}")
+    return name
+
+
+def _check_tuner(name: str) -> str:
+    if name not in tuner_registry.tuner_names():
+        raise ValueError(f"unknown tuner {name!r}; choose from {tuner_registry.tuner_names()}")
+    return name
+
+
+#: A tuner from ``stonks.lab.tuning.registry`` (``grid``, ``random``,
+#: ``optuna``, ``prescreen`` and any plugin), validated against the registry.
+TunerName = Annotated[
+    str,
+    AfterValidator(_check_tuner),
+    WithJsonSchema({"type": "string", "enum": tuner_registry.tuner_names()}),
+]
+#: An objective from ``stonks.lab.objectives`` (``cv_*`` score each trial on
+#: purged folds of the train window), validated against the registry.
+ObjectiveName = Annotated[
+    str,
+    AfterValidator(_check_objective),
+    WithJsonSchema({"type": "string", "enum": objective_names()}),
 ]
 CostModelName = Literal["zero", "realistic", "ibkr_tiered", "ibkr_fixed"]
+
+#: The deprecated flat tuner fields of :class:`LabRunOptions`, read into
+#: the chosen tuner's options when its ``Options`` model has them.
+_FLAT_TUNER_FIELDS: tuple[str, ...] = ("grid_size", "sampler", "prune")
+#: Marks those fields deprecated in the OpenAPI schema (the client warns).
+_DEPRECATED: dict[str, Any] = {"deprecated": True}
 
 #: API names kept from before the survival-test registry (BL-10).
 _LEGACY_TEST_NAMES: dict[str, str] = {"permutation": "mcpt"}
@@ -151,18 +163,52 @@ BenchmarkSpec = Annotated[
 #: Options per survival test id, e.g. ``{"oos": {"mode": "sharpe"}}``.
 SurvivalTestOptions = dict[SurvivalTestName, dict[str, Any]]
 
-_OBJECTIVES: dict[str, Callable[[], Objective]] = {
-    **OBJECTIVES,
-    "cv_sharpe": lambda: CVObjective(SharpeObjective()),
-    "cv_cagr": lambda: CVObjective(CAGRObjective()),
-    "cv_final_return": lambda: CVObjective(FinalReturnObjective()),
-}
-
 
 def lab_objectives() -> dict[str, Callable[[], Objective]]:
     """Every objective a lab request can name, by name (also what ``lab
     verify`` rescores with)."""
-    return dict(_OBJECTIVES)
+    return objective_factories()
+
+
+class ObjectiveInfo(BaseModel):
+    """An objective a lab request can name in ``objective``."""
+
+    name: str
+    #: Short label (the first line of the class's docstring).
+    label: str
+    description: str
+
+
+class TunerInfo(BaseModel):
+    """A tuner a lab request can name in ``tuner``, with the JSON Schema of
+    what ``tuner_options`` may set for it."""
+
+    name: str
+    #: Short label (the first line of the class's docstring).
+    label: str
+    description: str
+    options_schema: dict[str, Any]
+
+
+def objective_catalog() -> list[ObjectiveInfo]:
+    """Every registered objective with its label, in menu order."""
+    return [
+        ObjectiveInfo(name=n, label=objective_label(n), description=describe_objective(n))
+        for n in objective_names()
+    ]
+
+
+def tuner_catalog() -> list[TunerInfo]:
+    """Every registered tuner with its label and options schema."""
+    return [
+        TunerInfo(
+            name=n,
+            label=tuner_registry.tuner_label(n),
+            description=tuner_registry.describe_tuner(n),
+            options_schema=tuner_registry.options_model(n).model_json_schema(),
+        )
+        for n in tuner_registry.tuner_names()
+    ]
 
 
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
@@ -418,14 +464,32 @@ class LabRunOptions(BaseModel):
     budget: int = Field(default=20, ge=1, le=1_000)
     seed: int = 0
     objective: ObjectiveName = "sharpe"
-    #: Points per numeric axis for the ``grid`` tuner.
-    grid_size: int = Field(default=5, ge=1, le=50)
-    #: The ``optuna`` tuner's sampler: ``tpe`` (default), ``nsga2`` (a
-    #: Pareto search over the ``multi`` objective's parts) or ``random``.
-    sampler: SamplerName = "tpe"
-    #: Let the ``optuna`` tuner stop trials whose fast vectorised score
-    #: trails, before their full backtest. Pruned trials still count (P2).
-    prune: bool = False
+    #: Settings of the chosen tuner, validated by its ``Options`` model
+    #: (``GET /api/lab/tuners``), e.g. ``{"grid_size": 7}`` for ``grid`` or
+    #: ``{"sampler": "nsga2", "prune": true}`` for ``optuna``.
+    tuner_options: dict[str, Any] | None = None
+    #: Deprecated, use ``tuner_options``: points per numeric axis for the
+    #: ``grid`` (and ``prescreen``) tuner.
+    grid_size: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Deprecated: use tuner_options.grid_size",
+        json_schema_extra=_DEPRECATED,
+    )
+    #: Deprecated, use ``tuner_options``: the ``optuna`` tuner's sampler.
+    sampler: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Deprecated: use tuner_options.sampler",
+        json_schema_extra=_DEPRECATED,
+    )
+    #: Deprecated, use ``tuner_options``: the ``optuna`` tuner's pruning.
+    prune: bool | None = Field(
+        default=None,
+        description="Deprecated: use tuner_options.prune",
+        json_schema_extra=_DEPRECATED,
+    )
     #: Sweep two parameters around the tuned set into a heatmap with the
     #: plateau verdict on it (22.5). Every cell is a counted trial.
     heatmap: HeatmapOptions | None = None
@@ -472,6 +536,19 @@ class LabRunOptions(BaseModel):
     def registers(self) -> bool:
         return self.register_strategy or self.register_if_passes
 
+    def resolved_tuner_options(self) -> BaseModel:
+        """The chosen tuner's ``Options``: the deprecated flat fields the
+        tuner knows (others are ignored, as before), then ``tuner_options``
+        over them."""
+        model = tuner_registry.options_model(self.tuner)
+        merged: dict[str, Any] = {
+            name: getattr(self, name)
+            for name in _FLAT_TUNER_FIELDS
+            if getattr(self, name) is not None and name in model.model_fields
+        }
+        merged.update(self.tuner_options or {})
+        return model.model_validate(merged)
+
     def suite(self) -> list[str]:
         """Survival test ids to run: explicit tests (legacy names mapped),
         else ``preset``, else ``promotion`` when registering, else ``quick``."""
@@ -505,6 +582,11 @@ class LabRunOptions(BaseModel):
             if _LEGACY_TEST_NAMES.get(key, key) == name:
                 options.update(value)
         return options or None
+
+    @model_validator(mode="after")
+    def _check_tuner_options(self) -> Self:
+        self.resolved_tuner_options()  # a bad option is a 422 here, not a failed job
+        return self
 
     @model_validator(mode="after")
     def _check_options(self) -> Self:
@@ -735,14 +817,11 @@ class LabExecution:
 
 
 def build_tuner(options: LabRunOptions, parallel: ParallelSettings | None = None) -> Tuner:
-    """The request's tuner, spreading trials over ``parallel`` workers."""
-    if options.tuner == "grid":
-        return GridTuner(grid_size=options.grid_size, seed=options.seed, parallel=parallel)
-    if options.tuner == "optuna":
-        return OptunaTuner(
-            seed=options.seed, parallel=parallel, sampler=options.sampler, prune=options.prune
-        )
-    return RandomTuner(seed=options.seed, parallel=parallel)
+    """The request's tuner from the registry, spreading trials over
+    ``parallel`` workers."""
+    return tuner_registry.build_tuner(
+        options.tuner, options.resolved_tuner_options(), seed=options.seed, parallel=parallel
+    )
 
 
 def pinned_params(cls: type[Strategy], ref: StrategyRef) -> dict[str, Any] | None:
@@ -800,7 +879,7 @@ def execute_lab_run(
     check_heatmap_axes(cls, request.heatmap, set(fixed_params or {}))
     workers = parallel or settings.lab.parallel
     tuner = build_tuner(request, workers)
-    objective: Objective = _OBJECTIVES[request.objective]()
+    objective: Objective = lab_objectives()[request.objective]()
     tests: list[SurvivalTest] = [
         build_survival_test(name, _test_options(name, request, settings.lab.walk_forward))
         for name in request.suite()

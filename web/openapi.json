@@ -5222,11 +5222,19 @@
             "type": "string"
           },
           "grid_size": {
-            "default": 5,
-            "maximum": 50.0,
-            "minimum": 1.0,
-            "title": "Grid Size",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.grid_size",
+            "title": "Grid Size"
           },
           "heatmap": {
             "anyOf": [
@@ -5322,9 +5330,17 @@
             "title": "Preset"
           },
           "prune": {
-            "default": false,
-            "title": "Prune",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.prune",
+            "title": "Prune"
           },
           "register_if_passes": {
             "default": false,
@@ -5337,14 +5353,18 @@
             "type": "boolean"
           },
           "sampler": {
-            "default": "tpe",
-            "enum": [
-              "tpe",
-              "nsga2",
-              "random"
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Sampler",
-            "type": "string"
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.sampler",
+            "title": "Sampler"
           },
           "seed": {
             "default": 0,
@@ -5464,11 +5484,24 @@
             "default": "random",
             "enum": [
               "grid",
-              "random",
-              "optuna"
+              "optuna",
+              "prescreen",
+              "random"
             ],
             "title": "Tuner",
             "type": "string"
+          },
+          "tuner_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tuner Options"
           },
           "universe": {
             "items": {
@@ -11310,11 +11343,19 @@
             "type": "boolean"
           },
           "grid_size": {
-            "default": 5,
-            "maximum": 50.0,
-            "minimum": 1.0,
-            "title": "Grid Size",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.grid_size",
+            "title": "Grid Size"
           },
           "heatmap": {
             "anyOf": [
@@ -11410,9 +11451,17 @@
             "title": "Preset"
           },
           "prune": {
-            "default": false,
-            "title": "Prune",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.prune",
+            "title": "Prune"
           },
           "register_if_passes": {
             "default": false,
@@ -11425,14 +11474,18 @@
             "type": "boolean"
           },
           "sampler": {
-            "default": "tpe",
-            "enum": [
-              "tpe",
-              "nsga2",
-              "random"
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Sampler",
-            "type": "string"
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.sampler",
+            "title": "Sampler"
           },
           "seed": {
             "default": 0,
@@ -11555,11 +11608,24 @@
             "default": "random",
             "enum": [
               "grid",
-              "random",
-              "optuna"
+              "optuna",
+              "prescreen",
+              "random"
             ],
             "title": "Tuner",
             "type": "string"
+          },
+          "tuner_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tuner Options"
           },
           "universe": {
             "items": {
@@ -15256,6 +15322,30 @@
           "note"
         ],
         "title": "NoteRequest",
+        "type": "object"
+      },
+      "ObjectiveInfo": {
+        "description": "An objective a lab request can name in ``objective``.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "description"
+        ],
+        "title": "ObjectiveInfo",
         "type": "object"
       },
       "OnboardingStepView": {
@@ -29338,11 +29428,19 @@
             "type": "array"
           },
           "grid_size": {
-            "default": 5,
-            "maximum": 50.0,
-            "minimum": 1.0,
-            "title": "Grid Size",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.grid_size",
+            "title": "Grid Size"
           },
           "heatmap": {
             "anyOf": [
@@ -29438,9 +29536,17 @@
             "title": "Preset"
           },
           "prune": {
-            "default": false,
-            "title": "Prune",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.prune",
+            "title": "Prune"
           },
           "register_if_passes": {
             "default": false,
@@ -29453,14 +29559,18 @@
             "type": "boolean"
           },
           "sampler": {
-            "default": "tpe",
-            "enum": [
-              "tpe",
-              "nsga2",
-              "random"
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Sampler",
-            "type": "string"
+            "deprecated": true,
+            "description": "Deprecated: use tuner_options.sampler",
+            "title": "Sampler"
           },
           "seed": {
             "default": 0,
@@ -29595,11 +29705,24 @@
             "default": "random",
             "enum": [
               "grid",
-              "random",
-              "optuna"
+              "optuna",
+              "prescreen",
+              "random"
             ],
             "title": "Tuner",
             "type": "string"
+          },
+          "tuner_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tuner Options"
           },
           "universe": {
             "items": {
@@ -32559,6 +32682,36 @@
           "detail"
         ],
         "title": "TradingModeView",
+        "type": "object"
+      },
+      "TunerInfo": {
+        "description": "A tuner a lab request can name in ``tuner``, with the JSON Schema of\nwhat ``tuner_options`` may set for it.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "options_schema": {
+            "additionalProperties": true,
+            "title": "Options Schema",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "description",
+          "options_schema"
+        ],
+        "title": "TunerInfo",
         "type": "object"
       },
       "TurnView": {
@@ -46810,6 +46963,87 @@
         "x-permission": "lab.run"
       }
     },
+    "/api/lab/objectives": {
+      "get": {
+        "description": "Every objective a lab run can name in ``objective``, with a label and\na description from the objective's docstring (plugins included).",
+        "operationId": "listLabObjectives",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ObjectiveInfo"
+                  },
+                  "title": "Response Listlabobjectives",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Lab Objectives",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
     "/api/lab/runs": {
       "post": {
         "description": "Queue tune → fit → survival suite; fetch the typed result from\n``GET /api/lab/runs/{job_id}/result`` once it succeeds. Registering the\nresult in the catalog (``register_strategy``, ``register_if_passes``)\nneeds an admin.",
@@ -47495,6 +47729,87 @@
           }
         ],
         "summary": "Get Sweep Result",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/lab/tuners": {
+      "get": {
+        "description": "Every tuner a lab run can name in ``tuner``, with a label and the JSON\nSchema of what ``tuner_options`` may set for it (plugins included).",
+        "operationId": "listLabTuners",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TunerInfo"
+                  },
+                  "title": "Response Listlabtuners",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Lab Tuners",
         "tags": [
           "lab"
         ]

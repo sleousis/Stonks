@@ -15,8 +15,9 @@ src/stonks/lab/
 ├── universe.py      # point-in-time universes: id, list or rule (BL-37)
 ├── catalog.py       # every strategy `stonks lab run` can name
 ├── dataset.py       # LabDataset: train / validation windows, embargo
-├── objectives.py    # sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi
-├── tuning/          # grid.py, random.py, optuna.py, tune_and_fit in base.py
+├── objectives.py    # objective registry: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi
+├── tuning/          # registry.py, grid.py, random.py, optuna.py, prescreen.py, tune_and_fit in base.py
+├── plugins.py       # stonks.* entry points from outside packages
 ├── heatmap.py       # 2D parameter sweeps around the tuned set
 ├── trials.py        # trial ledger: lab_runs, lab_trials
 ├── manifest.py      # reproducibility manifest (code identity, config hash, data fingerprint, recipe)
@@ -57,9 +58,11 @@ class Strategy(Protocol):
 
 ## Tuners and objectives
 
-- Tuners: `grid`, `random` and `optuna` (`--tuner`). A tuner reads only the `ParamSpace`.
+- Tuners: `grid`, `random`, `optuna` and `prescreen` (`--tuner`). A tuner reads only the `ParamSpace`.
+- Tuners and objectives are registries. A tuner is a class with `@register_tuner("name")` in a `lab/tuning/` module, and an `Options` model for what `tuner_options` (`--tuner-options JSON`) may set. An objective is a class with `@register_objective("name", cv=...)`. The API, CLI, MCP and console read the names from the registries (`GET /api/lab/tuners`, `GET /api/lab/objectives`, `stonks lab tuners`, `stonks lab objectives`). Outside packages add more through entry points, see [strategies](../strategies/README.md#add-your-own).
+- `prescreen` scores a large grid with the vectorised fast path, then runs the full backtest on the best `budget` sets (see [fast path](#fast-path)). A strategy without the fast path gets the plain grid.
 - `optuna` is Bayesian search. Optuna stays inside `lab/tuning/optuna.py`, behind the `Tuner` seam. It asks for trials in fixed batches and our process pool runs them, so the result is the same for any worker count and the same seed gives the same trials.
-- `--sampler` picks how optuna searches: `tpe` (default), `nsga2` (a Pareto search over the parts of the `multi` objective) or `random`.
+- `--sampler` (or `tuner_options.sampler`) picks how optuna searches: `tpe` (default), `nsga2` (a Pareto search over the parts of the `multi` objective) or `random`.
 - `--prune` lets optuna stop a trial early when its fast vectorised score trails the others. Only strategies with the fast path can be pruned. A pruned trial still counts in the trial ledger (P2).
 - Objectives (`--objective`): `sharpe` (default), `cagr`, `final_return`, `sortino`, `calmar`, `sharpe_dd` (Sharpe less twice the max drawdown) and `multi` (Sharpe plus half the Calmar less the max drawdown). `cv_sharpe`, `cv_cagr` and `cv_final_return` score on purged folds.
 - `lab.cv.CVObjective(inner, folds=5)` wraps any of them: it scores a strategy on purged folds of the train window, each fold fitted on the others, so a tuner stops picking on in-sample fit (BL-45). The `cv_*` objectives are this wrapper.

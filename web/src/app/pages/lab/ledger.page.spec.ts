@@ -10,6 +10,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { LedgerRunPage, paramsText, searchName } from './ledger-run.page';
 import { LedgerPage, className, scoreText } from './ledger.page';
+import { LAB_OBJECTIVES } from './lab-test-fixtures';
 
 function run(i: number, over: Partial<LedgerRunView> = {}): LedgerRunView {
   return {
@@ -114,6 +115,16 @@ describe('LedgerPage', () => {
   });
 });
 
+/** Answer the objective labels the page asks for, then redraw. */
+async function labelsFrom(
+  http: HttpTestingController,
+  fixture: ComponentFixture<unknown>,
+): Promise<void> {
+  http.match('/api/lab/objectives').forEach((r) => r.flush(LAB_OBJECTIVES));
+  await tick();
+  fixture.detectChanges();
+}
+
 describe('LedgerRunPage', () => {
   it('shows the idea, the data and every trial, with the class count explained', async () => {
     TestBed.configureTestingModule({
@@ -166,6 +177,8 @@ describe('LedgerRunPage', () => {
     expect([...el.querySelectorAll('thead th')].map((t) => t.textContent!.trim())).toContain('Ran');
     expect(el.textContent).toContain('It stops working when trends vanish.');
     expect(el.querySelector('a.back')?.getAttribute('href')).toBe('/lab/ledger');
+    await labelsFrom(http, fixture);
+    expect(el.querySelector('.tiles')!.textContent).toContain('Sharpe');
     http.verify();
   });
 
@@ -195,6 +208,7 @@ describe('LedgerRunPage', () => {
     expect(el.textContent).toContain('Buys the strongest trailing returns.');
     expect(el.textContent).not.toContain('None written');
     expect(el.textContent).not.toContain('Premortem');
+    await labelsFrom(http, fixture);
     http.verify();
   });
 
@@ -235,6 +249,7 @@ describe('LedgerRunPage', () => {
         expect(reason.querySelector('details')).toBeNull();
         expect(el.textContent).not.toContain('pickle');
       }
+      await labelsFrom(http, fixture);
       http.verify();
     });
   }
@@ -262,6 +277,7 @@ describe('LedgerRunPage', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('.failed-reason details')).toBeNull();
     expect(el.textContent).not.toContain('kaboom');
+    await labelsFrom(http, fixture);
     http.verify();
   });
 });

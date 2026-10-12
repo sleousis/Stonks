@@ -1,8 +1,42 @@
-import type { SignalIcView, SurvivalTestInfo, SweepResultView } from '../../api/models';
+import type {
+  ObjectiveInfo,
+  SignalIcView,
+  SurvivalTestInfo,
+  SweepResultView,
+  TunerInfo,
+} from '../../api/models';
 
 /**
  * Test data for the Lab specs (not used by the app).
  */
+
+/** What `GET /api/lab/objectives` returns (trimmed descriptions). */
+export const LAB_OBJECTIVES: ObjectiveInfo[] = [
+  { name: 'sharpe', label: 'Sharpe', description: '' },
+  { name: 'cagr', label: 'CAGR', description: '' },
+  { name: 'calmar', label: 'Calmar', description: '' },
+  { name: 'sharpe_dd', label: 'Sharpe less twice the drawdown', description: '' },
+  { name: 'multi', label: 'Sharpe, Calmar and drawdown together', description: '' },
+  { name: 'cv_sharpe', label: 'Sharpe on purged folds', description: '' },
+];
+
+/** What `GET /api/lab/tuners` returns (trimmed). */
+export const LAB_TUNERS: TunerInfo[] = [
+  { name: 'grid', label: 'Grid search', description: '', options_schema: {} },
+  {
+    name: 'optuna',
+    label: 'Bayesian search (Optuna)',
+    description: '',
+    options_schema: {
+      properties: {
+        sampler: { default: 'tpe', enum: ['tpe', 'nsga2', 'random'], type: 'string' },
+        prune: { default: false, type: 'boolean' },
+      },
+    },
+  },
+  { name: 'prescreen', label: 'Pre-screened grid', description: '', options_schema: {} },
+  { name: 'random', label: 'Random search', description: '', options_schema: {} },
+];
 
 /** Trimmed copies of what `GET /api/lab/survival-tests` returns. */
 export const SURVIVAL_TEST_CATALOG: SurvivalTestInfo[] = [

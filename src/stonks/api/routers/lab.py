@@ -16,10 +16,14 @@ from stonks.app.lab import (
     CostModelPreset,
     LabRunRequest,
     LabRunView,
+    ObjectiveInfo,
     SurvivalPresetInfo,
     SurvivalTestInfo,
+    TunerInfo,
+    objective_catalog,
     survival_preset_catalog,
     survival_test_catalog,
+    tuner_catalog,
 )
 from stonks.app.sweep import SweepRequest, SweepResultView
 from stonks.auth import Permission, require
@@ -116,6 +120,20 @@ def list_survival_tests() -> list[SurvivalTestInfo]:
 def list_survival_presets() -> list[SurvivalPresetInfo]:
     """The named suites, their tests and the options they give them."""
     return survival_preset_catalog()
+
+
+@router.get("/objectives", response_model=list[ObjectiveInfo], operation_id="listLabObjectives")
+def list_lab_objectives() -> list[ObjectiveInfo]:
+    """Every objective a lab run can name in ``objective``, with a label and
+    a description from the objective's docstring (plugins included)."""
+    return objective_catalog()
+
+
+@router.get("/tuners", response_model=list[TunerInfo], operation_id="listLabTuners")
+def list_lab_tuners() -> list[TunerInfo]:
+    """Every tuner a lab run can name in ``tuner``, with a label and the JSON
+    Schema of what ``tuner_options`` may set for it (plugins included)."""
+    return tuner_catalog()
 
 
 @router.get(

@@ -1,15 +1,21 @@
 """The cross-validated objectives (``lab.cv.CVObjective``) are choices in
-the API, the CLI and MCP, next to the plain ones."""
+the API, the CLI and MCP, next to the plain ones, and every transport reads
+the names from the objective registry."""
 
 from __future__ import annotations
 
-from typing import get_args
-
 import pytest
+import typer
+from pydantic import TypeAdapter
 
-from stonks.app.lab import _OBJECTIVES, LabRunOptions, ObjectiveName
+from stonks.app.lab import LabRunOptions, lab_objectives
 from stonks.lab.cv import CVObjective
-from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
+from stonks.lab.objectives import (
+    CAGRObjective,
+    FinalReturnObjective,
+    SharpeObjective,
+    objective_names,
+)
 
 
 @pytest.mark.parametrize(
@@ -21,7 +27,7 @@ from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObj
     ],
 )
 def test_cv_objectives_wrap_the_plain_ones(name, inner):
-    objective = _OBJECTIVES[name]()
+    objective = lab_objectives()[name]()
     assert isinstance(objective, CVObjective)
     assert isinstance(objective.inner, inner)
     assert objective.name == name
@@ -29,12 +35,22 @@ def test_cv_objectives_wrap_the_plain_ones(name, inner):
 
 
 def test_every_objective_name_has_a_builder():
-    assert set(get_args(ObjectiveName)) == set(_OBJECTIVES)
+    assert set(objective_names()) == set(lab_objectives())
 
 
-def test_cli_and_mcp_offer_the_same_objectives():
-    from stonks.cli import _LAB_OBJECTIVES
+def test_the_cli_accepts_every_registry_objective():
+    from stonks.cli import _objective_choice
+
+    for name in objective_names():
+        assert _objective_choice(name) == name
+    with pytest.raises(typer.BadParameter, match="--objective"):
+        _objective_choice("no_such_objective")
+
+
+def test_mcp_takes_any_objective_name_and_points_at_the_list():
     from stonks.mcp.tools.common import ObjectiveName as McpObjectiveName
 
-    assert set(_LAB_OBJECTIVES) == set(get_args(ObjectiveName))
-    assert set(get_args(McpObjectiveName)) == set(get_args(ObjectiveName))
+    adapter = TypeAdapter(McpObjectiveName)
+    for name in objective_names():
+        assert adapter.validate_python(name) == name
+    assert "list_lab_objectives" in str(adapter.json_schema())
