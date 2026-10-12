@@ -86,7 +86,6 @@ describe('navigation', () => {
         'Build a strategy',
         'Lab',
         'Trial results',
-        'Strategy review',
         'Leaderboard',
         'Screener',
         'Options',

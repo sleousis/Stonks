@@ -70,6 +70,7 @@ export const routes: Routes = [
   // The Paper trading page (UX-09). Old /shadow links land on it.
   { path: 'paper', loadChildren: () => import('./pages/shadow/shadow.routes') },
   { path: 'shadow', redirectTo: 'paper' },
+  // The admin's approval queue: go-live.routes.ts guards it for admins.
   { path: 'go-live', loadChildren: () => import('./pages/go-live/go-live.routes') },
   {
     path: 'health',

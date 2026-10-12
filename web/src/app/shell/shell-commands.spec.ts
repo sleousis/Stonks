@@ -61,8 +61,12 @@ describe('registerShellCommands', () => {
 
   it('uses the nav words: Trial results, Strategy review, Trade costs', () => {
     expect(labels()).toEqual(
-      expect.arrayContaining(['Trial results', 'Strategy review', 'Trade costs', 'Strategies']),
+      expect.arrayContaining(['Trial results', 'Trade costs', 'Strategies']),
     );
+    // Strategy review is the admin's approval queue: a trader never finds it.
+    expect(labels()).not.toContain('Strategy review');
+    me.set(ADMIN);
+    expect(labels()).toContain('Strategy review');
   });
 
   it('follows the signed-in user: admin pages and g r appear for an admin, reactively', () => {

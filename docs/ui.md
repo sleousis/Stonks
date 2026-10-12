@@ -886,10 +886,12 @@ from the data, a summary strip, then sections on ink rules.
   down into the page colour.
 - **Trial results** (`/paper`). A summary strip, the comparison chart, and
   the strategies with a trial-day meter (20 ticks toward the go-live days).
-- **Strategy review** (`/go-live`). A summary strip (Ready to approve, On
+- **Strategy review** (`/go-live`, admins only). A summary strip (Ready to approve, On
   trial, Approved), the queue with the go-live check as a pass, fail or
   warning chip, days on trial with a ring, and the broker in a side column.
-  Approving happens on the strategy's Review tab with a reason.
+  Approving happens on the strategy's Review tab with a reason. An old
+  `/go-live?strategy=<id>` link opens that Review tab for anyone, before
+  the admin check.
 - **Going live** (`/going-live`). The stage path as a horizontal stepper
   (Simulated, Broker paper, Real money small, Real money full): the current
   stage in accent, the real-money stages in brass. The steps are rows on an
@@ -2046,7 +2048,8 @@ flowchart LR
 - **Routes.** `app.config.ts` wraps `app.routes.ts` with `protectRoutes()`, so
   every page gets `authGuard` unless it has `data: { public: true }`.
   `data: { bare: true }` shows a page without the app frame (sign-in).
-  `/admin/users` and `/dashboard` also have `adminGuard`: anyone else sees
+  `/admin/users`, `/dashboard`, `/health`, `/live` and `/go-live` (Strategy
+  review) also have `adminGuard`: anyone else sees
   the one **No access** page at the address they asked for (`/no-access`,
   kept out of the address bar). Home is `/`.
 - **Nav** (M1, `shell/nav-items.ts`): seven pages on top, the rest in
@@ -2060,7 +2063,7 @@ flowchart LR
   |---|---|---|
   | (top) | Today, Strategies, Build a strategy (`/studio`), Lab, Orders, Insights, Charts | everyone signed in (Build a strategy and Lab need `lab.run`) |
   | More | Approvals (`/tickets`), Going live (`/going-live`), Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Assistant | everyone. Approvals needs `portfolio.trade`, the Assistant shows only while it is on |
-  | Advanced | Strategy review (`/go-live`), Options, Trade costs (`/trades`), Halts (traders: their own halts) | Options once option chains are stored, Halts `killswitch.user` |
+  | Advanced | Strategy review (`/go-live`), Options, Trade costs (`/trades`), Halts (traders: their own halts) | Strategy review admins only, Options once option chains are stored, Halts `killswitch.user` |
   | System | Dashboard (`/dashboard`), Health, Intraday engine (`/live`), Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins. Intraday engine once the engine streams or has run, Model versions while a new version waits |
   | Account menu (pinned below the nav) | Profile, Settings, Broker connections, Get set up, Help, Sign out | everyone signed in |
 
