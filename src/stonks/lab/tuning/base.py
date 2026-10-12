@@ -1,4 +1,16 @@
-"""Tuner helpers shared by concrete implementations."""
+"""Tuner helpers shared by concrete implementations.
+
+Every tuner scores its candidates through :func:`evaluate_candidates`. A
+lab run sets a run-scoped trial sink (:func:`trial_sink`) around its
+search, and :func:`evaluate_candidates` hands the sink each trial as it
+finishes, with the trial's seed, so a cancel, a crash or a broken pool
+cannot hide trials that already ran (P2). A search inside a trial (an
+objective that tunes) is not the run's search and is not reported.
+
+A search where no trial scored has no winner: :func:`best_of` then returns
+NaN, and :func:`tune_and_fit` with ``require_score`` raises
+:class:`TuningFailed` with the first trial's error.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +19,9 @@ import itertools
 import math
 import pickle
 import random
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from stonks.core.params import ParameterSpec, Params, ParamSpace, tunable_only
@@ -18,6 +32,7 @@ from stonks.lab.parallel import (
     dataset_snapshot,
     planned_workers,
     run_tasks,
+    task_seeds,
 )
 from stonks.logging import get_logger
 from stonks.strategies.base import strategy_data_tickers
@@ -29,6 +44,52 @@ if TYPE_CHECKING:  # pragma: no cover
 _log = get_logger("stonks.lab.tuning")
 
 _FROM_DATASET: Any = object()
+
+#: Gets finished trials and their seeds (``None`` when a trial ran unseeded).
+TrialSink = Callable[[Sequence[TrialOutcome], Sequence[int | None]], None]
+
+_TRIAL_SINK: ContextVar[TrialSink | None] = ContextVar("stonks_lab_trial_sink", default=None)
+
+
+@contextmanager
+def trial_sink(sink: TrialSink | None) -> Iterator[None]:
+    """Report every trial :func:`evaluate_candidates` finishes inside the
+    block to ``sink`` (``None`` reports nothing). Scoped to the current
+    context, so a run in another thread keeps its own sink."""
+    token = _TRIAL_SINK.set(sink)
+    try:
+        yield
+    finally:
+        _TRIAL_SINK.reset(token)
+
+
+class TuningFailed(RuntimeError):
+    """Every trial of a search failed, so it has no winner. Carries the
+    tuner's result (its trials still count, P2) and the first trial error."""
+
+    def __init__(self, tuned: TunerResult, first_error: str | None) -> None:
+        self.tuned = tuned
+        self.first_error = first_error
+        n = len(getattr(tuned, "history", None) or [])
+        detail = first_error if first_error else "no trial reported an error"
+        super().__init__(f"all {n} tuning trials failed; the first error was: {detail}")
+
+
+def first_trial_error(tuned: Any) -> str | None:
+    """The first error a tuner's trials report, else ``None``."""
+    for outcome in getattr(tuned, "trials", None) or []:
+        error = getattr(outcome, "error", None)
+        if error:
+            return str(error)
+    return None
+
+
+def has_score(tuned: Any) -> bool:
+    """True when the search found a winner: a finite best score."""
+    try:
+        return math.isfinite(float(tuned.best_score))
+    except (TypeError, ValueError):
+        return False
 
 
 def fitted_strategy(
@@ -52,6 +113,8 @@ def tune_and_fit(
     dataset: Any,
     setup: TuningSetup,
     fixed_params: Mapping[str, Any] | None = None,
+    *,
+    require_score: bool = False,
 ) -> tuple[Strategy, TunerResult]:
     """Tune ``strategy_cls`` on ``dataset``'s train window, then build and
     fit the winning configuration on the same dataset. The one tune → fit
@@ -60,7 +123,11 @@ def tune_and_fit(
     ``fixed_params`` pin parameters for the whole search (see
     :func:`fix_params`); re-tuning tests pass ``fixed_params_of(strategy)``
     so a hand-set non-tunable param (a wrapper's inner strategy, a ticker)
-    is never reset to its class default."""
+    is never reset to its class default.
+
+    ``require_score`` raises :class:`TuningFailed` before the fit when no
+    trial scored. Without it such a search fits the defaults and reports a
+    NaN best score (a re-tuning test then scores that fold or draw NaN)."""
     fixed = dict(fixed_params or {})
     space = fix_params(strategy_cls.parameter_spec(), fixed)
     tuned = setup.tuner.tune(
@@ -70,6 +137,8 @@ def tune_and_fit(
         dataset=dataset,
         budget=setup.budget,
     )
+    if require_score and not has_score(tuned):
+        raise TuningFailed(tuned, first_trial_error(tuned))
     best = {**tuned.best_params, **fixed}
     if best != dict(tuned.best_params):
         tuned = dataclasses.replace(tuned, best_params=best)
@@ -185,7 +254,8 @@ def best_of(
 ) -> tuple[dict[str, Any], float]:
     """The first trial with the best score (ties keep the earlier trial;
     NaN never wins, nor does the worst possible value, ``-inf`` when
-    maximizing); the defaults with score 0.0 when no trial scored."""
+    maximizing); the defaults with a NaN score when no trial scored, so a
+    failed search never passes for a score of 0.0."""
     maximize = direction == "maximize"
     best: TrialOutcome | None = None
     best_score = -math.inf if maximize else math.inf
@@ -193,7 +263,7 @@ def best_of(
         if outcome.score > best_score if maximize else outcome.score < best_score:
             best, best_score = outcome, outcome.score
     if best is None:
-        return merge_with_defaults({}, space), 0.0
+        return merge_with_defaults({}, space), math.nan
     return dict(best.params), best.score
 
 
@@ -220,8 +290,51 @@ def evaluate_candidates(
     of itself) and ``checkpoint`` (run in this process between trials,
     e.g. a job-cancellation check) keeps its cancellation working. When
     the work cannot be pickled (a local strategy class, an objective
-    holding a live handle) the trials run in-process instead."""
-    tasks = list(enumerate(dict(c) for c in candidates))
+    holding a live handle) the trials run in-process instead.
+
+    With a :func:`trial_sink` set, each trial goes to the sink as it
+    finishes, with its seed. The sink is cleared while the trials run, so a
+    search nested inside a trial is never reported as the run's."""
+    tasks: list[tuple[int, dict[str, Any]]] = list(enumerate(dict(c) for c in candidates))
+    sink = _TRIAL_SINK.get()
+    report = None if sink is None else _reporter(sink, task_seeds(root_seed, len(tasks)))
+    token = _TRIAL_SINK.set(None)
+    try:
+        return _evaluate(
+            strategy_cls,
+            tasks,
+            candidates,
+            objective,
+            dataset,
+            parallel,
+            root_seed,
+            log_prefix,
+            report,
+        )
+    finally:
+        _TRIAL_SINK.reset(token)
+
+
+def _reporter(sink: TrialSink, seeds: list[int]) -> Callable[[int, TrialOutcome], None]:
+    """``run_tasks``'s ``on_result``: trial ``i`` goes to ``sink`` with its seed."""
+
+    def report(i: int, outcome: TrialOutcome) -> None:
+        sink([outcome], [seeds[i]])
+
+    return report
+
+
+def _evaluate(
+    strategy_cls: type[Strategy],
+    tasks: list[tuple[int, dict[str, Any]]],
+    candidates: Sequence[Params],
+    objective: Objective,
+    dataset: Any,
+    parallel: ParallelSettings,
+    root_seed: int,
+    log_prefix: str,
+    on_result: Callable[[int, TrialOutcome], None] | None,
+) -> list[TrialOutcome]:
     workers = planned_workers(len(tasks), settings=parallel)
     if workers > 1:
         worker_objective = getattr(objective, "worker_objective", objective)
@@ -239,6 +352,7 @@ def evaluate_candidates(
                     settings=parallel,
                     root_seed=root_seed,
                     checkpoint=checkpoint,
+                    on_result=on_result,
                 )
         _log.warning(f"{log_prefix}.parallel.unavailable", workers=workers, reason=problem)
     return run_tasks(
@@ -247,6 +361,7 @@ def evaluate_candidates(
         payload=_TrialState(strategy_cls, objective, dataset, log_prefix),
         max_workers=1,
         root_seed=root_seed,
+        on_result=on_result,
     )
 
 

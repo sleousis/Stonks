@@ -64,6 +64,7 @@ class MacroRegimeFilter(InnerStrategyWrapper):
         "turns down."
     )
     id_suffix = "macro"
+    data_tables = ("macro_indicators",)
     hypothesis = (
         "Risk assets do badly when the economy turns down, and macro "
         "series such as unemployment show the turn. Standing aside then "

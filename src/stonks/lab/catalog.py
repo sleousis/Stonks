@@ -9,6 +9,11 @@ plus the wrapper strategies (:class:`MacroRegimeFilter`,
 also accepts a class name or a ``module:Class`` path, and
 ``load_strategy_class`` returns the same class typed as a tradable
 :class:`~stonks.core.protocols.Strategy` for the lab.
+
+Outside packages add strategies through the ``stonks.strategies`` entry
+point group (``lab.plugins``). Only classes named by an installed entry
+point are imported, never an arbitrary ``module:Class`` from a request, and
+a plugin never replaces a built-in id.
 """
 
 from __future__ import annotations
@@ -19,6 +24,8 @@ import pkgutil
 from typing import TYPE_CHECKING, cast
 
 import stonks.strategies.examples as _examples
+from stonks.lab import plugins
+from stonks.logging import get_logger
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.feature_regime import FeatureRegimeFilter
 from stonks.strategies.last_trade_filter import LastTradeFilter
@@ -29,6 +36,8 @@ from stonks.strategies.trailing_stop import TrailingStopWrapper
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.core.protocols import Strategy
+
+_log = get_logger("stonks.lab.catalog")
 
 _WRAPPERS: tuple[type[BaseStrategy], ...] = (
     MacroRegimeFilter,
@@ -54,7 +63,29 @@ def strategy_catalog() -> dict[str, type[BaseStrategy]]:
                 and not cls.__name__.startswith("_")
             ):
                 found[cls.id] = cls
+    for cls in _plugin_strategies():
+        if cls.id in found and found[cls.id] is not cls:
+            _log.warning("lab.plugin.name_taken", group=plugins.STRATEGIES, name=cls.id)
+            continue
+        found[cls.id] = cls
     return dict(sorted(found.items()))
+
+
+def _plugin_strategies() -> list[type[BaseStrategy]]:
+    """The strategy classes of the ``stonks.strategies`` entry points. An
+    entry point naming anything else is logged and skipped."""
+    out: list[type[BaseStrategy]] = []
+    for plugin in plugins.plugin_objects(plugins.STRATEGIES):
+        cls = plugin.obj
+        if (
+            isinstance(cls, type)
+            and issubclass(cls, BaseStrategy)
+            and isinstance(cls.__dict__.get("id"), str)
+        ):
+            out.append(cls)
+        else:
+            _log.warning("lab.plugin.not_a_strategy", name=plugin.name, value=repr(cls))
+    return out
 
 
 def is_wrapper(cls: type) -> bool:

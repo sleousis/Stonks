@@ -5,10 +5,14 @@ validation backtest with every cost scaled by a multiplier and asks
 whether the edge survives:
 
 - Multipliers ``{0, 1, 2, 3}`` by default. A multiplier scales every cost
-  field of the dataset's ``CostModelSettings`` (``fee_flat``, ``fee_bps``,
-  ``half_spread_bps`` per asset class, ``impact_bps``, and
-  ``max_impact_bps`` so the impact cap does not swallow the stress) on a
-  copy; the cost model itself is never edited.
+  of the dataset's ``CostModelSettings`` on a copy
+  (``CostModelSettings.scaled``): ``fee_flat``, ``fee_bps`` and
+  ``half_spread_bps`` per asset class, the impact coefficients
+  (``impact_bps``, ``impact_gamma``, ``istar.a1``), commissions and US
+  regulatory fees (``commission_multiplier``), and ``max_impact_bps`` so the
+  impact cap does not swallow the stress. Every other setting is kept, so
+  the 1x level costs exactly what the dataset's model costs (P19). The cost
+  model itself is never edited.
 - The break-even multiple is the largest multiplier with a positive
   Sharpe, searched up to ``max_break_even`` (grid, then bisection to
   ``bisection_tolerance``).
@@ -22,8 +26,10 @@ break-even multiple is ``>= min_break_even``; and the speed limit holds.
 A strategy that makes no trade in the window fails with an "insufficient
 data" note (there is nothing to stress).
 
-When the dataset has no costs (``None`` or all zero) the 1x level is
-``CostModelSettings.realistic()`` and the report notes it.
+When the dataset has no costs (``None``, or settings that charge nothing:
+``CostModelSettings.charges_nothing``) the 1x level is
+``CostModelSettings.realistic()`` and the report notes it. A commission
+schedule alone is a cost.
 
 Shorts (roadmap 16.4): on a dataset that may short (``shorting`` set),
 every level also multiplies the borrow fees, and one more backtest charges
@@ -45,15 +51,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from stonks.backtest.costs import AssetClassCosts, CostModelSettings
+from stonks.backtest.costs import CostModelSettings
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import AssetClass
 from stonks.lab.survival._reruns import Rerun, RerunResult, run_reruns
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.survival.cost_stress")
-
-_BPS = 10_000.0
 
 
 class CostStressOptions(BaseModel):
@@ -121,39 +124,14 @@ class CostStressOptions(BaseModel):
 
 
 def scale_costs(settings: CostModelSettings, multiplier: float) -> CostModelSettings:
-    """A copy of ``settings`` with every cost scaled by ``multiplier``.
-    ``max_impact_bps`` scales too, but stays below the bound that keeps
-    sell fills at a positive price."""
-    m = float(multiplier)
-
-    def scaled(c: AssetClassCosts) -> AssetClassCosts:
-        return AssetClassCosts(
-            fee_flat=c.fee_flat * m, fee_bps=c.fee_bps * m, half_spread_bps=c.half_spread_bps * m
-        )
-
-    default = scaled(settings.default)
-    classes: dict[AssetClass, AssetClassCosts] = {
-        k: scaled(v) for k, v in settings.asset_classes.items()
-    }
-    widest = max(c.half_spread_bps for c in (default, *classes.values()))
-    if widest >= _BPS:
-        raise ValueError(f"a {m}x half spread reaches 100% of the price")
-    headroom = (_BPS - widest) * 0.999
-    return CostModelSettings(
-        default=default,
-        asset_classes=classes,
-        impact_bps=settings.impact_bps * m,
-        max_impact_bps=min(settings.max_impact_bps * m, headroom),
-    )
+    """A copy of ``settings`` with every cost scaled by ``multiplier``
+    (:meth:`CostModelSettings.scaled`). At 1x it costs what ``settings``
+    costs, commissions and impact model included (P19)."""
+    return settings.scaled(multiplier)
 
 
 def _has_costs(settings: CostModelSettings | None) -> bool:
-    if settings is None:
-        return False
-    costs = (settings.default, *settings.asset_classes.values())
-    return settings.impact_bps > 0 or any(
-        c.fee_flat > 0 or c.fee_bps > 0 or c.half_spread_bps > 0 for c in costs
-    )
+    return settings is not None and not settings.charges_nothing()
 
 
 def break_even_multiple(

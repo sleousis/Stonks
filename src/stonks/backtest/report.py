@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING
 from stonks.backtest import metrics
 from stonks.backtest.calendar import calendar_for_universe
 from stonks.backtest.corporate_actions import CorporateActionRecord
+from stonks.backtest.delisting import DelistingRecord
 from stonks.backtest.trades import RoundTrip, TradeStats
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass, Order
@@ -148,6 +149,9 @@ class BacktestReport:
     #: explain equity-curve jumps (a dividend credits cash, a split changes
     #: the share count at unchanged value).
     corporate_actions: tuple[CorporateActionRecord, ...] = ()
+    #: Holdings settled for cash because their name delisted (P14), in
+    #: order; the trade ledger closes their lots at the settle price.
+    delistings: tuple[DelistingRecord, ...] = ()
     # ---- return-series metrics (``stonks.backtest.metrics``) ----
     #: Bars per year the annualized figures use.
     periods_per_year: float = _TRADING_DAYS_PER_YEAR

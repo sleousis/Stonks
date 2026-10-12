@@ -4,15 +4,19 @@
 the same answer on today's data? It takes the stored manifest of a lab run
 (or of the lab run behind a registered strategy) and:
 
-1. recomputes the data fingerprint over exactly the tickers, window and
-   interval the run read, and lists the tickers whose bars, corporate
-   actions or point-in-time statement versions changed since (a vendor
-   restatement, a new split, a filled gap), with the restated statements
-   named apart;
-2. compares the config hash and the code version with today's;
-3. rebuilds the chosen parameters on the run's dataset and scores them with
-   the run's objective on its train window, seeded like the original
-   trial, and compares with the stored score.
+1. recomputes the data fingerprint over exactly the tickers, window,
+   interval and lake tables the run read, and lists the tickers whose
+   bars, corporate actions or point-in-time statement versions changed
+   since (a vendor restatement, a new split, a filled gap), with the
+   restated statements and the changed tables named apart;
+2. compares the config hash and the code identity with today's: the git
+   sha, else the source hash when a deploy has no ``.git``;
+3. takes the trial the tuner chose (``lab_runs.best_trial_index``, never a
+   heatmap cell), rebuilds the run's dataset from the manifest (lots,
+   shorting, fills, construction, benchmark, embargo), scores the trial's
+   params with the run's objective on the train window with the seed the
+   trial ran with (``lab_trials.seed``), and compares with the stored
+   score.
 
 The result has *moved* when the score changed by more than ``tolerance``.
 A changed fingerprint alone is reported, not judged: a restated bar that
@@ -31,9 +35,10 @@ from pathlib import Path
 from typing import Any
 
 from stonks.lab.manifest import (
+    changed_tables,
+    code_identity_changed,
     config_hash,
     fingerprint_changes,
-    git_info,
     refingerprint,
     restated_tickers,
 )
@@ -59,6 +64,9 @@ class VerifyTarget:
     stored_score: float | None = None
     seed: int | None = None
     trial_index: int | None = None
+    #: The seed the chosen trial's RNGs ran with (``lab_trials.seed``),
+    #: ``None`` for a trial stored before seeds were kept.
+    trial_seed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +83,8 @@ class VerifyReport:
     changed_tickers: list[str] = field(default_factory=list)
     #: Tickers whose statement versions changed (a subset of the above).
     restated_tickers: list[str] = field(default_factory=list)
+    #: Declared lake tables (``data_tables``) whose rows changed since.
+    changed_tables: list[str] = field(default_factory=list)
     config_changed: bool | None = None
     code_changed: bool | None = None
     error: str | None = None
@@ -111,6 +121,7 @@ class VerifyReport:
             "data_changed": self.data_changed,
             "changed_tickers": list(self.changed_tickers),
             "restated_tickers": list(self.restated_tickers),
+            "changed_tables": list(self.changed_tables),
             "config_changed": self.config_changed,
             "code_changed": self.code_changed,
             "error": self.error,
@@ -130,13 +141,13 @@ def resolve_target(state: Any, registry: Any, artifacts_dir: Path, target: str) 
     run_id = meta.get("lab_run_id") or None
     lab = ledger.run(run_id) if run_id else None
     manifest = dict(meta.get("manifest") or (lab or {}).get("manifest") or {})
-    stored = seed = index = None
+    stored = seed = index = trial_seed = None
     if lab is not None:
         trials = ledger.trials(str(run_id))
         match = next((t for t in trials if t.params == handle.params and t.status == "ok"), None)
-        match = match or _best(trials, _direction(lab.get("objective")))
+        match = match or _winner(trials, lab)
         if match is not None:
-            stored, index = match.score, match.trial_index
+            stored, index, trial_seed = match.score, match.trial_index, match.seed
         seed = lab.get("seed")
     return VerifyTarget(
         target=target,
@@ -149,23 +160,40 @@ def resolve_target(state: Any, registry: Any, artifacts_dir: Path, target: str) 
         stored_score=stored,
         seed=seed,
         trial_index=index,
+        trial_seed=trial_seed,
     )
 
 
 def _run_target(ledger: TrialLedger, run: Mapping[str, Any], target: str) -> VerifyTarget:
-    best = _best(ledger.trials(target), _direction(run.get("objective")))
+    best = _winner(ledger.trials(target), run)
+    params: dict[str, Any] = dict(best.params) if best is not None else {}
+    if best is not None and isinstance(run.get("best_params"), dict):
+        params = {**params, **run["best_params"]}  # the winner with its pinned params
     return VerifyTarget(
         target=target,
         kind="run",
         class_path=str(run["strategy_class"]),
-        params=dict(best.params) if best is not None else {},
+        params=params,
         manifest=dict(run.get("manifest") or {}),
         run_id=target,
         objective=run.get("objective"),
         stored_score=best.score if best is not None else None,
         seed=run.get("seed"),
         trial_index=best.trial_index if best is not None else None,
+        trial_seed=best.seed if best is not None else None,
     )
+
+
+def _winner(trials: list[Any], run: Mapping[str, Any]) -> Any:
+    """The trial the tuner chose (``lab_runs.best_trial_index``, migration
+    061), never a heatmap cell that happened to score higher. A run stored
+    before the winner was kept falls back to the best tuner trial."""
+    index = run.get("best_trial_index")
+    if index is not None:
+        chosen = next((t for t in trials if t.trial_index == int(index)), None)
+        if chosen is not None:
+            return chosen
+    return _best(trials, _direction(run.get("objective")))
 
 
 def verify(
@@ -183,6 +211,7 @@ def verify(
     data_changed: bool | None = None
     changed: list[str] = []
     restated: list[str] = []
+    tables: list[str] = []
     stored_fp = manifest.get("data_fingerprint")
     if isinstance(stored_fp, dict) and stored_fp.get("window"):
         try:
@@ -191,6 +220,7 @@ def verify(
             if data_changed:
                 changed = fingerprint_changes(stored_fp, current)
                 restated = restated_tickers(stored_fp, current)
+                tables = changed_tables(stored_fp, current)
         except Exception as exc:
             errors.append(f"fingerprint: {type(exc).__name__}: {exc}")
     stored_config = manifest.get("config_hash")
@@ -199,9 +229,7 @@ def verify(
         if stored_config is None or settings is None
         else config_hash(settings) != stored_config
     )
-    stored_sha = manifest.get("git_sha")
-    now_sha = git_info().get("git_sha")
-    code_changed = None if stored_sha is None or now_sha is None else stored_sha != now_sha
+    code_changed = code_identity_changed(manifest)
 
     current_score: float | None = None
     if target.stored_score is not None and target.objective:
@@ -221,6 +249,7 @@ def verify(
         data_changed=data_changed,
         changed_tickers=changed,
         restated_tickers=restated,
+        changed_tables=tables,
         config_changed=config_changed,
         code_changed=code_changed,
         error="; ".join(errors) or None,
@@ -243,11 +272,11 @@ def _rescore(
     settings: Any,
     objectives: Mapping[str, Callable[[], Any]] | None,
 ) -> float:
-    from stonks.lab.objectives import OBJECTIVES
+    from stonks.lab.objectives import objective_factories
     from stonks.lab.parallel import _call_seeded, task_seeds
     from stonks.lab.tuning.base import _run_trial, _TrialState
 
-    catalog = dict(objectives or OBJECTIVES)
+    catalog = dict(objectives or objective_factories())
     make = catalog.get(str(target.objective))
     if make is None:
         raise ValueError(f"unknown objective {target.objective!r}")
@@ -255,18 +284,30 @@ def _rescore(
     module_name, cls_name = target.class_path.split(":", 1)
     cls = getattr(importlib.import_module(module_name), cls_name)
     index = int(target.trial_index or 0)
-    seed = task_seeds(int(target.seed), index + 1)[index] if target.seed is not None else None
+    if target.trial_seed is not None:  # the seed the trial ran with
+        seed: int | None = int(target.trial_seed)
+    elif target.seed is not None:  # an older trial: derive it from the run seed
+        seed = task_seeds(int(target.seed), index + 1)[index]
+    else:
+        seed = None
     state = _TrialState(cls, make(), dataset, "lab.verify")
     outcome = _call_seeded(_run_trial, state, (index, dict(target.params)), seed)
     return float(outcome.score)
 
 
 def _dataset(manifest: Mapping[str, Any], lake: Any, settings: Any) -> Any:
-    """The run's :class:`LabDataset`: universe, windows and interval from the
-    manifest, costs as stored, execution and construction as configured."""
+    """The run's :class:`LabDataset`, rebuilt from the manifest: universe,
+    windows and interval, costs, lots, shorting, the fill model and
+    settlement, construction, benchmark and embargo, so the rescore runs the
+    backtests the run ran. A manifest written before the ``backtest`` block
+    takes what it lacks from today's ``settings``."""
     from stonks.backtest.costs import CostModelSettings
+    from stonks.backtest.fills import ExecutionSettings
+    from stonks.backtest.shorting import ShortingSettings
     from stonks.core.interval import Interval
     from stonks.lab.dataset import LabDataset
+    from stonks.portfolio.lots import LotSettings
+    from stonks.portfolio.settings import ConstructionSettings
 
     summary = manifest.get("dataset") or {}
     if not summary.get("full_window") or not summary.get("train_window"):
@@ -274,25 +315,52 @@ def _dataset(manifest: Mapping[str, Any], lake: Any, settings: Any) -> Any:
     start, end = (date.fromisoformat(str(d)[:10]) for d in summary["full_window"])
     train_end = date.fromisoformat(str(summary["train_window"][1])[:10])
     costs = manifest.get("costs")
+    stored = manifest.get("backtest")
     backtest = getattr(settings, "backtest", None)
-    return LabDataset(
+    lab = getattr(settings, "lab", None)
+    if isinstance(stored, dict):  # recorded with the run
+        execution = _model(ExecutionSettings, stored.get("execution"))
+        construction = _model(ConstructionSettings, stored.get("construction"))
+        benchmark = str(stored.get("benchmark") or "auto")
+        embargo = int(stored.get("embargo_bars") or 0)
+        lots = _model(LotSettings, manifest.get("lots"))
+    else:  # an older manifest: today's settings fill the gaps
+        execution = getattr(backtest, "execution", None)
+        construction = getattr(backtest, "construction", None)
+        benchmark = str(getattr(lab, "benchmark", None) or "auto")
+        embargo = int(getattr(lab, "embargo_bars", 0) or 0)
+        lots = _model(LotSettings, manifest.get("lots")) or getattr(backtest, "lots", None)
+    dataset = LabDataset(
         lake=lake,
         universe=list(summary.get("universe") or []),
         start=start,
         end=end,
         train_end=train_end,
         interval=Interval.parse(str(summary.get("interval") or "1d")),
-        costs=CostModelSettings.model_validate(costs) if isinstance(costs, dict) else None,
-        execution=getattr(backtest, "execution", None),
-        construction=getattr(backtest, "construction", None),
+        costs=_model(CostModelSettings, costs),
+        embargo_bars=embargo,
+        benchmark=benchmark,
+        execution=execution,
+        construction=construction,
         universe_id=summary.get("universe_id"),
+        shorting=_model(ShortingSettings, manifest.get("shorting")),
+        lots=lots,
     )
+    if summary.get("sessions"):  # windows split by session (roadmap 21.3.1)
+        dataset = dataset.with_sessions()
+    return dataset
+
+
+def _model(cls: Any, value: Any) -> Any:
+    """``value`` (a stored JSON object) as the settings model ``cls``, or
+    ``None`` when nothing was stored."""
+    return cls.model_validate(value) if isinstance(value, dict) else None
 
 
 def _direction(objective: Any) -> str:
-    from stonks.lab.objectives import OBJECTIVES
+    from stonks.lab.objectives import objective_factories
 
-    make = OBJECTIVES.get(str(objective))
+    make = objective_factories().get(str(objective))
     return str(getattr(make(), "direction", "maximize")) if make else "maximize"
 
 

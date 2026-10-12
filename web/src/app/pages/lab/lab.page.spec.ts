@@ -17,7 +17,12 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { JOB_FETCH, JOB_POLL_MS } from '../../core/jobs/jobs.service';
 import { LabPage, canCancel, jobStrategy, kindLabel } from './lab.page';
-import { SURVIVAL_TEST_CATALOG, SWEEP_RESULT } from './lab-test-fixtures';
+import {
+  LAB_OBJECTIVES,
+  LAB_TUNERS,
+  SURVIVAL_TEST_CATALOG,
+  SWEEP_RESULT,
+} from './lab-test-fixtures';
 
 function job(patch: Partial<Job>): Job {
   return {
@@ -149,6 +154,10 @@ describe('LabPage', () => {
         return req.flush(labRunView);
       case '/api/lab/survival-tests':
         return req.flush(SURVIVAL_TEST_CATALOG);
+      case '/api/lab/objectives':
+        return req.flush(LAB_OBJECTIVES);
+      case '/api/lab/tuners':
+        return req.flush(LAB_TUNERS);
       case '/api/lab/survival-presets':
         return req.flush([]);
       case '/api/universes':

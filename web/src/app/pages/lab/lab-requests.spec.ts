@@ -397,19 +397,29 @@ describe('lab requests', () => {
   });
 
   describe('Optuna and the heatmap', () => {
-    it('sends sampler and prune only with Optuna', () => {
-      expect(buildLabRunRequest(labForm({ prune: true }))).not.toHaveProperty('sampler');
-      expect(buildLabRunRequest(labForm({ prune: true }))).not.toHaveProperty('prune');
+    it('sends sampler and prune as tuner options, only with Optuna', () => {
+      expect(buildLabRunRequest(labForm({ prune: true }))).not.toHaveProperty('tuner_options');
       const body = buildLabRunRequest(
         labForm({ tuner: 'optuna', sampler: 'nsga2', prune: true, objective: 'multi' }),
       );
       expect(body).toMatchObject({
         tuner: 'optuna',
-        sampler: 'nsga2',
-        prune: true,
+        tuner_options: { sampler: 'nsga2', prune: true },
         objective: 'multi',
       });
-      expect(buildLabRunRequest(labForm({ tuner: 'optuna' }))).not.toHaveProperty('prune');
+      expect(body).not.toHaveProperty('sampler');
+      expect(buildLabRunRequest(labForm({ tuner: 'optuna' })).tuner_options).toEqual({
+        sampler: 'tpe',
+      });
+    });
+
+    it('reads the old flat Optuna fields and any registry name back', () => {
+      expect(
+        formFromRequest({ tuner: 'optuna', sampler: 'nsga2', prune: true, objective: 'omega' }),
+      ).toMatchObject({ tuner: 'optuna', sampler: 'nsga2', prune: true, objective: 'omega' });
+      expect(formFromRequest({ tuner: 'prescreen', objective: 'Not A Name' })).toEqual({
+        tuner: 'prescreen',
+      });
     });
 
     it('sends a heatmap only when asked, auto axes as null', () => {

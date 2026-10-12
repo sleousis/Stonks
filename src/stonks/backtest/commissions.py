@@ -149,6 +149,9 @@ class CommissionSettings(BaseModel):
     ibkr_fixed: IbkrFixedFees = IbkrFixedFees()
     ibkr_tiered: IbkrTieredFees = IbkrTieredFees()
     us_regulatory: UsRegulatoryFees = UsRegulatoryFees()
+    #: Scales every commission and regulatory fee (1.0 = as published). The
+    #: cost stress (P19) raises it with ``CostModelSettings.scaled``.
+    commission_multiplier: float = Field(default=1.0, ge=0.0)
 
 
 #: ``(trade, fill price, settings) -> commission in money``.
@@ -196,17 +199,21 @@ def commission_fee(
     name: str, trade: Trade, fill_price: float, settings: CommissionSettings
 ) -> float:
     """The commission of ``trade`` filled at ``fill_price`` under the named
-    schedule. Raises ``KeyError`` for an unknown name."""
+    schedule, times ``settings.commission_multiplier``. Raises ``KeyError``
+    for an unknown name."""
     if trade.quantity == 0:
         return 0.0
-    return COMMISSIONS[name](trade, fill_price, settings)
+    return COMMISSIONS[name](trade, fill_price, settings) * settings.commission_multiplier
 
 
-def regulatory_fee(trade: Trade, fill_price: float, fees: UsRegulatoryFees) -> float:
-    """SEC fee and FINRA TAF on a sale, plus the CAT fee on either side."""
+def regulatory_fee(
+    trade: Trade, fill_price: float, fees: UsRegulatoryFees, multiplier: float = 1.0
+) -> float:
+    """SEC fee and FINRA TAF on a sale, plus the CAT fee on either side,
+    times ``multiplier`` (``CommissionSettings.commission_multiplier``)."""
     shares = abs(trade.quantity)
     fee = shares * fees.cat_per_share
     if trade.side == "sell":
         fee += shares * fill_price * fees.sec_rate_per_million / 1_000_000.0
         fee += min(shares * fees.taf_per_share, fees.taf_max)
-    return fee
+    return fee * multiplier

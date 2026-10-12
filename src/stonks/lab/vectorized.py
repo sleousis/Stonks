@@ -31,6 +31,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.interval import Interval
 from stonks.core.params import Params, ParamSpace
@@ -47,6 +48,7 @@ from stonks.lab.tuning.base import (
     sample_grid,
 )
 from stonks.lab.tuning.grid import GridTuner
+from stonks.lab.tuning.registry import register_tuner
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.vectorized")
@@ -190,13 +192,27 @@ def prescreen(
     return out
 
 
+@register_tuner("prescreen")
 class PrescreenTuner:
-    """Screen a large grid with the vectorised backtest, then run the full
+    """Pre-screened grid.
+
+    Screen a large grid with the vectorised backtest, then run the full
     backtest (the objective) on the best ``budget`` of them (module doc).
+    A strategy without ``target_positions`` gets the plain grid search.
 
     ``grid_size`` points per axis, at most ``max_candidates`` points in all
     (a seeded sample beyond that). ``cost_bps`` charges the screen a flat
     cost per unit turnover, so it does not favour churn."""
+
+    class Options(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+        #: Points per numeric axis of the screened grid.
+        grid_size: int = Field(default=10, ge=1, le=50)
+        #: At most this many points screened (a seeded sample beyond it).
+        max_candidates: int = Field(default=2_000, ge=1, le=100_000)
+        #: Flat cost per unit turnover charged to the screen, in bps.
+        cost_bps: float = Field(default=5.0, ge=0, le=1_000)
 
     def __init__(
         self,

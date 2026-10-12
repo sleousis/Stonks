@@ -4068,18 +4068,8 @@
           },
           "objective": {
             "default": "sharpe",
-            "enum": [
-              "sharpe",
-              "cagr",
-              "final_return",
-              "sortino",
-              "calmar",
-              "sharpe_dd",
-              "multi",
-              "cv_sharpe",
-              "cv_cagr",
-              "cv_final_return"
-            ],
+            "description": "an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Objective",
             "type": "string"
           },
@@ -4182,11 +4172,8 @@
           },
           "tuner": {
             "default": "random",
-            "enum": [
-              "grid",
-              "random",
-              "optuna"
-            ],
+            "description": "a tuner: grid, random, optuna, prescreen or another from list_lab_tuners",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Tuner",
             "type": "string"
           },
@@ -4775,6 +4762,38 @@
         "type": "object"
       },
       "name": "list_jobs",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Every objective a lab run can score trials with (the names objective takes), with a label and what it measures.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "list_lab_objectives",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Every tuner a lab run can search with (the names tuner takes), with a label and the options schema of each.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "list_lab_tuners",
       "needs_confirm": false
     },
     {
@@ -7483,18 +7502,8 @@
           },
           "objective": {
             "default": "sharpe",
-            "enum": [
-              "sharpe",
-              "cagr",
-              "final_return",
-              "sortino",
-              "calmar",
-              "sharpe_dd",
-              "multi",
-              "cv_sharpe",
-              "cv_cagr",
-              "cv_final_return"
-            ],
+            "description": "an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Objective",
             "type": "string"
           },
@@ -7597,11 +7606,8 @@
           },
           "tuner": {
             "default": "random",
-            "enum": [
-              "grid",
-              "random",
-              "optuna"
-            ],
+            "description": "a tuner: grid, random, optuna, prescreen or another from list_lab_tuners",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Tuner",
             "type": "string"
           },
@@ -8274,18 +8280,8 @@
           },
           "objective": {
             "default": "sharpe",
-            "enum": [
-              "sharpe",
-              "cagr",
-              "final_return",
-              "sortino",
-              "calmar",
-              "sharpe_dd",
-              "multi",
-              "cv_sharpe",
-              "cv_cagr",
-              "cv_final_return"
-            ],
+            "description": "an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Objective",
             "type": "string"
           },
@@ -8431,11 +8427,8 @@
           },
           "tuner": {
             "default": "random",
-            "enum": [
-              "grid",
-              "random",
-              "optuna"
-            ],
+            "description": "a tuner: grid, random, optuna, prescreen or another from list_lab_tuners",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Tuner",
             "type": "string"
           },
@@ -8862,18 +8855,8 @@
           },
           "objective": {
             "default": "sharpe",
-            "enum": [
-              "sharpe",
-              "cagr",
-              "final_return",
-              "sortino",
-              "calmar",
-              "sharpe_dd",
-              "multi",
-              "cv_sharpe",
-              "cv_cagr",
-              "cv_final_return"
-            ],
+            "description": "an objective: sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi, a cv_ variant or another from list_lab_objectives",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Objective",
             "type": "string"
           },
@@ -8990,11 +8973,8 @@
           },
           "tuner": {
             "default": "random",
-            "enum": [
-              "grid",
-              "random",
-              "optuna"
-            ],
+            "description": "a tuner: grid, random, optuna, prescreen or another from list_lab_tuners",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Tuner",
             "type": "string"
           },

@@ -31,6 +31,9 @@ Pairing (FIFO, long and short lots)
   divides its entry price, so ``qty``/``entry_px`` are in shares at exit; a
   cash dividend credits ``cash_delta / quantity_before`` per held share to
   the lot, and is part of its P&L.
+- Delistings (``BacktestReport.delistings``, P14) close every open lot of
+  the ticker at the settle price with no fee, before fills stamped at the
+  same bar. Their ``exit_ref`` is ``"delisting"``.
 
 Money
 -----
@@ -66,6 +69,7 @@ import pandas as pd
 
 from stonks.backtest import metrics
 from stonks.backtest.corporate_actions import CorporateActionRecord
+from stonks.backtest.delisting import DelistingRecord
 from stonks.core.types import Fill
 
 if TYPE_CHECKING:
@@ -175,6 +179,7 @@ def build_round_trips(
     reference_price: ReferencePrice | None = None,
     key_of: Callable[[Fill], str] | None = None,
     ref_of: Callable[[Fill], str] | None = None,
+    delistings: Iterable[DelistingRecord] = (),
 ) -> list[RoundTrip]:
     """Round trips from ``fills`` (see the module docstring for the rules).
 
@@ -190,11 +195,12 @@ def build_round_trips(
     clock = [_utc(t) for t in timeline]
     excursions = Excursions(bars)
     splits: dict[str, list[tuple[datetime, float]]] = {}
-    events: list[tuple[datetime, int, Fill | CorporateActionRecord]] = []
+    events: list[tuple[datetime, int, Fill | CorporateActionRecord | DelistingRecord]] = []
     for record in corporate_actions:
         events.append((_utc(record.timestamp), 0, record))
         if record.kind == "split":
             splits.setdefault(record.ticker, []).append((_utc(record.timestamp), record.value))
+    events.extend((_utc(d.timestamp), 0, d) for d in delistings)
     events.extend((_utc(f.filled_at), 1, f) for f in fills if f.quantity > 0)
     events.sort(key=lambda e: (e[0], e[1]))  # stable: fill order kept
 
@@ -220,6 +226,25 @@ def build_round_trips(
     for ts, _, event in events:
         if isinstance(event, CorporateActionRecord):
             _apply_corporate_action(lots, event)
+            continue
+        if isinstance(event, DelistingRecord):
+            queue = lots.get(event.ticker, [])
+            for lot in queue:
+                trades.append(
+                    _trip(
+                        lot,
+                        lot.qty,
+                        exit_ts=ts,
+                        exit_px=event.price,
+                        exit_fee=0.0,
+                        exit_slippage=0.0,
+                        bars_held=bars_between(lot.entry_ts, ts),
+                        excursion=excursion,
+                        is_open=False,
+                        exit_ref="delisting",
+                    )
+                )
+            queue.clear()
             continue
         fill = event
         last_price[fill.ticker] = fill.price
@@ -529,6 +554,7 @@ def with_trades(
         bars=bars,
         marks=marks,
         reference_price=reference_price,
+        delistings=report.delistings,
     )
     stats = compute_trade_stats(
         trades,

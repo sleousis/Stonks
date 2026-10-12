@@ -62,7 +62,7 @@ Enforced: today the engine and the bar cache read raw `close` (`backtest/engine.
 
 **P14. Universes are point in time, delisted names included.**
 Why: a universe of names that are alive today inflates every cross-sectional backtest (Malkiel; Clenow; Covel).
-Enforced: BL-37 (membership table and survivorship warning). A backtest with a `universe_id` (`BacktestConfig.universe_id`, set from the lab dataset) trades a name only on days it is a member and sells a holding that leaves (RS-05). A tick over a stored universe scores only names that are members on the tick date (`Ranker(universe_id=...)`, BL-49), and membership read through the point-in-time lake hides joins and exits after the decision. The preflight warns about tickers that are never members in the window.
+Enforced: BL-37 (membership table and survivorship warning). A backtest with a `universe_id` (`BacktestConfig.universe_id`, set from the lab dataset) trades a name only on days it is a member and sells a holding that leaves (RS-05). A holding whose name delists settles for cash at its last close times `1 + [backtest.delisting] return` on the first bar after its last bar, once the name is past `instruments.delisted_date` or past the end of its membership with no later bar. Its queued orders are dropped and the trade ledger closes the lot (`backtest/delisting.py`, `tests/integration/test_backtester_delisting.py`). A tick over a stored universe scores only names that are members on the tick date (`Ranker(universe_id=...)`, BL-49), and membership read through the point-in-time lake hides joins and exits after the decision. The preflight warns about tickers that are never members in the window.
 
 ## 3. Benchmarking
 
@@ -86,7 +86,7 @@ Enforced: BL-13. `[backtest.costs]` in `config/default.toml` holds realistic cos
 
 **P19. A strategy must survive twice the modelled costs, and costs may eat at most a third of the pre-cost Sharpe.**
 Why: cost estimates are uncertain, and Carver's "speed limit" caps turnover (Chan; Carver; Wilmott).
-Enforced: BL-18 (cost-stress and cost-budget test). Per rule, `forecast_blend` drops a trend rule whose yearly cost is above 0.13 Sharpe on an instrument, and weights the rest after costs (roadmap 22.7, `features/forecast_weights`).
+Enforced: BL-18 (cost-stress and cost-budget test). It scales the dataset's own cost model with `CostModelSettings.scaled`, so commissions, US regulatory fees and the impact model stay in at every level and the 1x level costs what the backtest paid (`tests/unit/test_cost_stress.py`). Per rule, `forecast_blend` drops a trend rule whose yearly cost is above 0.13 Sharpe on an instrument, and weights the rest after costs (roadmap 22.7, `features/forecast_weights`).
 
 **P20. Impact grows with order size relative to volume and with volatility, and no fill takes more than a set share of a bar's volume.**
 Why: today a backtest can buy 300% of a small cap's daily volume at one open (Kissell; Harris; Zipline's volume limit).

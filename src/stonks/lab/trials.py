@@ -2,9 +2,13 @@
 
 Every lab run is recorded **before** tuning starts (strategy class,
 hypothesis, premortem, tuner, objective, budget, seed, dataset, manifest),
-then every trial the tuner evaluated is appended, then the verdict. Repeated
-lab runs of one strategy class are trials too, so :meth:`TrialLedger.n_trials`
-counts across runs. Per-bar trial returns, when the tuner provides them
+then every trial is appended as it finishes (the runner's trial sink, so a
+cancel or a crash cannot hide trials that ran), then the verdict with the
+tuner's winner. Repeated lab runs of one strategy class are trials too, so
+:meth:`TrialLedger.n_trials` counts across runs, and a finished run with no
+recorded trial counts its whole budget (P2). A run left without a verdict
+whose heartbeat is older than the offload lease is closed by
+:meth:`TrialLedger.reap_unfinished`. Per-bar trial returns, when the tuner provides them
 (``TunerResult.trials``, BL-07), are a float32 ``T x N`` matrix saved beside
 the artifacts at ``<artifacts>/_trials/<run_id>.npz``; SQLite holds only the
 scores.
@@ -21,7 +25,7 @@ import math
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -38,16 +42,27 @@ Verdict = Literal["pass", "fail", "error"]
 
 TRIALS_SUBDIR = "_trials"
 
+#: What the ledger says of a run stopped before it finished (a cancel, or a
+#: process that died and was reaped).
+LAB_RUN_STOPPED_MESSAGE = "The run was stopped before it finished."
+
+#: A finished run (it has a verdict) with no recorded trial.
+_UNSCORED = (
+    "r.verdict IS NOT NULL AND NOT EXISTS (SELECT 1 FROM lab_trials t WHERE t.run_id = r.id)"
+)
+
 
 @dataclass(frozen=True)
 class TrialRecord:
-    """One tuning trial. A non-finite score is a failed trial."""
+    """One tuning trial. A non-finite score is a failed trial. ``seed`` is
+    the seed its RNGs ran with (not part of equality)."""
 
     trial_index: int
     params: dict[str, Any]
     score: float
     n_bars: int | None = None
     status: TrialStatus = "ok"
+    seed: int | None = None
 
     def __post_init__(self) -> None:
         if not _finite(self.score) and self.status == "ok":
@@ -173,31 +188,79 @@ class TrialLedger:
     ) -> None:
         """Append a run's trials in one transaction, and its per-bar return
         matrix (if any) to ``<trials_dir>/<run_id>.npz``."""
-        if matrix is not None:
-            self.trials_dir.mkdir(parents=True, exist_ok=True)
-            index = matrix.index
-            if index.dtype == object:
-                index = pd.to_datetime(index).values
-            np.savez_compressed(
-                self.trials_dir / f"{run_id}.npz", index=index, values=matrix.values
-            )
+        self._save_matrix(run_id, matrix)
         with self.state.transaction():
-            for t in trials:
-                self.state.execute(
-                    """
-                    INSERT INTO lab_trials
-                        (run_id, trial_index, params_json, score, n_bars, status)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    [
-                        run_id,
-                        t.trial_index,
-                        _dumps(t.params),
-                        float(t.score) if _finite(t.score) else None,
-                        t.n_bars,
-                        t.status,
-                    ],
-                )
+            self._insert_trials(run_id, trials)
+
+    def replace_trials(
+        self,
+        run_id: str,
+        trials: Sequence[TrialRecord],
+        matrix: TrialMatrix | None = None,
+    ) -> None:
+        """Make ``trials`` the run's whole trial list in one transaction (the
+        rows the trial sink wrote as trials finished are replaced, so no
+        trial is stored twice), plus the matrix when given."""
+        self._save_matrix(run_id, matrix)
+        with self.state.transaction():
+            self.state.execute("DELETE FROM lab_trials WHERE run_id = ?", [run_id])
+            self._insert_trials(run_id, trials)
+
+    def _save_matrix(self, run_id: str, matrix: TrialMatrix | None) -> None:
+        if matrix is None:
+            return
+        self.trials_dir.mkdir(parents=True, exist_ok=True)
+        index = matrix.index
+        if index.dtype == object:
+            index = pd.to_datetime(index).values
+        np.savez_compressed(self.trials_dir / f"{run_id}.npz", index=index, values=matrix.values)
+
+    def _insert_trials(self, run_id: str, trials: Sequence[TrialRecord]) -> None:
+        self.state.con.executemany(
+            """
+            INSERT INTO lab_trials
+                (run_id, trial_index, params_json, score, n_bars, status, seed)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                [
+                    run_id,
+                    t.trial_index,
+                    _dumps(t.params),
+                    float(t.score) if _finite(t.score) else None,
+                    t.n_bars,
+                    t.status,
+                    t.seed,
+                ]
+                for t in trials
+            ],
+        )
+
+    def update_seeds(self, run_id: str, seeds: dict[str, Any]) -> None:
+        """Store ``seeds`` as the run's manifest seeds (BL-06): the seeds the
+        tests actually use, read after they were bound to the run."""
+        rows = self.state.sql("SELECT manifest_json FROM lab_runs WHERE id = ?", [run_id])
+        if not rows:
+            return
+        manifest = json.loads(rows[0]["manifest_json"] or "{}")
+        manifest["seeds"] = seeds
+        self.state.execute(
+            "UPDATE lab_runs SET manifest_json = ? WHERE id = ?", [_dumps(manifest), run_id]
+        )
+
+    def touch(self, run_id: str) -> None:
+        """Mark a running run alive now (the reaper skips it for a lease)."""
+        self.state.execute(
+            "UPDATE lab_runs SET heartbeat_at = ? WHERE id = ? AND verdict IS NULL",
+            [_iso_now(), run_id],
+        )
+
+    def reap_unfinished(self, lease_seconds: float) -> list[str]:
+        """Close runs left without a verdict whose last sign of life (the
+        heartbeat, else the start) is older than ``lease_seconds``: verdict
+        ``error`` with :data:`LAB_RUN_STOPPED_MESSAGE`. A reaped run with no
+        recorded trial then counts its whole budget (P2). Returns their ids."""
+        return reap_unfinished_runs(self.state, lease_seconds)
 
     def finish_run(
         self,
@@ -206,14 +269,25 @@ class TrialLedger:
         *,
         error: str | None = None,
         error_detail: str | None = None,
+        best_trial_index: int | None = None,
+        best_params: dict[str, Any] | None = None,
     ) -> None:
         """Close a run with its verdict. A failed run also keeps ``error``
         (a plain sentence for everyone) and ``error_detail`` (the raw,
-        scrubbed exception, read back by admins only)."""
+        scrubbed exception, read back by admins only). A run with a result
+        keeps the tuner's winner: its trial index and params."""
         self.state.execute(
-            "UPDATE lab_runs SET verdict = ?, finished_at = ?, error = ?, error_detail = ?"
-            " WHERE id = ?",
-            [verdict, _iso_now(), error, error_detail, run_id],
+            "UPDATE lab_runs SET verdict = ?, finished_at = ?, error = ?, error_detail = ?,"
+            " best_trial_index = ?, best_params_json = ? WHERE id = ?",
+            [
+                verdict,
+                _iso_now(),
+                error,
+                error_detail,
+                best_trial_index,
+                _dumps(best_params) if best_params is not None else None,
+                run_id,
+            ],
         )
 
     def record_run(
@@ -232,25 +306,28 @@ class TrialLedger:
 
     # ---- reads -------------------------------------------------------------
 
+    def _count(self, where: str, params: Sequence[Any]) -> int:
+        """Trials of the runs matching ``where`` (on ``lab_runs r``), plus the
+        budget of each finished run among them with no recorded trial (P2)."""
+        recorded = self.state.sql(
+            f"SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id WHERE {where}",
+            params,
+        )[0][0]
+        unscored = self.state.sql(
+            "SELECT COALESCE(SUM(COALESCE(r.budget, 0)), 0) FROM lab_runs r"
+            f" WHERE ({where}) AND {_UNSCORED}",
+            params,
+        )[0][0]
+        return int(recorded) + int(unscored)
+
     def n_trials(self, strategy_class: str) -> int:
-        """Cumulative trial count across every recorded run of the class."""
-        row = self.state.sql(
-            """
-            SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id
-            WHERE r.strategy_class = ?
-            """,
-            [strategy_class],
-        )[0]
-        return int(row[0])
+        """Cumulative trial count across every recorded run of the class,
+        each finished run with no recorded trial counting its budget."""
+        return self._count("r.strategy_class = ?", [strategy_class])
 
     def n_trials_family(self, family: str) -> int:
         """Trials across every run of one research family (roadmap 22.9)."""
-        row = self.state.sql(
-            "SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id"
-            " WHERE r.family = ?",
-            [family],
-        )[0]
-        return int(row[0])
+        return self._count("r.family = ?", [family])
 
     def n_trials_searched(self, strategy_class: str, family: str | None) -> int:
         """Trials of every run of the class or of the family, each once:
@@ -258,28 +335,31 @@ class TrialLedger:
         other classes both count (P2)."""
         if not family:
             return self.n_trials(strategy_class)
-        row = self.state.sql(
-            "SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id"
-            " WHERE r.strategy_class = ? OR r.family = ?",
-            [strategy_class, family],
-        )[0]
-        return int(row[0])
+        return self._count("r.strategy_class = ? OR r.family = ?", [strategy_class, family])
 
-    def unscored_runs(self, family: str) -> list[tuple[str, int]]:
-        """``(run_id, budget)`` of the family's runs with no recorded trial:
-        runs stopped or crashed before their trials were written."""
+    def unscored_runs(self, family: str | None = None) -> list[tuple[str, int]]:
+        """``(run_id, budget)`` of runs with no recorded trial: runs stopped
+        or crashed before their trials were written. With ``family``, that
+        family's runs, finished or not (the research loop asks once the
+        session's runs are over). Without, every finished run."""
+        if family is not None:
+            where, params = "family = ?", [family]
+        else:
+            where, params = "verdict IS NOT NULL", []
         rows = self.state.sql(
-            "SELECT id, budget FROM lab_runs r WHERE family = ?"
+            f"SELECT id, budget FROM lab_runs r WHERE {where}"
             " AND NOT EXISTS (SELECT 1 FROM lab_trials t WHERE t.run_id = r.id)"
             " ORDER BY started_at, id",
-            [family],
+            params,
         )
         return [(str(r["id"]), int(r["budget"] or 0)) for r in rows]
 
-    def count_unscored(self, family: str) -> int:
+    def count_unscored(self, family: str | None = None) -> int:
         """Record each unscored run's whole budget as failed trials, so a
         stopped run still counts every trial it may have tried (P2). Returns
-        the trials added."""
+        the trials added. The counts already charge a finished unscored
+        run's budget, so for those this changes no count: it makes the
+        charge visible as trial rows."""
         added = 0
         for run_id, budget in self.unscored_runs(family):
             placeholders = [
@@ -315,6 +395,7 @@ class TrialLedger:
                 score=float("nan") if r["score"] is None else float(r["score"]),
                 n_bars=r["n_bars"],
                 status=r["status"],
+                seed=r["seed"],
             )
             for r in rows
         ]
@@ -408,6 +489,21 @@ def build_trial_matrix(returns: Sequence[Any]) -> TrialMatrix:
     return TrialMatrix(index=np.arange(t), values=values)
 
 
+def reap_unfinished_runs(
+    state: SqliteState, lease_seconds: float, *, now: datetime | None = None
+) -> list[str]:
+    """:meth:`TrialLedger.reap_unfinished` on an open state connection (the
+    offload queue's reaper calls it without a ledger, on its own clock)."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    cutoff = (now - timedelta(seconds=lease_seconds)).isoformat(timespec="microseconds")
+    rows = state.sql(
+        "UPDATE lab_runs SET verdict = 'error', finished_at = ?, error = ?, error_detail = NULL"
+        " WHERE verdict IS NULL AND COALESCE(heartbeat_at, started_at) < ? RETURNING id",
+        [now.isoformat(timespec="microseconds"), LAB_RUN_STOPPED_MESSAGE, cutoff],
+    )
+    return sorted(str(r["id"]) for r in rows)
+
+
 def new_run_id() -> str:
     """Sortable, unique: ``lab_<UTC yyyymmddThhmmssffffff>_<8 hex>``."""
     return f"lab_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}_{uuid.uuid4().hex[:8]}"
@@ -417,6 +513,8 @@ def _run_dict(row: Any) -> dict[str, Any]:
     d = dict(row)
     d["dataset"] = json.loads(d.pop("dataset_json") or "{}")
     d["manifest"] = json.loads(d.pop("manifest_json") or "{}")
+    best = d.pop("best_params_json", None)
+    d["best_params"] = json.loads(best) if best else None
     return d
 
 

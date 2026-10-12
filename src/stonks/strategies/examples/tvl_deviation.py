@@ -134,6 +134,7 @@ class TVLDeviationStrategy(SingleTickerLongFlat):
     premise = "mean_reversion"
     label_horizon_bars = 10
     required_history_bars = 31
+    data_tables = ("defi_tvl",)
 
     def param_metadata(self) -> dict[str, int]:
         p = self.params

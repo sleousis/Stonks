@@ -8,7 +8,8 @@ and finishes it through the normal job store, so results land in the same
 ``result_json`` column the API reads for every job.
 
 A running worker job whose heartbeat is older than the lease is failed by
-:meth:`LabQueue.reap_stale` (the worker died or lost its disk). Every
+:meth:`LabQueue.reap_stale` (the worker died or lost its disk), which also
+closes trial-ledger runs left without a verdict past the lease. Every
 method opens a short-lived SQLite connection, like ``JobStore``.
 """
 
@@ -184,10 +185,16 @@ class LabQueue:
             return cur.rowcount == 1
 
     def reap_stale(self, lease_seconds: float) -> list[str]:
-        """Fail running worker jobs with no heartbeat for ``lease_seconds``."""
+        """Fail running worker jobs with no heartbeat for ``lease_seconds``,
+        and close the trial ledger's runs left without a verdict that long
+        (:func:`~stonks.lab.trials.reap_unfinished_runs`), so a dead worker's
+        run still counts its budget (P2). Returns the failed job ids."""
+        from stonks.lab.trials import reap_unfinished_runs
+
         now = self._clock()
         cutoff = _iso(now - timedelta(seconds=lease_seconds))
         with self._state() as s:
+            reap_unfinished_runs(s, lease_seconds, now=now)
             rows = s.sql(
                 "UPDATE jobs SET status='failed', finished_at=?, error=? "
                 "WHERE executor=? AND status='running' AND heartbeat_at < ? RETURNING id",

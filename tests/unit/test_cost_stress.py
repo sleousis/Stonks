@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from stonks.backtest.costs import AssetClassCosts, CostModelSettings
+from stonks.backtest.costs import AssetClassCosts, CostModelSettings, Trade
 from stonks.lab.survival.cost_stress import (
     CostStressOptions,
     CostStressTest,
+    _has_costs,
     break_even_multiple,
     scale_costs,
 )
@@ -62,6 +63,61 @@ def test_scale_costs_keeps_sell_prices_positive_at_extreme_multiples():
     )
     s = scale_costs(base, 10.0)
     assert s.default.half_spread_bps + s.max_impact_bps < 10_000
+
+
+_SALE = Trade(ticker="X.US", side="sell", quantity=100.0, price=50.0, asset_class="equity")
+
+
+def _ibkr_istar() -> CostModelSettings:
+    return CostModelSettings.ibkr("tiered").model_copy(update={"impact_model": "istar"})
+
+
+def test_p19_scale_costs_at_1x_keeps_commissions_and_impact_settings():
+    base = _ibkr_istar()
+    expected = base.build().cost(_SALE)
+    assert expected.fee == pytest.approx(0.8291, abs=1e-4)
+    one = scale_costs(base, 1.0)
+    assert one.build().cost(_SALE) == expected
+    assert one.impact_model == "istar"
+    assert one.for_asset_class("equity").commission == "ibkr_tiered"
+    assert one.for_asset_class("equity").us_sell_fees
+
+
+def test_p19_scale_costs_never_cheaper_at_2x():
+    base = _ibkr_istar()
+    one = scale_costs(base, 1.0).build().cost(_SALE)
+    two = scale_costs(base, 2.0).build().cost(_SALE)
+    assert two.fee >= one.fee
+    assert two.fill_price <= one.fill_price  # a sale fills lower at higher costs
+    # twice the fees, less a hair: the SEC fee is on the lower 2x fill value
+    assert two.fee == pytest.approx(2 * one.fee, rel=1e-4)
+
+
+def test_scaled_scales_impact_coefficients_and_commission_multiplier():
+    base = _ibkr_istar().model_copy(update={"impact_gamma": 1.5})
+    s = base.scaled(3.0)
+    assert s.impact_gamma == pytest.approx(4.5)
+    assert s.istar.a1 == pytest.approx(base.istar.a1 * 3.0)
+    assert s.istar.a2 == base.istar.a2
+    assert s.commissions.commission_multiplier == pytest.approx(3.0)
+    assert base.commissions.commission_multiplier == 1.0
+    zero = base.scaled(0.0)
+    assert zero.build().cost(_SALE).fee == 0.0
+    assert zero.build().cost(_SALE).fill_price == 50.0
+    assert zero.charges_nothing()
+
+
+def test_commission_only_settings_are_not_free():
+    commission_only = CostModelSettings(
+        default=AssetClassCosts(commission="ibkr_fixed"), max_impact_bps=0.0
+    )
+    assert not commission_only.charges_nothing()
+    assert _has_costs(commission_only)
+    fees_only = CostModelSettings(default=AssetClassCosts(us_sell_fees=True))
+    assert not fees_only.charges_nothing()
+    assert CostModelSettings().charges_nothing()
+    assert not _has_costs(CostModelSettings())
+    assert not _has_costs(None)
 
 
 def _sharpe_line(zero: float, slope: float):

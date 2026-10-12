@@ -92,6 +92,7 @@ class EarningsDrift(BaseStrategy):
     alpha_family = "sentiment"
     premise = "trend"
     label_horizon_bars = 40
+    data_tables: ClassVar[tuple[str, ...]] = ("earnings_calendar",)
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
 
     def __init__(self, params: Any) -> None:

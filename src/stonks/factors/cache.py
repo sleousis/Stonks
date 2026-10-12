@@ -1,7 +1,8 @@
 """The factor panel cache (roadmap 22.2).
 
 A panel is keyed by a :class:`PanelKey`: a *slot* (the factor, universe,
-window, interval and sampling) and a *fingerprint* of the data it read
+window, interval and sampling, plus the source hash of the running code,
+so a code change misses) and a *fingerprint* of the data it read
 (bar checksums, corporate actions, membership spans, and any other table
 the factor declares). A slot holds one panel. When the data changes the
 fingerprint changes, the next read misses, and the stale panel is dropped,
@@ -30,6 +31,7 @@ from typing import Any
 import duckdb
 import pandas as pd
 
+from stonks.code_identity import source_hash
 from stonks.logging import get_logger
 from stonks.store.pit import PointInTimeLake
 
@@ -68,10 +70,11 @@ def slot_of(
     extra: Any = None,
 ) -> str:
     """The slot of a panel: everything that defines it except the data,
-    plus :data:`ENGINE_VERSION`, so a panel computed by older SQL is never
-    served again."""
+    plus :data:`ENGINE_VERSION` and the package's
+    :func:`~stonks.code_identity.source_hash`, so a panel computed by older
+    SQL or older code is never served again (P46)."""
     window_ = [str(window[0]), str(window[1])]
-    return _digest([token, list(universe), window_, interval, extra, ENGINE_VERSION])
+    return _digest([token, list(universe), window_, interval, extra, ENGINE_VERSION, source_hash()])
 
 
 def data_fingerprint(

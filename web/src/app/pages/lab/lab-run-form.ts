@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { LabChoices } from '../../api/lab-choices.service';
 import { LabService } from '../../api/lab.service';
 import type {
   IntervalInfo,
@@ -29,7 +30,7 @@ import {
   HEATMAP_GRID_MAX,
   HEATMAP_GRID_MIN,
   type LabRunForm,
-  OBJECTIVES,
+  SAMPLER_TEXT,
   PICKABLE_TESTS,
   SUITES,
   SURVIVAL_TESTS,
@@ -114,6 +115,7 @@ export class LabRunFormView {
   readonly submitted = output<LabRunRequest>();
 
   private readonly lab = inject(LabService);
+  private readonly choices = inject(LabChoices);
   private readonly session = inject(SessionService);
   /** May this user start lab jobs? Otherwise the button is off with a note. */
   protected readonly canRun = computed(() => this.session.can('lab.run'));
@@ -172,7 +174,23 @@ export class LabRunFormView {
       .filter((f) => f.tunable && f.control !== 'text')
       .map((f) => ({ name: f.name, label: f.label })),
   );
-  protected readonly objectives = OBJECTIVES;
+  /** The server's objectives; the current choice stands in while they load. */
+  protected readonly objectives = computed(() => {
+    const list = this.choices.objectives();
+    return list.length ? list : [{ name: this.form().objective, label: this.form().objective }];
+  });
+  /** The server's tuners; the current choice stands in while they load. */
+  protected readonly tuners = computed(() => {
+    const list = this.choices.tuners();
+    return list.length ? list : [{ name: this.form().tuner, label: this.form().tuner }];
+  });
+  /** The Optuna tuner's samplers, from its options schema. */
+  protected readonly samplers = computed(() => {
+    const schema = this.choices.tuner('optuna')?.options_schema as
+      { properties?: { sampler?: { enum?: unknown[] } } } | undefined;
+    const names = (schema?.properties?.sampler?.enum ?? [this.form().sampler]).map(String);
+    return names.map((name) => ({ name, label: SAMPLER_TEXT[name] ?? name }));
+  });
   protected readonly title = strategyTitle;
   protected readonly gridMin = HEATMAP_GRID_MIN;
   protected readonly gridMax = HEATMAP_GRID_MAX;

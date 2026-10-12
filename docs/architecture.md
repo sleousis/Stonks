@@ -124,8 +124,8 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 | `IndexSource` | `universes/index_sources/` (registry) | wikipedia_sp500 |
 | `Strategy` | `core/protocols.py`, `strategies/base.py` | 46 catalogued: 40 strategies and 6 wrappers |
 | `Factor` | `factors/base.py`, `factors/library/` (registry) | alpha158, classic, fundamentals |
-| `Tuner`, `Objective` | `lab/tuning/`, `lab/objectives.py` | Tuners grid, random, optuna. Objectives Sharpe, CAGR, final return, Sortino, Calmar, drawdown Sharpe, multi-metric, purged CV |
-| `SurvivalTest` | `lab/survival/` (registry) | 24 tests, presets `quick`, `standard`, `promotion` |
+| `Tuner`, `Objective` | `lab/tuning/registry.py`, `lab/objectives.py` (registries, plus `stonks.tuners` and `stonks.objectives` entry points) | Tuners grid, random, optuna, prescreen. Objectives Sharpe, CAGR, final return, Sortino, Calmar, drawdown Sharpe, multi-metric, purged CV |
+| `SurvivalTest` | `lab/survival/` (registry, plus `stonks.survival_tests` entry points) | 24 tests, presets `quick`, `standard`, `promotion` |
 | `Forecaster` | `features/forecasters/` (registry) | random_walk, drift, ets, theta, chronos_bolt, chronos_2, timesfm_2_5, kronos_small, kronos_mini ([forecasting](forecasting.md)) |
 | `PortfolioConstructor` | `portfolio/base.py` (registry) | single_winner, equal_weight_top_n, inverse_vol, vol_target, atr_parity, hrp, erc, mean_variance_costs |
 | `RiskRule` | `production/rules/` (registry) | caps, position risk, portfolio vol, style exposure, drawdown scaling, liquidity, sector cap, max holding, circuit breaker, short rules, account rules, live safeguards, protective stops, option limits, intraday rules |
@@ -197,7 +197,7 @@ flowchart LR
   G -->|promote| AC[active]
 ```
 
-Every trial is written to `lab_runs` and `lab_trials`, so the deflated Sharpe and PBO know how many things were tried. Every status change writes a `status_changes` row. Promotion needs a passing go-live check or an override with a reason.
+Every trial is written to `lab_runs` and `lab_trials` as it finishes, through a run-scoped trial sink, so the deflated Sharpe and PBO know how many things were tried even after a cancel or a crash. A run with no recorded trial counts its budget, and runs left open by a dead process are reaped. Every status change writes a `status_changes` row. Promotion needs a passing go-live check or an override with a reason.
 
 ## Accounts and data ownership
 

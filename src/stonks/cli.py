@@ -1571,20 +1571,62 @@ def lab_importance(ctx: typer.Context) -> None:
     raise typer.Exit(code=importance.main(list(ctx.args), prog="stonks lab importance"))
 
 
-_LAB_TUNERS = ("grid", "random", "optuna")
-_LAB_SAMPLERS = ("tpe", "nsga2", "random")
-_LAB_OBJECTIVES = (
-    "sharpe",
-    "cagr",
-    "final_return",
-    "sortino",
-    "calmar",
-    "sharpe_dd",
-    "multi",
-    "cv_sharpe",
-    "cv_cagr",
-    "cv_final_return",
+def _tuner_choice(value: str | None) -> str | None:
+    """``--tuner``: a name from the tuner registry (``stonks lab tuners``)."""
+    from stonks.lab.tuning.registry import tuner_names
+
+    return _choice("--tuner", tuple(tuner_names()))(value)
+
+
+def _objective_choice(value: str | None) -> str | None:
+    """``--objective``: a name from the objective registry (``stonks lab
+    objectives``)."""
+    from stonks.lab.objectives import objective_names
+
+    return _choice("--objective", tuple(objective_names()))(value)
+
+
+def _tuner_options(raw: str | None) -> dict[str, Any] | None:
+    """``--tuner-options`` as a JSON object, or ``None``."""
+    if raw is None:
+        return None
+    import json
+
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"not valid JSON ({exc})", param_hint="--tuner-options") from None
+    if not isinstance(value, dict):
+        raise typer.BadParameter("must be a JSON object", param_hint="--tuner-options")
+    return value
+
+
+_TUNER_OPTIONS = typer.Option(
+    None,
+    "--tuner-options",
+    help="the tuner's settings as JSON, e.g. '{\"grid_size\": 7}' (stonks lab tuners)",
 )
+
+
+@lab_app.command("objectives")
+def lab_objectives_cmd() -> None:
+    """List the objectives a lab run can score trials with."""
+    from stonks.app.lab import objective_catalog
+
+    for info in objective_catalog():
+        typer.echo(f"{info.name:<18} {info.label}")
+
+
+@lab_app.command("tuners")
+def lab_tuners_cmd() -> None:
+    """List the tuners a lab run can search with, and their options."""
+    from stonks.app.lab import tuner_catalog
+
+    for info in tuner_catalog():
+        options = ", ".join(info.options_schema.get("properties", {})) or "none"
+        typer.echo(f"{info.name:<12} {info.label}  (options: {options})")
+
+
 _LAB_COST_MODELS = ("config", "zero", "realistic", "ibkr_tiered", "ibkr_fixed")
 
 
@@ -1740,19 +1782,24 @@ def lab_run(
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
     train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
     tuner: str = typer.Option(
-        "grid", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random|optuna"
+        "grid",
+        "--tuner",
+        callback=_tuner_choice,
+        help="grid|random|optuna|prescreen or a plugin (stonks lab tuners)",
     ),
-    grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
+    tuner_options: str | None = _TUNER_OPTIONS,
+    grid_size: int | None = typer.Option(
+        None, "--grid-size", min=1, help="points per numeric axis (grid, prescreen)"
+    ),
     budget: int = typer.Option(20, "--budget", min=1, help="tuning trials"),
     seed: int = typer.Option(0, "--seed", help="tuner seed"),
-    sampler: str = typer.Option(
-        "tpe",
+    sampler: str | None = typer.Option(
+        None,
         "--sampler",
-        callback=_choice("--sampler", _LAB_SAMPLERS),
-        help="optuna sampler: tpe|nsga2 (Pareto over the multi objective)|random",
+        help="optuna sampler: tpe (default)|nsga2 (Pareto over the multi objective)|random",
     ),
-    prune: bool = typer.Option(
-        False, "--prune", help="optuna: stop trials whose fast score trails (they still count)"
+    prune: bool | None = typer.Option(
+        None, "--prune", help="optuna: stop trials whose fast score trails (they still count)"
     ),
     heatmap: str | None = typer.Option(
         None,
@@ -1766,9 +1813,9 @@ def lab_run(
     objective: str = typer.Option(
         "sharpe",
         "--objective",
-        callback=_choice("--objective", _LAB_OBJECTIVES),
+        callback=_objective_choice,
         help="sharpe|cagr|final_return|sortino|calmar|sharpe_dd|multi, or cv_ plus "
-        "sharpe, cagr or final_return to score on purged folds",
+        "sharpe, cagr or final_return to score on purged folds (stonks lab objectives)",
     ),
     tests: str | None = typer.Option(
         None,
@@ -1938,14 +1985,15 @@ def lab_run(
             end=end_d,
             interval=bar_interval.code,
             train_ratio=train_ratio,
-            tuner=tuner,  # type: ignore[arg-type]
+            tuner=tuner,
+            tuner_options=_tuner_options(tuner_options),
             grid_size=grid_size,
             budget=budget,
             seed=seed,
-            sampler=sampler,  # type: ignore[arg-type]
+            sampler=sampler,
             prune=prune,
             heatmap=_heatmap_option(heatmap, heatmap_grid, heatmap_full),
-            objective=objective,  # type: ignore[arg-type]
+            objective=objective,
             survival_tests=suite,
             walk_forward=(
                 settings.lab.walk_forward.model_copy(update=wf_overrides)
@@ -2086,16 +2134,23 @@ def lab_sweep(
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
     train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
     tuner: str = typer.Option(
-        "random", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random|optuna"
+        "random",
+        "--tuner",
+        callback=_tuner_choice,
+        help="grid|random|optuna|prescreen or a plugin (stonks lab tuners)",
     ),
-    grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
+    tuner_options: str | None = _TUNER_OPTIONS,
+    grid_size: int | None = typer.Option(
+        None, "--grid-size", min=1, help="points per numeric axis (grid, prescreen)"
+    ),
     budget: int = typer.Option(10, "--budget", min=1, help="tuning trials per run"),
     seed: int = typer.Option(0, "--seed", help="tuner seed"),
     objective: str = typer.Option(
         "sharpe",
         "--objective",
-        callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
+        callback=_objective_choice,
+        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds "
+        "(stonks lab objectives)",
     ),
     tests: str | None = typer.Option(
         None, "--tests", help="comma-separated survival test ids; default: --preset"
@@ -2165,11 +2220,12 @@ def lab_sweep(
             end=end_d,
             interval=bar_interval.code,
             train_ratio=train_ratio,
-            tuner=tuner,  # type: ignore[arg-type]
+            tuner=tuner,
+            tuner_options=_tuner_options(tuner_options),
             grid_size=grid_size,
             budget=budget,
             seed=seed,
-            objective=objective,  # type: ignore[arg-type]
+            objective=objective,
             survival_tests=suite,
             walk_forward=settings.lab.walk_forward if "walk_forward" in suite else None,
             cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
