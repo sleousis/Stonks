@@ -15,15 +15,8 @@
 
 // The allocation is the page's headline figure. Brass only when it is
 // real money; paper stays in ink.
-.figure {
-  font-size: var(--text-2xl);
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.live-figure {
-  color: var(--color-live);
-  font-size: var(--text-2xl);
+.allocation-figure {
+  font-size: clamp(2rem, 6vw, var(--text-figure));
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -34,13 +27,12 @@
 }
 
 h3 {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--color-ink-2);
+  font-size: var(--text-lead);
+  font-weight: var(--weight-bold);
 }
 
 p {
-  max-width: 70ch;
+  max-width: 68ch;
 }
 
 .actions {
@@ -65,7 +57,7 @@ p {
   gap: var(--space-1);
   margin: 0;
   padding-left: var(--space-4);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 .rules {
@@ -79,7 +71,7 @@ p {
     display: grid;
     gap: 2px;
     padding: var(--space-3) 0;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
   > li:first-child {
@@ -105,7 +97,7 @@ p {
 
 .rule-effect {
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 .rules-title {
@@ -117,7 +109,7 @@ p {
   align-items: center;
   min-height: var(--touch-min);
   cursor: pointer;
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 // 19.13: the risks of a margin account, said before a switch to it.
@@ -126,7 +118,7 @@ p {
   gap: var(--space-2);
 
   h3 {
-    color: var(--color-ink);
+    color: var(--ink);
   }
 
   ul {

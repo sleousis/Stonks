@@ -1,51 +1,59 @@
 @use 'breakpoints' as bp;
 
-.off-title {
-  font-family: var(--font-display);
-  font-stretch: var(--display-stretch);
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-display-sm);
+// Not set up: a short, calm note on the page, no box.
+.off {
+  border-top: 2px solid var(--rule-strong);
 }
 
-.off .panel-body {
+.off-body {
   display: grid;
   justify-items: start;
   gap: var(--space-3);
-  max-width: 70ch;
-  padding-block: var(--space-6);
+  max-width: 68ch;
+  padding-top: var(--space-6);
+
+  p {
+    margin: 0;
+    color: var(--ink-2);
+  }
 }
 
 .off-mark {
-  color: var(--color-ink-3);
-  font-size: var(--text-2xl);
-  line-height: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
+  color: var(--ink-2);
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 
-.off p {
-  margin: 0;
+.off-title {
+  font-size: var(--text-section);
 }
 
-// Frozen or limited: a callout above the conversation.
+// Frozen or limited: a band above the conversation.
 .banner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2) var(--space-3);
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-6);
 
   > * + * {
     margin-top: 0;
   }
 
   p {
-    margin: 0;
-    min-width: 0;
     flex: 1 1 20rem;
-  }
-
-  @include bp.phone {
-    margin-bottom: var(--space-3);
+    min-width: 0;
+    margin: 0;
   }
 }
 
@@ -59,32 +67,30 @@
 .tag {
   display: inline-flex;
   align-items: center;
+  height: 20px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-xs);
-  color: var(--color-ink-2);
+  border-radius: var(--r-pill);
+  background: var(--sunk);
+  color: var(--ink-2);
   font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-label);
   white-space: nowrap;
 }
 
+// The list of conversations on the left, the chat column on the right.
 // Phones: the list alone, or the open conversation alone (with a way back).
 .layout {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--section-gap) var(--column-gap);
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
-
-  @include bp.phone {
-    gap: var(--space-3);
-  }
 
   &.has-open .convos {
     display: none;
   }
 
   @include bp.from-tablet {
-    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+    grid-template-columns: minmax(13rem, 16.5rem) minmax(0, 1fr);
     align-items: start;
 
     &.has-open .convos {
@@ -95,56 +101,68 @@
 
 .convos {
   min-width: 0;
+
+  @include bp.from-tablet {
+    position: sticky;
+    top: calc(var(--chrome-h) + var(--rail-h) + var(--space-6));
+  }
+
+  .muted {
+    padding-top: var(--space-4);
+    font-size: var(--text-sm);
+  }
 }
 
 .convo-list {
   display: grid;
   margin: 0;
-  padding: 0;
+  padding: var(--space-2) 0 0;
   list-style: none;
 
   li {
     display: flex;
     align-items: center;
     gap: var(--space-1);
-    border-bottom: 1px solid var(--color-border);
+    border-radius: var(--r-ctl);
+    transition: background-color var(--dur-fast) var(--ease-out);
 
-    &:last-child {
-      border-bottom: 0;
+    &:hover {
+      background: var(--sunk);
     }
 
-    // The open conversation: an accent rule and a quiet tint.
+    // The open conversation: the soft accent and an accent edge.
     &.active {
-      box-shadow: inset 2px 0 0 var(--color-accent);
-      background: var(--color-accent-soft);
+      box-shadow: inset 2px 0 0 var(--accent);
+      background: var(--accent-soft);
+    }
+  }
+
+  .btn-icon {
+    flex: none;
+    color: var(--muted);
+
+    svg {
+      width: 14px;
+      height: 14px;
     }
   }
 }
 
 .convo-link {
   display: grid;
+  flex: 1;
   align-content: center;
   gap: 2px;
-  flex: 1;
   min-width: 0;
   min-height: var(--touch-min);
   padding: var(--space-2) var(--space-3);
-  color: var(--color-ink);
+  color: var(--ink);
   text-decoration: none;
-  transition: background-color var(--dur-fast) var(--ease);
-
-  &:hover {
-    background: var(--color-hover);
-  }
-
-  &:active {
-    background: var(--color-pressed);
-  }
 }
 
 .convo-title {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-md);
+  font-weight: var(--weight-label);
   overflow-wrap: anywhere;
 }
 
@@ -152,22 +170,31 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  color: var(--color-ink-3);
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 
+// The chat column: 760px at most, the composer pinned at its foot.
 .chat {
   display: grid;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 760px;
   min-width: 0;
 }
 
 .chat-head {
+  display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--rule-strong);
 
   h2 {
     flex: 1 1 12rem;
     min-width: 0;
+    font-size: var(--text-section);
     overflow-wrap: anywhere;
   }
 }
@@ -177,7 +204,10 @@
   align-items: center;
   min-height: var(--touch-min);
   flex-basis: 100%;
-  font-size: var(--text-sm);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: var(--weight-label);
+  text-decoration: none;
 
   @include bp.from-tablet {
     display: none;
@@ -189,18 +219,55 @@
 }
 
 .intro {
-  max-width: 70ch;
-  color: var(--color-ink-2);
+  display: grid;
+  gap: var(--space-3);
+  max-width: 68ch;
+  color: var(--ink-2);
+}
 
-  ul {
-    margin: var(--space-2) 0 var(--space-3);
-    padding-left: var(--space-5);
+.intro-title {
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-weight: var(--weight-semibold);
+}
+
+.prompts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prompt {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sheet);
+  background: var(--raise);
+  color: var(--ink);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    border-color: var(--accent-line);
+  }
+
+  &:active {
+    transform: translateY(1px);
   }
 }
 
 .transcript {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -211,29 +278,29 @@
 
   .who {
     display: block;
-    margin-bottom: 2px;
-    color: var(--color-ink-3);
+    margin-bottom: var(--space-1);
+    color: var(--muted);
     font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
+    font-weight: var(--weight-label);
   }
 
   .text {
     margin: 0;
-    max-width: 70ch;
-    line-height: var(--leading-body);
+    max-width: 68ch;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 }
 
-// Messages are quiet rows: yours on an inset well at the right, the
-// assistant's as plain text.
+// Your turns sit right on a sunk bubble. The assistant's are flat on the
+// page. Tool steps are callouts, a write it wants to run is a sheet.
 .msg.user {
   justify-self: end;
-  max-width: min(100%, 38rem);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-2);
+  max-width: min(100%, 34rem);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
 
   .who {
     text-align: end;
@@ -241,12 +308,15 @@
 }
 
 .msg.answer {
-  max-width: min(100%, 46rem);
+  max-width: 100%;
+
+  .text {
+    color: var(--ink);
+    font-size: var(--text-lead);
+  }
 }
 
 .msg.error {
-  max-width: min(100%, 46rem);
-
   > * + * {
     margin-top: 0;
   }
@@ -258,7 +328,7 @@
   height: 1em;
   margin-left: 2px;
   vertical-align: text-bottom;
-  background: var(--color-accent);
+  background: var(--accent);
   animation: blink 1s steps(2, start) infinite;
 }
 
@@ -274,11 +344,15 @@
   }
 }
 
+// The composer: a sheet pinned to the foot of the screen.
 .composer {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: var(--z-sticky);
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4) var(--space-4);
-  border-top: 1px solid var(--color-border);
+  box-shadow: var(--shadow-overlay);
 
   textarea {
     width: 100%;
@@ -289,6 +363,7 @@
   }
 
   @include bp.phone {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + var(--space-2));
     padding: var(--space-3);
   }
 }
@@ -307,7 +382,7 @@
   .research-hint {
     flex-basis: 100%;
     order: 3;
-    color: var(--color-ink-3);
+    color: var(--muted);
     font-size: var(--text-xs);
   }
 

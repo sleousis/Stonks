@@ -1,5 +1,7 @@
 <app-page-header
   title="Real-money settings"
+  backPath="/profile"
+  backLabel="Profile"
   [description]="
     portfolio()
       ? 'What Stonks may do in ' +
@@ -12,10 +14,9 @@
     <app-mode-stamp [live]="realMoney()" />
   }
   <ng-container ngProjectAs="[actions]">
-    <a class="btn btn-tertiary" routerLink="/going-live" [queryParams]="{ portfolio: id() }"
+    <a class="btn" routerLink="/going-live" [queryParams]="{ portfolio: id() }"
       >Going live checklist</a
     >
-    <a class="btn" routerLink="/profile">Back to your portfolios</a>
   </ng-container>
 </app-page-header>
 
@@ -52,12 +53,7 @@
     />
 
     <!-- Allocation ---------------------------------------------------------->
-    <section
-      class="panel span-6"
-      id="allocation"
-      [class.live-frame]="realMoney()"
-      aria-labelledby="allocation-title"
-    >
+    <section class="panel span-6" id="allocation" aria-labelledby="allocation-title">
       <div class="panel-head">
         <h2 id="allocation-title">Allocation</h2>
       </div>
@@ -74,9 +70,9 @@
           @let a = allocation.value();
           <div class="headline">
             <span
-              class="figure"
+              class="headline-figure allocation-figure"
               data-testid="allocation-figure"
-              [class.live-figure]="realMoney()"
+              [class.brass]="realMoney()"
               >{{ allocationText(a) }}</span
             >
             @if (a.amount === null) {

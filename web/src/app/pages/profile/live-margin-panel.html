@@ -22,7 +22,7 @@
     } @else {
       @let v = view()!;
       @if (v.account; as a) {
-        <dl class="figures well" aria-label="The account as the broker reports it now">
+        <dl class="figures" aria-label="The account as the broker reports it now">
           <div>
             <dt>Equity</dt>
             <dd class="num">{{ money(a.equity, { currency: a.currency }) }}</dd>

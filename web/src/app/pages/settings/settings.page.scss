@@ -1,112 +1,115 @@
 @use 'breakpoints' as bp;
 
-.column {
+// The section list on the left from 1024px, the form groups on the right.
+// Below 1024px the same tablist is an underline tab row above the content.
+.settings-layout {
   display: grid;
-  // One track that may shrink, so a wide panel scrolls inside itself (no page scroll).
   grid-template-columns: minmax(0, 1fr);
-  align-content: start;
-  gap: var(--space-4);
-  min-width: 0;
+  align-items: start;
+
+  @media (min-width: 1024px) {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: var(--column-gap);
+  }
 }
 
-.group-note {
-  font-size: var(--text-sm);
-  color: var(--color-ink-2);
-  max-width: 70ch;
-}
+@media (min-width: 1024px) {
+  // A vertical list: the current section on --sunk in ink, the rest muted.
+  :host ::ng-deep .section-list {
+    position: sticky;
+    top: calc(var(--chrome-h) + var(--rail-h) + var(--space-6));
+    margin: 0;
 
-// A section's panels in two columns on wide screens; long ones span both.
-.wide {
-  @include bp.from-desktop {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    // Each panel keeps its own height, so a short one never stretches.
-    align-items: start;
+    .tabs {
+      flex-direction: column;
+      gap: 2px;
+      border-bottom: 0;
+      mask-image: none;
+    }
 
-    .group-note,
-    .full {
-      grid-column: 1 / -1;
+    .tab {
+      min-height: var(--control-h);
+      margin: 0;
+      padding: 0 var(--space-3);
+      border-bottom: 0;
+      border-radius: var(--r-ctl);
+      transition: background-color var(--dur-fast) var(--ease-out);
+    }
+
+    .tab:last-child {
+      margin-right: 0;
+    }
+
+    .tab:hover {
+      background: var(--sunk);
+    }
+
+    .tab.active {
+      background: var(--sunk);
+      color: var(--ink);
+      font-weight: var(--weight-semibold);
     }
   }
 }
 
-.lead {
-  margin-bottom: var(--space-4);
-  color: var(--color-ink-2);
-  max-width: 70ch;
-}
-
-.themes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-kbd {
-  display: inline-block;
-  min-width: 1.5em;
-  padding: 0 4px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-align: center;
-  background: var(--color-surface-2);
-}
-
-// Label / value pairs, two columns from tablet.
-.facts {
+.settings-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  margin: 0;
-  padding: var(--space-2) var(--space-4) var(--space-3);
+  align-content: start;
+  gap: var(--section-gap);
+  min-width: 0;
+}
 
-  @include bp.from-tablet {
+// Broker and data sources side by side on wide screens.
+.server-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--section-gap) var(--column-gap);
+  align-items: start;
+
+  @include bp.from-desktop {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-5);
   }
+}
 
-  > div {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: var(--space-3);
-    padding: var(--space-2) 0;
-    border-bottom: 1px solid var(--color-border);
-  }
+.theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+}
 
+// Facts whose values are words, not figures, stay in the sans.
+.fact-list.words dd {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+}
+
+.keys {
   dt {
-    color: var(--color-ink-2);
-    font-size: var(--text-sm);
-  }
-
-  dt {
-    flex: none;
+    color: var(--ink-2);
   }
 
   dd {
-    min-width: 0;
-    margin: 0;
-    font-weight: var(--weight-medium);
-    text-align: end;
-    overflow-wrap: anywhere;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
   }
 }
 
 .sub {
-  padding: var(--space-3) var(--space-4) var(--space-2);
-  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
 
   h4 {
-    font-size: var(--text-sm);
+    font-size: var(--text-md);
     font-weight: var(--weight-semibold);
-    color: var(--color-ink-2);
-  }
-
-  .facts {
-    padding-inline: 0;
   }
 }
 
@@ -115,126 +118,57 @@ kbd {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-2);
-  margin-top: var(--space-2);
   font-size: var(--text-sm);
-
-  .reason {
-    color: var(--color-ink-2);
-    overflow-wrap: anywhere;
-  }
-}
-
-.list {
-  margin: 0;
-  padding: 0 var(--space-4);
-  list-style: none;
-
-  li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-1) var(--space-3);
-    padding: var(--space-3) 0;
-
-    & + li {
-      border-top: 1px solid var(--color-border);
-    }
-  }
-}
-
-.list-main {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.list-title {
-  font-weight: var(--weight-semibold);
-}
-
-.list-detail {
-  flex-basis: 100%;
-  font-size: var(--text-sm);
-  color: var(--color-ink-2);
   overflow-wrap: anywhere;
 }
 
-.tag {
-  padding: 0 var(--space-1);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-xs);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  color: var(--color-ink-2);
+.row-main .ticker-tag {
+  margin-left: var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-label);
+}
+
+// Each preset: a name and a sentence, then its costs as a table.
+.presets {
+  display: grid;
+  align-items: start;
+  gap: var(--space-8) var(--column-gap);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .preset {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-
-  & + .preset {
-    border-top: 1px solid var(--color-border);
-  }
+  gap: var(--space-3);
+  min-width: 0;
+  padding-top: var(--space-4);
 
   h4 {
-    font-size: var(--text-md);
+    font-size: var(--text-body);
     font-weight: var(--weight-semibold);
     text-transform: capitalize;
   }
 
-  .hint {
-    font-size: var(--text-xs);
-    color: var(--color-ink-3);
-  }
-}
+  .preset-head {
+    display: grid;
+    gap: 2px;
 
-.mini {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-
-  th,
-  td {
-    padding: var(--space-1) var(--space-2);
-    border-bottom: 1px solid var(--color-border);
-    text-align: start;
-  }
-
-  th,
-  td {
-    height: var(--row-h);
-  }
-
-  thead th {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--color-ink-2);
+    p {
+      font-size: var(--text-sm);
+    }
   }
 
   tbody th {
-    font-weight: var(--weight-medium);
+    height: var(--row-h);
+    color: var(--ink);
+    font-size: var(--text-md);
+    font-weight: var(--weight-label);
   }
 
-  .num {
-    text-align: end;
-  }
-
-  // Column labels stay in the text face; the figures under them are mono.
-  thead th.num {
-    font-family: var(--font-sans);
-    font-size: var(--text-xs);
-    letter-spacing: normal;
-  }
-
-  th:first-child,
-  td:first-child {
-    padding-left: 0;
-  }
-
-  th:last-child,
-  td:last-child {
-    padding-right: 0;
+  .hint {
+    color: var(--muted);
+    font-size: var(--text-sm);
   }
 }

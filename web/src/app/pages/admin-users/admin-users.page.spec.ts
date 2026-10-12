@@ -57,7 +57,7 @@ describe('AdminUsersPage', () => {
   }
 
   function rowOf(el: HTMLElement, name: string) {
-    return [...el.querySelectorAll('li')].find((li) => li.textContent?.includes(name))!;
+    return [...el.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes(name))!;
   }
 
   function button(root: Element, text: string) {
@@ -219,7 +219,7 @@ describe('AdminUsersPage', () => {
       statusText: 'No Content',
     });
     await reload([{ ...ANN, mfa_enrolled: false }, ME]);
-    expect(rowOf(el, 'Ann').textContent).toContain('Authenticator app not set up');
+    expect(rowOf(el, 'Ann').textContent).toContain('No authenticator');
   });
 
   it('resets a password after the email is typed', async () => {

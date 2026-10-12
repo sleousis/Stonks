@@ -1806,6 +1806,40 @@ Some pages put it together like this. Insights has a summary strip, the money as
 - **Charts:** the equity area is a 2px accent line over a 16% to 0 fill with
   dotted gridlines and mono axes. Live portfolios draw in brass.
 
+**System and account pages.** These follow the pattern with a few shapes of
+their own:
+
+- **Settings and Profile:** a sticky 220px list of sections on the left from
+  1024px, an underline tab row (Settings) or a row of jump links (Profile)
+  on smaller screens. Settings shows one section at a time
+  (`/settings?tab=risk`). Profile keeps every section on the page and marks
+  the one in view. Security and new tokens are rows: what it is on the
+  left, the control on the right. A one-time secret sits in a callout.
+  System settings fold into groups on a 2px ink rule, fields in two
+  columns from 1024px, and the save bar is a sheet pinned to the foot.
+- **Users:** a table with a squircle avatar, role chips (admin in ink,
+  trader in accent, viewer quiet) and a "⋯" button per row that opens the
+  role select and the row actions (reset password, reset authenticator,
+  disable). Escape closes it. On phones each person is a list item.
+- **Broker connections:** your connections are link rows with a chevron,
+  the brokers are rows with a letter mark, what they give and Connect on the
+  right. API keys are typed in a side sheet from the right edge (full screen
+  on phones). The detail page shows its state as a summary strip.
+- **Halts:** each active halt is a row on a red edge with its way out
+  (Resume trading through the existing typed confirm, or Clear). Past
+  halts stay a table.
+- **Schedule:** a summary strip (scheduler, jobs, next run, failed of the
+  last runs) above the jobs, recent runs and backups.
+- **Health:** the verdict band, a summary strip, then the system checks as a
+  strip of cells with state chips, then one section per area.
+- **Help:** search on top, the five sentences as a numbered strip, then a
+  two-column glossary (the term left, what it means right), one column on
+  phones.
+- **Assistant:** the conversations on the left, a chat column of 760px at
+  most. Your turns sit right on a sunk bubble, answers are flat on the page,
+  tool steps are callouts and a write it wants to run is a sheet. A drafted
+  order says it is approved on Approvals with a fresh code.
+
 **Motion.** Short and purposeful: hover and press 150ms, menus 160ms (scale
 and fade), a page enters in 320ms (fade and a 6px rise), the tab underline
 slides, the headline figure counts up, countdowns tick. Everything stops

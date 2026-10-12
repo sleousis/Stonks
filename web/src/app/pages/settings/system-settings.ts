@@ -218,8 +218,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ErrorState, LoadingState, NgTemplateOutlet],
   template: `
-    <section class="panel" aria-labelledby="ops-settings-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="ops-settings-title">
+      <div class="section-head">
         <h3 id="ops-settings-title">System settings</h3>
         @if (lastSaved(); as s) {
           <span class="muted saved">
@@ -236,7 +236,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       } @else if (state.isLoading() && !state.hasValue()) {
         <app-loading-state label="Loading system settings" [rows]="4" />
       } @else {
-        <form class="panel-body" novalidate (submit)="$event.preventDefault(); save()">
+        <form class="section-body" novalidate (submit)="$event.preventDefault(); save()">
           <p class="intro">
             The server checks each value and keeps it in the audit log with your reason. Your
             authenticator code is asked for before a save. Keys, tokens and passwords stay on the
@@ -252,6 +252,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                 @if (changedIn(g.id); as n) {
                   <span class="group-count">{{ n === 1 ? '1 change' : n + ' changes' }}</span>
                 }
+                <span class="disclosure-chev" aria-hidden="true"></span>
               </summary>
               <div class="group-body">
                 <p class="group-help">{{ g.help }}</p>
@@ -260,7 +261,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                 }
                 @if (g.advanced.length) {
                   <details class="advanced" [open]="needsLook().has(g.id + ':advanced')">
-                    <summary>Advanced</summary>
+                    <summary>
+                      <span class="group-title">Advanced</span>
+                      <span class="disclosure-chev" aria-hidden="true"></span>
+                    </summary>
                     <div class="group-body">
                       @for (f of g.advanced; track f.key) {
                         <ng-container
@@ -431,140 +435,162 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
   `,
   styles: `
     @use 'breakpoints' as bp;
-    .panel-body {
+    :host {
+      display: block;
+      min-width: 0;
+    }
+    .section-body {
       display: grid;
-      gap: var(--space-4);
+      gap: var(--space-6);
     }
     .intro,
     .group-help {
       margin: 0;
+      color: var(--ink-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
-      max-width: 70ch;
+      max-width: 68ch;
     }
     .saved,
     .changed {
+      color: var(--muted);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
     }
     .changed {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--space-2);
+      gap: var(--space-1) var(--space-2);
     }
-    // One fold per group, so the page starts short. Folds sit on hairlines,
-    // not in boxes: the panel is the only frame.
+    /* A group: a 2px ink rule and a 15px title that folds its fields away. */
     .group {
       min-width: 0;
-      border-top: 1px solid var(--color-border);
-      &:last-of-type {
-        border-bottom: 1px solid var(--color-border);
-      }
-      // Folds stack on one rule each, without the form's gap between them.
-      & + .group {
-        margin-top: calc(-1 * var(--space-4));
-      }
+      border-top: 2px solid var(--rule-strong);
     }
-    .advanced {
-      min-width: 0;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
-    }
-    .group,
-    .advanced {
-      > summary {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--space-2);
-        min-height: var(--touch-min);
-        padding: 0 var(--space-1);
-        cursor: pointer;
-        font-size: var(--text-panel);
-        font-weight: var(--weight-semibold);
-        list-style: none;
-        transition: background-color var(--dur-fast) var(--ease);
-        &:hover {
-          background: var(--color-hover);
-        }
-        &::-webkit-details-marker {
-          display: none;
-        }
-        &::before {
-          content: '▸';
-          color: var(--color-ink-3);
-          transition: transform var(--dur-fast) var(--ease);
-        }
-      }
-      &[open] > summary {
-        &::before {
-          transform: rotate(90deg);
-        }
-      }
-    }
+    .group > summary,
     .advanced > summary {
-      padding: 0 var(--space-3);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: var(--touch-min);
+      cursor: pointer;
+      list-style: none;
+    }
+    .group > summary::-webkit-details-marker,
+    .advanced > summary::-webkit-details-marker {
+      display: none;
+    }
+    .group > summary {
+      font-size: var(--text-lead);
+      font-weight: var(--weight-bold);
+    }
+    .group > summary:hover .group-title,
+    .advanced > summary:hover {
+      color: var(--accent);
+    }
+    .group-title {
+      flex: 1;
+      transition: color var(--dur-fast) var(--ease-out);
     }
     .group-count {
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-regular);
+      padding: 0 var(--space-2);
+      border-radius: var(--r-pill);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-label);
+      line-height: 22px;
     }
     .group-body {
       display: grid;
-      gap: var(--space-4);
-      padding: var(--space-1) var(--space-1) var(--space-4);
+      gap: var(--space-5) var(--space-7);
+      padding: var(--space-1) 0 var(--space-6);
       min-width: 0;
+      align-items: start;
+    }
+    @media (min-width: 1024px) {
+      .group-body {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .group-help,
+      .advanced {
+        grid-column: 1 / -1;
+      }
+    }
+    /* Advanced: a quiet callout that folds open. */
+    .advanced {
+      min-width: 0;
+      padding: 0 var(--space-4);
+      border-radius: var(--r-sheet);
+      background: var(--sunk);
+    }
+    .advanced > summary {
+      color: var(--ink-2);
+      font-size: var(--text-md);
+      font-weight: var(--weight-label);
     }
     .advanced .group-body {
-      padding: var(--space-1) var(--space-3) var(--space-3);
+      grid-template-columns: minmax(0, 1fr);
+      padding: 0 0 var(--space-4);
     }
     .multi {
       display: grid;
-      gap: var(--space-1);
+      gap: 0;
       margin: 0;
       padding: 0;
       border: 0;
       min-width: 0;
-      legend {
-        padding: 0;
-        margin-bottom: var(--space-1);
-      }
+    }
+    .multi legend {
+      padding: 0;
+      margin-bottom: var(--space-1);
+      color: var(--ink-2);
+      font-size: 0.8125rem;
+      font-weight: var(--weight-label);
     }
     .control {
       display: flex;
       align-items: center;
       gap: var(--space-2);
-      .input {
-        max-width: 22rem;
-      }
-      .input.short {
-        max-width: 8rem;
-      }
-      textarea.input {
-        max-width: none;
-        padding-block: var(--space-2);
-      }
+    }
+    .control .input {
+      max-width: 22rem;
+    }
+    .control .input.short {
+      max-width: 8rem;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .control textarea.input {
+      max-width: none;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
     }
     .unit {
-      color: var(--color-ink-2);
+      color: var(--muted);
+      font-family: var(--font-mono);
     }
-    // Save stays in reach at the foot of the screen while there are changes.
+    /* Save stays in reach at the foot of the screen while there are changes. */
     .save-bar {
       display: grid;
       gap: var(--space-3);
-      &.active {
-        position: sticky;
-        bottom: 0;
-        z-index: var(--z-sticky);
-        margin: 0 calc(-1 * var(--space-4));
-        padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
-        border-top: 1px solid var(--color-border);
-        background: var(--color-surface);
-        box-shadow: var(--shadow-overlay);
+      padding-top: var(--space-5);
+      border-top: 2px solid var(--rule-strong);
+    }
+    .save-bar.active {
+      position: sticky;
+      bottom: var(--space-4);
+      z-index: var(--z-sticky);
+      padding: var(--space-4) var(--space-5);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-sheet);
+      background: var(--raise);
+      box-shadow: var(--shadow-overlay);
+      animation: menu-in var(--dur-menu) var(--ease-out);
+    }
+    @include bp.phone {
+      .save-bar.active {
+        bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + var(--space-2));
+        padding: var(--space-3) var(--space-4);
       }
     }
     .reason .input {
@@ -577,10 +603,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-2);
-      @include bp.phone {
-        .btn {
-          flex: 1;
-        }
+    }
+    @include bp.phone {
+      .actions .btn {
+        flex: 1;
       }
     }
   `,

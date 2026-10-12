@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import type { ConfirmItem } from './chat-model';
 import { ConfirmStep, previewLines } from './confirm-step';
@@ -15,6 +16,8 @@ const CONFIRM: ConfirmItem = {
 };
 
 describe('ConfirmStep', () => {
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideRouter([])] }));
+
   function render(item: ConfirmItem, busy = false) {
     const fixture = TestBed.createComponent(ConfirmStep);
     fixture.componentRef.setInput('item', item);
@@ -47,6 +50,15 @@ describe('ConfirmStep', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelectorAll('button')).toHaveLength(0);
     expect(el.textContent).toContain('Rejected');
+  });
+
+  it('says a drafted order is approved on Approvals, with a fresh code', () => {
+    const el = render({ ...CONFIRM, tool: 'draft_order', args: { ticker: 'AAPL.US' } })
+      .nativeElement as HTMLElement;
+    const note = el.querySelector('.order-note')!;
+    expect(note.textContent).toContain('fresh code');
+    expect(note.querySelector('a')?.getAttribute('href')).toBe('/tickets');
+    expect(render(CONFIRM).nativeElement.querySelector('.order-note')).toBeNull();
   });
 
   it('disables the buttons while busy', () => {

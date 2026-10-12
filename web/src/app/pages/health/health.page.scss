@@ -1,13 +1,14 @@
 @use 'breakpoints' as bp;
 
-// Overall state: a callout in the level's tone with a small mark. Text,
+// Overall state: the verdict in the level's tone, a mark in front. Text,
 // shape and colour together, never colour alone.
 .overall {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  margin-bottom: var(--space-4);
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
 
   // The callout's child spacing is replaced by the grid gap.
   > * + * {
@@ -23,19 +24,16 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: var(--space-1) var(--space-3);
-    font-size: var(--text-panel);
-    font-weight: var(--weight-semibold);
-    color: var(--color-ink);
+    color: var(--ink);
+    font-size: var(--text-stat);
+    font-weight: var(--weight-bold);
+    letter-spacing: -0.02em;
   }
 
   p {
     margin-top: var(--space-1);
-    color: var(--color-ink-2);
-    max-width: 70ch;
-  }
-
-  @include bp.phone {
-    margin-bottom: var(--space-3);
+    color: var(--ink-2);
+    max-width: 68ch;
   }
 
   .version {
@@ -50,68 +48,80 @@
       grid-column: auto;
     }
   }
-}
-
-.overall-count {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--color-ink-2);
-}
-
-// A small mark in the level's tone. Circle = good, triangle = warning,
-// diamond = critical.
-.glyph {
-  width: 10px;
-  height: 10px;
-  background: var(--callout-tone);
-  border-radius: 50%;
-}
-
-.overall[data-level='warning'] .glyph {
-  border-radius: var(--radius-xs);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-}
-
-.overall[data-level='critical'] .glyph {
-  width: 8px;
-  height: 8px;
-  margin: 1px;
-  border-radius: var(--radius-xs);
-  transform: rotate(45deg);
-}
-
-// The tile grid (global .tile-grid) lays the three tiles out.
-.tiles {
-  margin-bottom: var(--space-4);
 
   @include bp.phone {
-    margin-bottom: var(--space-3);
+    padding: var(--space-4);
+
+    h2 {
+      font-size: var(--text-section);
+    }
   }
 }
 
-// A panel component that has nothing to show leaves an empty host: keep it
-// out of the grid so the 16px rhythm between panels holds.
-.page-grid > :empty {
+.overall-count {
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+// A mark in the level's tone, in a 40px squircle. Circle = good,
+// triangle = warning, diamond = critical.
+.glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sheet);
+  background: var(--raise);
+
+  &::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--up);
+  }
+}
+
+.overall[data-level='warning'] .glyph::after {
+  border-radius: 0;
+  background: var(--warn);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.overall[data-level='critical'] .glyph::after {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--down);
+  transform: rotate(45deg);
+}
+
+.tiles {
+  margin-bottom: var(--section-gap);
+}
+
+// A section component that has nothing to show leaves an empty host: keep
+// it out of the stack so the rhythm between sections holds.
+.section-stack > :empty {
   display: none;
 }
 
 .all-fresh {
-  margin: var(--space-3) var(--space-4) var(--space-4);
+  margin: var(--space-4) 0 0;
+}
 
-  @include bp.phone {
-    margin: var(--space-3);
-  }
+.section-note {
+  padding-top: var(--space-4);
 }
 
 .ticker-form {
   display: grid;
   gap: var(--space-2) var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-
-  @include bp.phone {
-    padding: var(--space-3);
-  }
+  max-width: 44rem;
+  padding: var(--space-4) 0;
 
   @include bp.from-tablet {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -131,20 +141,43 @@
   }
 }
 
+// System checks: a strip of cells, each with its state chip, hairlines
+// between them.
 .checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
   margin: 0;
-  padding: 0 var(--space-4) var(--space-2);
+  padding: 0;
+  border-bottom: 1px solid var(--rule);
   list-style: none;
-
-  @include bp.phone {
-    padding: 0 var(--space-3) var(--space-1);
-  }
+  overflow: hidden;
 
   li {
-    padding: var(--space-3) 0;
+    margin: -1px 0 0 -1px;
+    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-4);
+    border-top: 1px solid var(--rule);
+    border-left: 1px solid var(--rule);
+  }
 
-    & + li {
-      border-top: 1px solid var(--color-border);
+  li[data-level='critical'] {
+    box-shadow: inset 3px 0 0 var(--down);
+  }
+
+  li[data-level='warning'] {
+    box-shadow: inset 3px 0 0 var(--warn);
+  }
+
+  @include bp.phone {
+    grid-template-columns: minmax(0, 1fr);
+
+    li {
+      padding-inline: 0 0;
+      border-left: 0;
+    }
+
+    li[data-level='critical'],
+    li[data-level='warning'] {
+      padding-left: var(--space-3);
     }
   }
 }
@@ -158,37 +191,35 @@
 }
 
 .check-name {
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
 
 .check-detail {
   margin-top: var(--space-1);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 
 .check-limit {
   margin-top: 2px;
+  color: var(--muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  color: var(--color-ink-3);
 }
 
 .check-meaning,
 .panel-intro {
   margin-top: 2px;
   font-size: var(--text-xs);
-  color: var(--color-ink-3);
+  color: var(--muted);
   max-width: 70ch;
 }
 
 .panel-intro {
   margin: 0;
-  padding: var(--space-3) var(--space-4) 0;
-
-  @include bp.phone {
-    padding: var(--space-3) var(--space-3) 0;
-  }
+  padding: var(--space-4) 0 0;
 }
 
 .check-action {
@@ -231,6 +262,6 @@
   max-width: 48ch;
   white-space: normal;
   overflow-wrap: anywhere;
-  color: var(--color-loss);
+  color: var(--down);
   font-size: var(--text-sm);
 }

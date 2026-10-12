@@ -1,7 +1,4 @@
-<app-page-header
-  title="Users"
-  description="People with an account, their role and sign-in status. Never their holdings."
->
+<app-page-header title="Users" [description]="standfirst()">
   <button
     actions
     type="button"
@@ -15,16 +12,12 @@
 </app-page-header>
 
 @if (showForm()) {
-  <section id="add-user" class="panel add" aria-labelledby="add-title">
-    <div class="panel-head">
+  <section id="add-user" class="sheet-box add" aria-labelledby="add-title">
+    <div class="add-head">
       <h2 id="add-title">Add a person</h2>
+      <p class="muted">They set up their authenticator app the first time they sign in.</p>
     </div>
-    <form
-      class="panel-body form-grid form-grid-2"
-      [formGroup]="form"
-      (ngSubmit)="create()"
-      novalidate
-    >
+    <form class="form-grid form-grid-2" [formGroup]="form" (ngSubmit)="create()" novalidate>
       <div class="field">
         <label for="user-name">Name</label>
         <input id="user-name" class="input" formControlName="display_name" autocomplete="off" />
@@ -92,7 +85,7 @@
           </button>
         </div>
         <div class="pw-tools">
-          <button type="button" class="btn btn-tertiary" (click)="generateNewPassword()">
+          <button type="button" class="btn btn-ghost" (click)="generateNewPassword()">
             Generate
           </button>
           @if (form.controls.password.value) {
@@ -123,12 +116,14 @@
   </section>
 }
 
-<section class="panel" aria-labelledby="people-title">
-  <div class="panel-head">
-    <h2 id="people-title">People</h2>
-    @if (users.hasValue()) {
-      <span class="muted num">{{ users.value().length }}</span>
-    }
+<section class="page-section" aria-labelledby="people-title">
+  <div class="section-head">
+    <h2 id="people-title">
+      People
+      @if (users.hasValue()) {
+        <span class="count">{{ users.value().length }}</span>
+      }
+    </h2>
   </div>
   @if (users.error(); as err) {
     <app-error-state title="Could not load people" [error]="err" (retry)="users.reload()" />
@@ -137,75 +132,127 @@
   } @else if (sorted().length === 0) {
     <app-empty-state title="No people yet" message="Add a person to give them an account." />
   } @else {
-    <ul class="people">
-      @for (u of sorted(); track u.id) {
-        <li>
-          <div class="who">
-            <span class="name">
-              {{ u.display_name }}
-              @if (u.id === myId()) {
-                <span class="muted">(you)</span>
-              }
-            </span>
-            <span class="email">{{ u.email ?? 'No email' }}</span>
-            <span class="seen muted">{{ lastSeen(u) }}</span>
-          </div>
-          <div class="pills">
-            <app-status-pill
-              [status]="u.status === 'active' ? 'ok' : 'disabled'"
-              [label]="u.status === 'active' ? 'Active' : 'Disabled'"
-            />
-            <app-status-pill
-              [status]="u.mfa_enrolled ? 'ok' : 'warn'"
-              [tone]="u.mfa_enrolled ? 'positive' : 'warn'"
-              [label]="u.mfa_enrolled ? 'Authenticator app set up' : 'Authenticator app not set up'"
-            />
-          </div>
-          <div class="controls">
-            <label class="visually-hidden" [for]="'role-' + u.id"
-              >Role for {{ u.display_name }}</label
-            >
-            <select
-              class="input role"
-              [id]="'role-' + u.id"
-              [value]="u.role"
-              [disabled]="busy() === u.id || u.id === myId()"
-              (change)="changeRole(u, $event)"
-            >
-              @for (r of roles; track r.value) {
-                <option [value]="r.value" [selected]="r.value === u.role">{{ r.label }}</option>
-              }
-            </select>
-            <button
-              type="button"
-              class="btn"
-              [disabled]="busy() === u.id || u.id === myId()"
-              [attr.aria-label]="'Reset password for ' + u.display_name"
-              (click)="openReset(u)"
-            >
-              Reset password
-            </button>
-            <button
-              type="button"
-              class="btn btn-tertiary"
-              [disabled]="busy() === u.id || u.id === myId()"
-              (click)="toggleStatus(u)"
-            >
-              {{ u.status === 'active' ? 'Disable' : 'Enable' }}
-            </button>
-            <button
-              type="button"
-              class="btn btn-tertiary"
-              [disabled]="busy() === u.id || !u.mfa_enrolled || u.id === myId()"
-              [attr.aria-label]="'Reset authenticator app for ' + u.display_name"
-              (click)="resetMfa(u)"
-            >
-              Reset authenticator app
-            </button>
-          </div>
-        </li>
-      }
-    </ul>
+    <table class="table people">
+      <caption class="visually-hidden">
+        People with an account
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Person</th>
+          <th scope="col">Role</th>
+          <th scope="col">Status</th>
+          <th scope="col">Authenticator</th>
+          <th scope="col">Last seen</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of sorted(); track u.id) {
+          <tr [class.open]="menuFor() === u.id">
+            <td class="who">
+              <span class="avatar" aria-hidden="true">{{ initials(u) }}</span>
+              <span class="who-text">
+                <span class="name">
+                  {{ u.display_name }}
+                  @if (u.id === myId()) {
+                    <span class="muted">(you)</span>
+                  }
+                </span>
+                <span class="email">{{ u.email ?? 'No email' }}</span>
+              </span>
+            </td>
+            <td class="role-cell">
+              <span class="role-chip" [attr.data-role]="u.role">{{ roleLabel(u.role) }}</span>
+            </td>
+            <td class="status-cell">
+              <app-status-pill
+                [status]="u.status === 'active' ? 'ok' : 'disabled'"
+                [label]="u.status === 'active' ? 'Active' : 'Disabled'"
+              />
+            </td>
+            <td class="mfa-cell">
+              <app-status-pill
+                [status]="u.mfa_enrolled ? 'ok' : 'warn'"
+                [tone]="u.mfa_enrolled ? 'positive' : 'warn'"
+                [label]="u.mfa_enrolled ? 'Authenticator set up' : 'No authenticator'"
+              />
+            </td>
+            <td class="seen">{{ lastSeen(u) }}</td>
+            <td class="more">
+              <button
+                type="button"
+                class="btn btn-ghost btn-icon more-button"
+                [attr.aria-expanded]="menuFor() === u.id"
+                [attr.aria-controls]="'actions-' + u.id"
+                [attr.aria-label]="'Actions for ' + u.display_name"
+                (click)="toggleMenu(u.id, $event)"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <circle cx="3.5" cy="8" r="1.3" />
+                  <circle cx="8" cy="8" r="1.3" />
+                  <circle cx="12.5" cy="8" r="1.3" />
+                </svg>
+              </button>
+              <div
+                class="row-menu"
+                role="group"
+                [id]="'actions-' + u.id"
+                [attr.aria-label]="'Actions for ' + u.display_name"
+                [hidden]="menuFor() !== u.id"
+                (keydown.escape)="closeMenu(true)"
+                (click)="$event.stopPropagation()"
+              >
+                <div class="field">
+                  <label [for]="'role-' + u.id">Role for {{ u.display_name }}</label>
+                  <select
+                    class="input role"
+                    [id]="'role-' + u.id"
+                    [value]="u.role"
+                    [disabled]="busy() === u.id || u.id === myId()"
+                    (change)="changeRole(u, $event)"
+                  >
+                    @for (r of roles; track r.value) {
+                      <option [value]="r.value" [selected]="r.value === u.role">
+                        {{ r.label }}
+                      </option>
+                    }
+                  </select>
+                </div>
+                <div class="menu-actions">
+                  <button
+                    type="button"
+                    class="menu-item"
+                    [disabled]="busy() === u.id || u.id === myId()"
+                    [attr.aria-label]="'Reset password for ' + u.display_name"
+                    (click)="closeMenu(); openReset(u)"
+                  >
+                    Reset password
+                  </button>
+                  <button
+                    type="button"
+                    class="menu-item"
+                    [disabled]="busy() === u.id || !u.mfa_enrolled || u.id === myId()"
+                    [attr.aria-label]="'Reset authenticator app for ' + u.display_name"
+                    (click)="closeMenu(); resetMfa(u)"
+                  >
+                    Reset authenticator app
+                  </button>
+                  <button
+                    type="button"
+                    class="menu-item"
+                    [class.danger]="u.status === 'active'"
+                    [disabled]="busy() === u.id || u.id === myId()"
+                    (click)="closeMenu(); toggleStatus(u)"
+                  >
+                    {{ u.status === 'active' ? 'Disable' : 'Enable' }}
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
     @if (sorted().length === 1) {
       <div class="first-run callout" role="note">
         <p class="callout-title">Only you so far.</p>
@@ -266,7 +313,7 @@
           </button>
         </div>
         <div class="pw-tools">
-          <button type="button" class="btn btn-tertiary" (click)="generateResetPassword()">
+          <button type="button" class="btn btn-ghost" (click)="generateResetPassword()">
             Generate
           </button>
           @if (newPassword()) {

@@ -1,16 +1,18 @@
-<app-page-header
-  title="Broker connections"
-  description="Link your brokerage so Stonks can read your positions, cash and activity. Some brokers can also take orders, only when you allow it."
->
+<app-page-header title="Broker connections" [description]="standfirst()">
   <a actions class="btn" routerLink="/connections/import">Import a CSV statement</a>
-  <a actions class="btn btn-tertiary" routerLink="/going-live">Going live checklist</a>
+  <a actions class="btn btn-ghost" routerLink="/going-live">Going live checklist</a>
 </app-page-header>
 
-<div class="page-grid">
+<div class="section-stack">
   <!-- Your connections ------------------------------------------------------>
-  <section class="panel span-12" aria-labelledby="connections-title">
-    <div class="panel-head">
-      <h2 id="connections-title">Your connections</h2>
+  <section class="page-section" aria-labelledby="connections-title">
+    <div class="section-head">
+      <h2 id="connections-title">
+        Your connections
+        @if (connections.hasValue()) {
+          <span class="count">{{ connections.value().length }}</span>
+        }
+      </h2>
     </div>
     @if (connections.error(); as err) {
       <app-error-state
@@ -40,24 +42,36 @@
               class="connection"
               [routerLink]="csv ? ['/connections', 'import'] : ['/connections', row.connection.id]"
             >
-              <span class="connection-name">
-                {{ providerName(row.connection.provider) }}
-                @if (row.connection.label && !csv) {
-                  <span class="muted">{{ row.connection.label }}</span>
-                }
+              <span class="mark" aria-hidden="true">{{
+                providerName(row.connection.provider).charAt(0)
+              }}</span>
+              <span class="connection-text">
+                <span class="connection-name">
+                  {{ providerName(row.connection.provider) }}
+                  @if (row.connection.label && !csv) {
+                    <span class="muted">{{ row.connection.label }}</span>
+                  }
+                </span>
+                <span class="connection-meta">
+                  <span
+                    >{{ csv ? 'Last import' : 'Last sync' }}
+                    {{
+                      row.connection.last_sync_at ? (row.connection.last_sync_at | ago) : 'Not yet'
+                    }}</span
+                  >
+                  <span
+                    ><span class="num">{{ row.accounts ?? 'n/a' }}</span>
+                    {{ row.accounts === 1 ? 'account' : 'accounts' }}</span
+                  >
+                </span>
               </span>
               <app-status-pill
                 [status]="row.connection.status"
                 [label]="statusLabel[row.connection.status]"
               />
-              <span class="fact">
-                <span class="muted">{{ csv ? 'Last import' : 'Last sync' }}</span>
-                {{ row.connection.last_sync_at ? (row.connection.last_sync_at | ago) : 'Not yet' }}
-              </span>
-              <span class="fact">
-                <span class="muted">Accounts</span>
-                <span class="num">{{ row.accounts ?? 'n/a' }}</span>
-              </span>
+              <svg class="chev" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="m6 3.5 4.5 4.5L6 12.5" stroke="currentColor" stroke-width="1.6" />
+              </svg>
             </a>
           </li>
         }
@@ -66,46 +80,50 @@
   </section>
 
   <!-- Providers ------------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="providers-title">
-    <div class="panel-head">
-      <h2 id="providers-title" tabindex="-1" #providersHeading>Connect a broker</h2>
-    </div>
-    <div class="panel-body">
-      <p class="when">
-        Read-only brokers never get orders. A broker that can trade only gets orders from follows
-        set to <strong>Approve each trade</strong> or <strong>Automatic</strong>.
-        <a class="touch-link" routerLink="/going-live">Going live</a>
-      </p>
+  <section class="page-section" aria-labelledby="providers-title">
+    <div class="section-head">
+      <h2 id="providers-title" tabindex="-1" #providersHeading>
+        Connect a broker
+        @if (providers.hasValue()) {
+          <span class="count">{{ enabled().length }}</span>
+        }
+      </h2>
       <app-permission-note permission="connection.manage" />
-      @if (providers.error(); as err) {
-        <app-error-state
-          title="Could not load the brokers"
-          [error]="err"
-          (retry)="providers.reload()"
+    </div>
+    <p class="when callout">
+      Read-only brokers never get orders. A broker that can trade only gets orders from follows set
+      to <strong>Approve each trade</strong> or <strong>Automatic</strong>.
+      <a class="touch-link" routerLink="/going-live">Going live</a>
+    </p>
+    @if (providers.error(); as err) {
+      <app-error-state
+        title="Could not load the brokers"
+        [error]="err"
+        (retry)="providers.reload()"
+      />
+    } @else if (!providers.hasValue()) {
+      <app-loading-state label="Loading brokers" [rows]="2" />
+    } @else {
+      @if (noneEnabled()) {
+        <app-empty-state
+          title="No brokers are turned on yet"
+          message="An admin must turn on a broker before anyone can connect one. Ask your admin."
         />
-      } @else if (!providers.hasValue()) {
-        <app-loading-state label="Loading brokers" [rows]="2" />
-      } @else {
-        @if (noneEnabled()) {
-          <app-empty-state
-            title="No brokers are turned on yet"
-            message="An admin must turn on a broker before anyone can connect one. Ask your admin."
-          />
-        }
-        @if (turnedOff(); as off) {
-          <p class="turned-off muted">
-            {{ off }}
-            <a class="touch-link" routerLink="/settings" [queryParams]="{ tab: 'system' }"
-              >Settings, System</a
-            >.
-          </p>
-        }
-        <ul class="providers">
-          @for (p of enabled(); track p.name) {
-            <li class="provider well">
-              <div class="provider-head">
-                <h3>{{ p.display_name }}</h3>
-              </div>
+      }
+      @if (turnedOff(); as off) {
+        <p class="turned-off muted">
+          {{ off }}
+          <a class="touch-link" routerLink="/settings" [queryParams]="{ tab: 'system' }"
+            >Settings, System</a
+          >.
+        </p>
+      }
+      <ul class="providers">
+        @for (p of enabled(); track p.name) {
+          <li class="provider">
+            <span class="mark" aria-hidden="true">{{ p.display_name.charAt(0) }}</span>
+            <div class="provider-text">
+              <h3>{{ p.display_name }}</h3>
               <p>
                 {{ gives(p) }} {{ reach(p) }}
                 @if (p.has_paper) {
@@ -113,7 +131,9 @@
                 }
               </p>
               <p class="muted">{{ flow(p) }}</p>
-              @if (canManage()) {
+            </div>
+            @if (canManage()) {
+              <div class="provider-action">
                 @if (p.auth_flow === 'portal') {
                   <button
                     type="button"
@@ -128,116 +148,131 @@
                   <button
                     type="button"
                     class="btn"
+                    aria-haspopup="dialog"
                     [attr.aria-expanded]="keysFor() === p.name"
                     [attr.aria-controls]="'keys-' + p.name"
                     (click)="toggleKeys(p)"
                   >
                     {{ keysFor() === p.name ? 'Close' : connectLabel(p) }}
                   </button>
-                  @if (keysFor() === p.name) {
-                    <form
-                      class="form-grid keys"
-                      [id]="'keys-' + p.name"
-                      autocomplete="off"
-                      novalidate
-                      (submit)="$event.preventDefault(); connectWithKeys(p)"
-                    >
-                      @if (keyHint(p); as hint) {
-                        <p class="hint">{{ hint }}</p>
-                      }
-                      @for (f of p.credential_fields; track f) {
-                        <div class="field">
-                          <label [for]="'key-' + p.name + '-' + f">{{ fieldLabel(f) }}</label>
-                          @if (p.needs_gateway && f === 'gateway') {
-                            <select
-                              class="input"
-                              [id]="'key-' + p.name + '-' + f"
-                              [attr.name]="f"
-                              [attr.aria-invalid]="missing(p, f)"
-                              [attr.aria-describedby]="
-                                missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null
-                              "
-                              (change)="setKey(f, $any($event.target).value)"
-                            >
-                              <option value="">Pick a gateway</option>
-                              @for (g of p.gateways ?? []; track g) {
-                                <option [value]="g">{{ g }}</option>
-                              }
-                            </select>
-                            @if (!(p.gateways ?? []).length) {
-                              <p class="hint">No gateway is set up yet. Ask your admin.</p>
-                            }
-                          } @else {
-                            <input
-                              class="input"
-                              type="password"
-                              autocomplete="off"
-                              spellcheck="false"
-                              [id]="'key-' + p.name + '-' + f"
-                              [attr.name]="f"
-                              [attr.aria-invalid]="missing(p, f)"
-                              [attr.aria-describedby]="
-                                missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null
-                              "
-                              (input)="setKey(f, $any($event.target).value)"
-                            />
-                          }
-                          @if (missing(p, f)) {
-                            <p class="error" [id]="'key-' + p.name + '-' + f + '-error'">
-                              {{ missingText(p, f) }}
-                            </p>
-                          }
-                        </div>
-                      }
-                      <div class="field">
-                        <label [for]="'key-' + p.name + '-label'">Name (optional)</label>
-                        <input
-                          class="input"
-                          type="text"
-                          maxlength="120"
-                          [id]="'key-' + p.name + '-label'"
-                          [value]="keyLabel()"
-                          (input)="keyLabel.set($any($event.target).value)"
-                        />
-                        <p class="hint">Helps you tell two accounts at the same broker apart.</p>
-                      </div>
-                      @if (offersPaper(p)) {
-                        <label class="check">
-                          <input
-                            type="checkbox"
-                            [checked]="paper()"
-                            (change)="paper.set($any($event.target).checked)"
-                          />
-                          These are paper or demo account keys (no real money)
-                        </label>
-                        <p class="hint">
-                          Untick only for real-money keys.
-                          @if (!p.can_trade) {
-                            Stonks still only reads until trading is turned on.
-                          }
-                        </p>
-                      }
-                      <div class="form-actions">
-                        <button
-                          type="submit"
-                          class="btn btn-primary"
-                          [disabled]="busy() === p.name"
-                          [attr.aria-busy]="busy() === p.name"
-                        >
-                          {{ busy() === p.name ? 'Connecting…' : 'Connect' }}
-                        </button>
-                      </div>
-                    </form>
-                  }
                 }
-              }
-            </li>
-          }
-        </ul>
-      }
-    </div>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
   </section>
 
   <!-- Brokers read from their exports (DEGIRO) -------------------------------->
-  <app-broker-exports-panel class="span-12" />
+  <app-broker-exports-panel />
 </div>
+
+<!-- The keys of a broker, typed in a side sheet. -->
+<app-sheet
+  class="side-sheet"
+  [wide]="true"
+  [open]="!!keysProvider()"
+  labelledBy="keys-title"
+  describedBy="keys-message"
+  (dismiss)="closeKeys()"
+>
+  @if (keysProvider(); as p) {
+    <form
+      class="sheet-form keys"
+      [id]="'keys-' + p.name"
+      autocomplete="off"
+      novalidate
+      (submit)="$event.preventDefault(); connectWithKeys(p)"
+    >
+      <h2 id="keys-title">Connect {{ p.display_name }}</h2>
+      <p id="keys-message" class="sheet-message">
+        {{ gives(p) }} The keys are sealed on the server and never shown again.
+      </p>
+      @if (keyHint(p); as hint) {
+        <p class="callout">{{ hint }}</p>
+      }
+      @for (f of p.credential_fields; track f) {
+        <div class="field">
+          <label [for]="'key-' + p.name + '-' + f">{{ fieldLabel(f) }}</label>
+          @if (p.needs_gateway && f === 'gateway') {
+            <select
+              class="input"
+              [id]="'key-' + p.name + '-' + f"
+              [attr.name]="f"
+              [attr.aria-invalid]="missing(p, f)"
+              [attr.aria-describedby]="missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null"
+              (change)="setKey(f, $any($event.target).value)"
+            >
+              <option value="">Pick a gateway</option>
+              @for (g of p.gateways ?? []; track g) {
+                <option [value]="g">{{ g }}</option>
+              }
+            </select>
+            @if (!(p.gateways ?? []).length) {
+              <p class="hint">No gateway is set up yet. Ask your admin.</p>
+            }
+          } @else {
+            <input
+              class="input"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              [id]="'key-' + p.name + '-' + f"
+              [attr.name]="f"
+              [attr.aria-invalid]="missing(p, f)"
+              [attr.aria-describedby]="missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null"
+              (input)="setKey(f, $any($event.target).value)"
+            />
+          }
+          @if (missing(p, f)) {
+            <p class="error" [id]="'key-' + p.name + '-' + f + '-error'">
+              {{ missingText(p, f) }}
+            </p>
+          }
+        </div>
+      }
+      <div class="field">
+        <label [for]="'key-' + p.name + '-label'">Name (optional)</label>
+        <input
+          class="input"
+          type="text"
+          maxlength="120"
+          [id]="'key-' + p.name + '-label'"
+          [value]="keyLabel()"
+          (input)="keyLabel.set($any($event.target).value)"
+        />
+        <p class="hint">Helps you tell two accounts at the same broker apart.</p>
+      </div>
+      @if (offersPaper(p)) {
+        <div class="field">
+          <label class="check">
+            <input
+              type="checkbox"
+              [checked]="paper()"
+              (change)="paper.set($any($event.target).checked)"
+            />
+            These are paper or demo account keys (no real money)
+          </label>
+          <p class="hint">
+            Untick only for real-money keys.
+            @if (!p.can_trade) {
+              Stonks still only reads until trading is turned on.
+            }
+          </p>
+        </div>
+      }
+      <div class="sheet-actions">
+        <button type="button" class="btn" (click)="closeKeys()">Cancel</button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="busy() === p.name"
+          [attr.aria-busy]="busy() === p.name"
+        >
+          {{ busy() === p.name ? 'Connecting…' : 'Connect' }}
+        </button>
+      </div>
+    </form>
+  }
+</app-sheet>

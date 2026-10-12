@@ -18,6 +18,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { AgoPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
+import { Sheet } from '../../shared/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BrokerExportsPanel } from './broker-exports-panel';
@@ -65,6 +66,7 @@ export const CALLBACK_PATH = '/connections/callback';
     RouterLink,
     AgoPipe,
     BrokerExportsPanel,
+    Sheet,
   ],
   templateUrl: './connections.page.html',
   styleUrl: './connections.page.scss',
@@ -127,6 +129,32 @@ export class ConnectionsPage {
   protected readonly paper = signal(true);
   protected readonly keysSubmitted = signal(false);
   protected readonly busy = signal<string | null>(null);
+
+  /** The provider whose key sheet is open. */
+  protected readonly keysProvider = computed(
+    () => this.enabled().find((p) => p.name === this.keysFor()) ?? null,
+  );
+
+  /** One sentence from the lists: what is connected and what could be. */
+  protected readonly standfirst = computed(() => {
+    if (!this.connections.hasValue() || !this.providers.hasValue()) {
+      return 'Link your brokerage so Stonks can read your positions, cash and activity.';
+    }
+    const rows = this.connections.value();
+    const n = rows.length;
+    const ready = this.enabled().length;
+    const can = ready === 1 ? '1 broker you can connect' : `${ready} brokers you can connect`;
+    if (n === 0) return `Nothing connected yet. ${can[0].toUpperCase()}${can.slice(1)}.`;
+    const needs = rows.filter((r) => r.connection.status === 'error');
+    const linked = n === 1 ? '1 connection' : `${n} connections`;
+    const attention = needs.length ? `, ${needs.length} needing a look` : '';
+    return `${linked}${attention}. ${can[0].toUpperCase()}${can.slice(1)}.`;
+  });
+
+  protected closeKeys(): void {
+    this.resetKeys();
+    this.keysFor.set(null);
+  }
 
   protected isCsv(c: ConnectionView): boolean {
     return c.provider === CSV_PROVIDER;

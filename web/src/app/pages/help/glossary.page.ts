@@ -23,67 +23,93 @@ import { PageHeader } from '../../shared/ui/page-header';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PageHeader],
   template: `
-    <app-page-header
-      title="Help"
-      description="How Stonks works, and what each word and figure in the console means."
-    />
+    <app-page-header title="Help" [description]="standfirst" />
 
-    <!-- The product in five sentences (F21), in the words of docs/design/vocabulary.md. -->
-    <section class="panel intro" aria-labelledby="how-title">
-      <div class="panel-head">
-        <h2 id="how-title">How Stonks works</h2>
+    <!-- Search on top: it filters the glossary below as you type. -->
+    <div class="finder">
+      <div class="field search">
+        <label for="glossary-filter">Find a term</label>
+        <div class="search-box">
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.6" />
+            <path
+              d="m10.5 10.5 3 3"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+          <input
+            id="glossary-filter"
+            class="input"
+            type="search"
+            autocomplete="off"
+            placeholder="Sharpe, paper, drawdown"
+            [value]="query()"
+            (input)="query.set($any($event.target).value)"
+          />
+        </div>
       </div>
-      <ol class="panel-body steps prose">
-        <li>
-          Stonks runs <strong>strategies</strong>: rules that read prices after each close and
-          decide what to buy and sell.
-        </li>
-        <li>
-          You <strong>follow</strong> a strategy in one of your <strong>portfolios</strong>, first
-          as alerts only or on paper, so you see how it does without risk.
-        </li>
-        <li>
-          After enough paper days you may let it trade <strong>real money</strong> at your broker,
-          approving each trade yourself or letting it trade automatically, always within the amount
-          you set.
-        </li>
-        <li>
-          <strong>Today</strong> shows what your money is doing, what your strategies want next and
-          anything waiting for you.
-        </li>
-        <li>
-          If anything looks wrong, <strong>Stop trading</strong> at the top of every page stops new
-          orders at once, and nothing starts again until you say so.
-        </li>
-      </ol>
-    </section>
-
-    <div class="field search">
-      <label for="glossary-filter">Find a term</label>
-      <input
-        id="glossary-filter"
-        class="input"
-        type="search"
-        autocomplete="off"
-        [value]="query()"
-        (input)="query.set($any($event.target).value)"
-      />
+      <p class="count muted" role="status">
+        <span class="num">{{ entries().length }}</span>
+        {{ entries().length === 1 ? 'term' : 'terms' }}
+      </p>
     </div>
 
-    <p class="count muted" role="status">
-      {{ entries().length === 1 ? '1 term' : entries().length + ' terms' }}
-    </p>
+    @if (!query().trim()) {
+      <!-- The product in five sentences (F21), in the words of docs/design/vocabulary.md. -->
+      <section class="page-section intro" aria-labelledby="how-title">
+        <div class="section-head">
+          <h2 id="how-title">How Stonks works</h2>
+        </div>
+        <ol class="steps">
+          <li>
+            Stonks runs <strong>strategies</strong>: rules that read prices after each close and
+            decide what to buy and sell.
+          </li>
+          <li>
+            You <strong>follow</strong> a strategy in one of your <strong>portfolios</strong>, first
+            as alerts only or on paper, so you see how it does without risk.
+          </li>
+          <li>
+            After enough paper days you may let it trade <strong>real money</strong> at your broker,
+            approving each trade yourself or letting it trade automatically, always within the
+            amount you set.
+          </li>
+          <li>
+            <strong>Today</strong> shows what your money is doing, what your strategies want next
+            and anything waiting for you.
+          </li>
+          <li>
+            If anything looks wrong, <strong>Stop trading</strong> at the top of every page stops
+            new orders at once, and nothing starts again until you say so.
+          </li>
+        </ol>
+      </section>
+    }
 
     @if (entries().length === 0) {
       <p class="empty callout" data-tone="neutral">
         No term matches "{{ query() }}". Try a shorter word.
       </p>
     } @else {
-      <div #list>
+      <nav class="filter-pills jump" aria-label="Glossary sections">
         @for (g of groups(); track g.title) {
-          <section class="group panel" [attr.aria-labelledby]="'glossary-' + $index">
-            <div class="panel-head">
-              <h2 [id]="'glossary-' + $index">{{ g.title }}</h2>
+          <a
+            class="filter-pill"
+            [href]="'/help/glossary#glossary-' + $index"
+            (click)="jump($event, 'glossary-' + $index)"
+            >{{ g.title }} <span class="count">{{ g.entries.length }}</span></a
+          >
+        }
+      </nav>
+      <div #list class="groups">
+        @for (g of groups(); track g.title) {
+          <section class="group page-section" [attr.aria-labelledby]="'glossary-' + $index">
+            <div class="section-head">
+              <h2 [id]="'glossary-' + $index" tabindex="-1">
+                {{ g.title }} <span class="count">{{ g.entries.length }}</span>
+              </h2>
             </div>
             <dl class="terms">
               @for (e of g.entries; track e.key) {
@@ -94,7 +120,7 @@ import { PageHeader } from '../../shared/ui/page-header';
                     <dd class="example">For example: {{ e.example }}</dd>
                   }
                   @if (e.aliases.length) {
-                    <dd class="aliases muted">Also shown as {{ e.aliases.join(', ') }}</dd>
+                    <dd class="aliases">Also shown as {{ e.aliases.join(', ') }}</dd>
                   }
                 </div>
               }
@@ -105,89 +131,145 @@ import { PageHeader } from '../../shared/ui/page-header';
     }
   `,
   styles: `
-    .intro {
-      margin-bottom: var(--space-5);
+    @use 'breakpoints' as bp;
+    :host {
+      display: block;
     }
-    .steps {
-      display: grid;
-      gap: var(--space-2);
-      margin: 0;
-      padding-left: calc(var(--space-4) + 1.25rem);
-      color: var(--color-ink-2);
-    }
-    .steps ::marker {
-      font-family: var(--font-mono);
-      color: var(--color-ink-3);
+    .finder {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-3) var(--space-6);
+      margin-bottom: var(--section-gap);
     }
     .search {
-      max-width: 28rem;
+      flex: 1 1 22rem;
+      max-width: 36rem;
+    }
+    .search-box {
+      position: relative;
+    }
+    .search-box svg {
+      position: absolute;
+      top: 50%;
+      left: var(--space-3);
+      width: 16px;
+      height: 16px;
+      color: var(--muted);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .search-box .input {
+      min-height: 44px;
+      padding-left: 36px;
+      font-size: var(--text-body);
     }
     .count {
-      margin: var(--space-2) 0 var(--space-4);
+      margin: 0 0 var(--space-3);
       font-size: var(--text-sm);
-      font-variant-numeric: tabular-nums slashed-zero;
+    }
+    .intro {
+      margin-bottom: var(--section-gap);
+    }
+    /* Five sentences on a numbered strip, hairlines between them. */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+      overflow: hidden;
+    }
+    .steps li {
+      margin: -1px 0 0 -1px;
+      padding: var(--space-4) var(--space-5) var(--space-4) var(--space-4);
+      border-top: 1px solid var(--rule);
+      border-left: 1px solid var(--rule);
+      color: var(--ink-2);
+      font-size: var(--text-md);
+      counter-increment: step;
+    }
+    .steps li::before {
+      content: counter(step, decimal-leading-zero);
+      display: block;
+      margin-bottom: var(--space-2);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-semibold);
+    }
+    .steps strong {
+      color: var(--ink);
     }
     .empty {
       margin: 0;
     }
-    // One panel per group, the terms a definition list on hairlines.
-    .group + .group {
-      margin-top: var(--space-4);
+    .jump {
+      margin-bottom: var(--space-6);
     }
-    .terms {
+    .groups {
       display: grid;
+      gap: var(--section-gap);
+    }
+    .group h2 {
+      outline: none;
+      scroll-margin-top: calc(var(--chrome-h) + var(--rail-h) + var(--space-4));
+    }
+    /* Two columns: the term on the left, what it means on the right. */
+    .terms {
       margin: 0;
-      padding: 0 var(--space-4);
     }
     .term {
-      padding: var(--space-3) 0;
-      scroll-margin-top: var(--space-8);
+      display: grid;
+      gap: var(--space-1) var(--space-8);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--rule);
+      scroll-margin-top: calc(var(--chrome-h) + var(--rail-h) + var(--space-4));
     }
-    .term + .term {
-      border-top: 1px solid var(--color-border);
+    @include bp.from-tablet {
+      .term {
+        grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+      }
+      .term dt {
+        grid-row: 1 / span 3;
+      }
+      .term dd {
+        grid-column: 2;
+      }
     }
-    // The term a link pointed at: an accent rule at the panel edge.
+    .term:last-child {
+      border-bottom: 0;
+    }
+    /* The term a link pointed at: an accent edge and the soft accent fill. */
     .term.target {
-      margin-inline: calc(-1 * var(--space-4));
-      padding-inline: calc(var(--space-4) - 2px) var(--space-4);
-      border-left: 2px solid var(--color-focus);
-      background: var(--color-accent-soft);
+      padding-inline: var(--space-4);
+      border-radius: var(--r-sheet);
+      border-bottom-color: transparent;
+      box-shadow: inset 3px 0 0 var(--accent);
+      background: var(--accent-soft);
     }
     .term:focus-visible {
       outline-offset: -2px;
     }
     dt {
-      font-size: var(--text-md);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
     }
     dd {
-      max-width: 70ch;
-      margin: var(--space-1) 0 0;
+      max-width: 68ch;
+      margin: 0;
+      color: var(--ink-2);
       font-size: var(--text-md);
-      color: var(--color-ink-2);
       overflow-wrap: anywhere;
-    }
-    .aliases {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
     }
     .example {
       font-size: var(--text-sm);
     }
-    @media (max-width: 767.98px) {
-      .intro {
-        margin-bottom: var(--space-4);
-      }
-      .group + .group {
-        margin-top: var(--space-3);
-      }
-      .terms {
-        padding: 0 var(--space-3);
-      }
-      .term.target {
-        margin-inline: calc(-1 * var(--space-3));
-        padding-inline: calc(var(--space-3) - 2px) var(--space-3);
-      }
+    .aliases {
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
   `,
 })
@@ -226,6 +308,22 @@ export class GlossaryPage {
   });
 
   protected readonly entries = computed(() => this.groups().flatMap((g) => g.entries));
+
+  /** One sentence, counted from the glossary. */
+  protected readonly standfirst = `How Stonks works, and what each of the ${this.all.reduce(
+    (n, g) => n + g.entries.length,
+    0,
+  )} words and figures in the console means.`;
+
+  /** Jump to a glossary section and put focus on its heading. */
+  protected jump(event: Event, id: string): void {
+    event.preventDefault();
+    const heading = this.list()?.nativeElement.querySelector<HTMLElement>(`#${id}`);
+    if (!heading) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    heading.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+    heading.focus({ preventScroll: true });
+  }
 
   constructor() {
     // Bring the linked term into view and focus it, so keyboard and screen
