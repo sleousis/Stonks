@@ -19,6 +19,14 @@ cd web && npm ci                  # Node 22+
 
 CI runs tests, lint, `pip-audit`, `npm audit`, CodeQL, an image build, and checks of the deploy files. Accepted audit findings go in `.github/audit/` with a reason and a review date.
 
+The Python tests run in four parallel shards. `tools/ci_shards.py` splits the test modules by file size, the same way every run, and each module lands in exactly one shard. To run one shard yourself:
+
+```bash
+uv run pytest -n 2 $(uv run python -m tools.ci_shards 1 4)
+```
+
+The required `test` check waits for lint and every shard. It fails if any of them fails, then combines the shards' coverage and runs the coverage gates (overall `fail_under` and `tools/coverage_gate.py`). `test-python-3-12` does the same for Python 3.12 without coverage. A new test file needs no CI change. To change the shard count, edit `CI_SHARDS` and the `shard` lists in `.github/workflows/ci.yml` together.
+
 ## Commit messages
 
 One line in the imperative, starting with a verb: `Add ...`, `Fix ...`, `Remove ...`, `Document ...`. The changelog sorts commits into sections by that first word (`cliff.toml`).
