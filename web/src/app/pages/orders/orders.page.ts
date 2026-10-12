@@ -34,7 +34,7 @@ import { OrdersTabs } from './orders-tabs';
   template: `
     <app-page-header
       title="Orders"
-      description="Orders placed by trading runs and by hand, the fills they received, and the runs themselves."
+      description="Every order from your trading runs and by hand, with the fills it got."
     >
       <app-updated-ago [at]="status.updatedAt()" />
       <ng-container ngProjectAs="[actions]">

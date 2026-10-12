@@ -39,16 +39,10 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, DataTable, TableCell, LoadingState, EmptyState, ErrorState, SideTag],
   template: `
-    <section class="panel panel-flush" aria-labelledby="fills-title">
-      <div class="panel-head">
-        <h2 id="fills-title">Fills</h2>
-        @if (page(); as p) {
-          <span class="count num">{{ p.total }} matching</span>
-        }
-      </div>
-
+    <section class="page-section section-flush" aria-labelledby="fills-title">
+      <div class="toolbar">
       <form
-        class="filters"
+        class="filters always"
         role="search"
         aria-label="Filter fills"
         (submit)="$event.preventDefault()"
@@ -84,12 +78,22 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
             (change)="setFilter('order', $any($event.target).value)"
           />
         </div>
-        <div class="filter-actions">
-          <button type="button" class="btn" [disabled]="!hasFilters()" (click)="clearFilters()">
+        @if (hasFilters()) {
+          <button type="button" class="btn btn-ghost clear" (click)="clearFilters()">
             Clear filters
           </button>
-        </div>
+        }
       </form>
+      </div>
+
+      <header class="section-head">
+        <h2 id="fills-title">
+          Fills
+          @if (page(); as p) {
+            <span class="count">{{ p.total }} matching</span>
+          }
+        </h2>
+      </header>
 
       @let p = page();
       @if (fills.error(); as err) {
