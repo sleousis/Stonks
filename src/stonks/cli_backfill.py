@@ -56,7 +56,7 @@ def run(
         None, "--max-calls", min=1, help="stop after this many API calls in this run"
     ),
     budget: int | None = typer.Option(
-        None, "--budget", min=1, help="API calls a UTC day may reach (default [ingest.backfill])"
+        None, "--budget", min=1, help="API calls a UTC day may reach (default \\[ingest.backfill])"
     ),
     until_budget: bool = typer.Option(
         False,
