@@ -150,6 +150,9 @@ describe('ChartPage', () => {
     ]);
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('h1')?.textContent).toContain('UP.US');
+    // The last close as the headline figure, and a standfirst from the data.
+    expect(el.querySelector('.quote .price')?.textContent?.trim()).toMatch(/^[\d,]+\.\d{2}$/);
+    expect(el.querySelector('.standfirst')?.textContent).toMatch(/^(Up|Down) [\d.]+% over 1Y/);
     expect(el.textContent).toContain('trend is up');
     // Strategies by name, never by raw id (UX-27).
     expect(el.textContent).toContain('Momentum 3fa9');
