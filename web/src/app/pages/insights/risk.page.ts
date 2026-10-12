@@ -149,6 +149,24 @@ export class RiskPage {
     const v = this.mine.hasValue() ? this.mine.value().effective.min_order_notional : null;
     return v ? formatMoney(v) : null;
   });
+  /** Limits near or over, for the strip and the standfirst. */
+  protected readonly pressed = computed(
+    () => this.limited().filter((r) => r.status === 'near' || r.status === 'over').length,
+  );
+
+  /** "2 of 8 limits are near or over. A bad day could cost 2.1% of the value." */
+  protected readonly standfirst = computed(() => {
+    const fallback = 'How close your portfolio is to its limits and how much a bad day could cost.';
+    const total = this.limited().length;
+    if (!total) return fallback;
+    const n = this.pressed();
+    const head = n
+      ? `${n} of ${total} limits ${n === 1 ? 'is' : 'are'} near or over.`
+      : `All ${total} limits are clear.`;
+    const b = this.live.hasValue() ? this.live.value().portfolio : null;
+    return b?.var_95 != null ? `${head} A bad day could cost ${this.loss(b.var_95)} of the value.` : head;
+  });
+
   protected readonly statusText = STATUS_TEXT;
   protected readonly meterWidth = (r: LimitRow) =>
     `${Math.min(1, Math.max(0, r.usage ?? 0)) * 100}%`;

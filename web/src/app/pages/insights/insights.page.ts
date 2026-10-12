@@ -193,8 +193,23 @@ export class InsightsPage {
     formatPercent(value, { digits: 1, signed });
   protected readonly num = (value: number | null | undefined) => formatNumber(value, { digits: 2 });
 
-  /** The header stays the same while the page loads, so nothing below it jumps. */
-  protected readonly description = 'Where your money sits, how it did and which strategies agree.';
+  /**
+   * One sentence from the data: "Most of it sits in Equity, at 62.40%. The largest
+   * holding is AAPL.US at 26.10%." The default stays while the page loads.
+   */
+  protected readonly description = computed(() => {
+    const fallback = 'Where your money sits, how it did and which strategies agree.';
+    if (!this.insights.hasValue()) return fallback;
+    const i = this.insights.value();
+    const top = [...i.allocation.asset_class].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))[0];
+    if (!top || !top.weight) return fallback;
+    const label = ASSET_CLASS_LABELS[top.key] ?? top.key;
+    const lead = `Most of it sits in ${label}, at ${this.pct(top.weight)}.`;
+    const c = i.risk.concentration;
+    return c.largest && c.top_weight
+      ? `${lead} The largest holding is ${c.largest} at ${this.pct(c.top_weight)}.`
+      : lead;
+  });
 
   /** Where the figures come from, under the tiles once they load. */
   protected readonly asOf = computed(() => {
@@ -287,6 +302,19 @@ export class InsightsPage {
     this.dimension() === 'asset_class' || s.key === 'cash'
       ? (ASSET_CLASS_LABELS[s.key] ?? s.key)
       : s.key;
+  /** The slices with a share of the split bar, largest first. */
+  protected readonly splitSlices = computed(() =>
+    this.slices()
+      .filter((s) => Math.abs(s.weight ?? 0) > 0)
+      .sort((a, b) => Math.abs(b.weight ?? 0) - Math.abs(a.weight ?? 0)),
+  );
+  /** A slice's share of the split bar (shorts count by size). */
+  protected readonly share = (s: AllocationSlice) => Math.abs(s.weight ?? 0);
+  /** Each slice's shade of the accent, by its rank: the largest is the strongest. */
+  protected readonly shade = (s: AllocationSlice) => {
+    const rank = this.splitSlices().findIndex((x) => x.key === s.key);
+    return rank < 0 ? 0.15 : Math.max(0.15, 1 - rank * 0.17);
+  };
   protected readonly barWidth = (s: AllocationSlice) =>
     `${Math.max(0, Math.min(1, Math.abs(s.weight ?? 0))) * 100}%`;
 }

@@ -60,7 +60,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
   template: `
     <app-page-header
       title="Cash flows"
-      description="Money you put in or took out. Returns leave it out, so a deposit is never profit."
+      [description]="standfirst()"
     />
     <app-insights-nav />
 
@@ -97,12 +97,41 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
         it judges your own timing. Neither counts the deposit as profit.
       </p>
 
-      <div class="page-grid">
-        <section class="panel span-5" aria-labelledby="record-title">
-          <div class="panel-head">
+      <div class="cols">
+        <section class="page-section section-flush" aria-labelledby="flows-title">
+          <div class="section-head">
+            <h2 id="flows-title">Deposits and withdrawals</h2>
+          </div>
+          <div class="section-body">
+            @if (flows.error(); as err) {
+              <app-error-state
+                title="Could not load the cash flows"
+                [error]="err"
+                (retry)="flows.reload()"
+              />
+            } @else if (!flows.hasValue()) {
+              <app-loading-state label="Loading cash flows" [rows]="4" />
+            } @else if (flows.value().length === 0) {
+              <app-empty-state
+                title="No deposits or withdrawals yet"
+                message="Record one here when you add or take out money, so your returns stay right."
+              />
+            } @else {
+              <app-data-table
+                caption="Deposits and withdrawals, newest first"
+                [rows]="newestFirst()"
+                [columns]="columns"
+                [rowKey]="flowKey"
+              />
+            }
+          </div>
+        </section>
+
+        <section class="page-section" aria-labelledby="record-title">
+          <div class="section-head">
             <h2 id="record-title">Record a deposit or withdrawal</h2>
           </div>
-          <div class="panel-body">
+          <div class="section-body">
             @if (isBroker()) {
               <p class="muted">
                 This portfolio is at a broker, so its deposits and withdrawals come in with each
@@ -177,34 +206,6 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
           </div>
         </section>
 
-        <section class="panel panel-flush span-7" aria-labelledby="flows-title">
-          <div class="panel-head">
-            <h2 id="flows-title">Deposits and withdrawals</h2>
-          </div>
-          <div class="panel-body">
-            @if (flows.error(); as err) {
-              <app-error-state
-                title="Could not load the cash flows"
-                [error]="err"
-                (retry)="flows.reload()"
-              />
-            } @else if (!flows.hasValue()) {
-              <app-loading-state label="Loading cash flows" [rows]="4" />
-            } @else if (flows.value().length === 0) {
-              <app-empty-state
-                title="No deposits or withdrawals yet"
-                message="Record one here when you add or take out money, so your returns stay right."
-              />
-            } @else {
-              <app-data-table
-                caption="Deposits and withdrawals, newest first"
-                [rows]="newestFirst()"
-                [columns]="columns"
-                [rowKey]="flowKey"
-              />
-            }
-          </div>
-        </section>
       </div>
     }
   `,
@@ -221,7 +222,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
     .explain {
       max-width: 70ch;
       margin: 0 0 var(--space-5);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
   `,
 })
@@ -275,6 +276,17 @@ export class CashFlowsPage {
         })
       : '–',
   );
+
+  /** "4 deposits and withdrawals, 9,000 in net. Returns leave them out." */
+  protected readonly standfirst = computed(() => {
+    const fallback = 'Money you put in or took out. Returns leave it out, so a deposit is never profit.';
+    if (!this.flows.hasValue() || !this.insights.hasValue() || !this.flows.value().length) {
+      return fallback;
+    }
+    const n = this.flows.value().length;
+    const what = n === 1 ? '1 deposit or withdrawal' : `${n} deposits and withdrawals`;
+    return `${what}, ${this.netFlows()} in net. Returns leave them out, so a deposit is never profit.`;
+  });
 
   /** The cash a withdrawal may take, from the latest insights. */
   private readonly cash = computed(() => {

@@ -66,10 +66,7 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
     EmptyState,
   ],
   template: `
-    <app-page-header
-      title="Behaviour"
-      description="How you trade by hand: your manual orders and synced broker trades."
-    />
+    <app-page-header title="Behaviour" [description]="standfirst()" />
     <app-insights-nav />
 
     @if (book() === 'none') {
@@ -89,120 +86,115 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
       />
     } @else {
       @let r = report.value();
-      <div class="page-grid">
-        <section class="panel span-12" aria-labelledby="bh-summary">
-          <div class="panel-head"><h2 id="bh-summary">Summary</h2></div>
-          <div class="panel-body">
-            <dl class="stats">
-              <div>
-                <dt>Closed trades</dt>
-                <dd class="num">{{ num(r.trades) }}</dd>
-              </div>
-              <div>
-                <dt>Win rate</dt>
-                <dd class="num">{{ pct(r.win_rate) }}</dd>
-              </div>
-              <div>
-                <dt>Profit and loss</dt>
-                <dd class="num" [class]="tone(r.total_pnl)">{{ money(r.total_pnl) }}</dd>
-              </div>
-              <div>
-                <dt>Average win / loss</dt>
-                <dd class="num">{{ money(r.avg_win) }} / {{ money(r.avg_loss) }}</dd>
-              </div>
-            </dl>
-            @if (notes().length) {
-              <ul class="findings">
-                @for (n of notes(); track n) {
-                  <li>{{ n }}</li>
-                }
-              </ul>
-            }
+      <section aria-labelledby="bh-summary">
+        <h2 id="bh-summary" class="visually-hidden">Summary</h2>
+        <dl class="summary-strip stats strip">
+          <div>
+            <dt>Closed trades</dt>
+            <dd class="num">{{ num(r.trades) }}</dd>
           </div>
-        </section>
+          <div>
+            <dt>Win rate</dt>
+            <dd class="num">{{ pct(r.win_rate) }}</dd>
+          </div>
+          <div>
+            <dt>Profit and loss</dt>
+            <dd class="num" [class]="tone(r.total_pnl)">{{ money(r.total_pnl) }}</dd>
+          </div>
+          <div>
+            <dt>Average win / loss</dt>
+            <dd class="num">{{ money(r.avg_win) }} / {{ money(r.avg_loss) }}</dd>
+          </div>
+        </dl>
+        @if (notes().length) {
+          <div class="callout findings-box">
+            <p class="callout-title">What stands out</p>
+            <ul class="findings">
+              @for (n of notes(); track n) {
+                <li>{{ n }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </section>
 
-        <section class="panel panel-flush span-6" aria-labelledby="bh-holding">
-          <div class="panel-head"><h2 id="bh-holding">By holding time</h2></div>
-          <div class="panel-body">
+      <div class="cols body">
+        <div class="section-stack">
+          <section class="page-section section-flush" aria-labelledby="bh-holding">
+            <header class="section-head"><h2 id="bh-holding">By holding time</h2></header>
             <ng-container
               *ngTemplateOutlet="table; context: { rows: r.by_holding, caption: 'By holding time' }"
             />
-          </div>
-        </section>
+          </section>
 
-        <section class="panel panel-flush span-6" aria-labelledby="bh-weekday">
-          <div class="panel-head"><h2 id="bh-weekday">By weekday of entry</h2></div>
-          <div class="panel-body">
+          <section class="page-section section-flush" aria-labelledby="bh-weekday">
+            <header class="section-head"><h2 id="bh-weekday">By weekday of entry</h2></header>
             <ng-container
               *ngTemplateOutlet="table; context: { rows: weekdays(), caption: 'By weekday' }"
             />
-          </div>
-        </section>
+          </section>
 
-        <section class="panel span-6" aria-labelledby="bh-habits">
-          <div class="panel-head"><h2 id="bh-habits">Habits</h2></div>
-          <div class="panel-body">
-            <dl class="stats">
-              <div>
-                <dt>Days held, winners</dt>
-                <dd class="num">{{ days(r.disposition.avg_days_winners) }}</dd>
-              </div>
-              <div>
-                <dt>Days held, losers</dt>
-                <dd class="num">{{ days(r.disposition.avg_days_losers) }}</dd>
-              </div>
-              <div>
-                <dt>Entries a trading day</dt>
-                <dd class="num">{{ days(r.overtrading.entries_per_active_day) }}</dd>
-              </div>
-              <div>
-                <dt>Most in a day</dt>
-                <dd class="num">{{ num(r.overtrading.max_entries_in_a_day) }}</dd>
-              </div>
-              <div>
-                <dt>Busy days</dt>
-                <dd class="num">{{ num(r.overtrading.busy_days) }}</dd>
-              </div>
-              <div>
-                <dt>P&amp;L on busy days</dt>
-                <dd class="num" [class]="tone(r.overtrading.busy_day_pnl)">
-                  {{ money(r.overtrading.busy_day_pnl) }}
-                </dd>
-              </div>
-              <div>
-                <dt>P&amp;L on other days</dt>
-                <dd class="num" [class]="tone(r.overtrading.other_day_pnl)">
-                  {{ money(r.overtrading.other_day_pnl) }}
-                </dd>
-              </div>
-              <div>
-                <dt>Revenge trades</dt>
-                <dd class="num">{{ num(r.revenge.trades) }}</dd>
-              </div>
-              <div>
-                <dt>P&amp;L from revenge trades</dt>
-                <dd class="num" [class]="tone(r.revenge.pnl)">{{ money(r.revenge.pnl) }}</dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-
-        <section class="panel panel-flush span-6" aria-labelledby="bh-strategies">
-          <div class="panel-head"><h2 id="bh-strategies">Against the strategies</h2></div>
-          <p class="table-note muted">
-            Each entry next to the active strategies' signals in the week before it.
-          </p>
-          <div class="panel-body">
+          <section class="page-section section-flush" aria-labelledby="bh-strategies">
+            <header class="section-head"><h2 id="bh-strategies">Against the strategies</h2></header>
+            <p class="table-note muted">
+              Each entry next to the active strategies' signals in the week before it.
+            </p>
             <ng-container
               *ngTemplateOutlet="table; context: { rows: stances(), caption: 'Versus strategies' }"
             />
-          </div>
+          </section>
+        </div>
+
+        <section class="page-section" aria-labelledby="bh-habits">
+          <header class="section-head"><h2 id="bh-habits">Habits</h2></header>
+          <dl class="stats habits">
+            <div>
+              <dt>Days held, winners</dt>
+              <dd class="num">{{ days(r.disposition.avg_days_winners) }}</dd>
+            </div>
+            <div>
+              <dt>Days held, losers</dt>
+              <dd class="num">{{ days(r.disposition.avg_days_losers) }}</dd>
+            </div>
+            <div>
+              <dt>Entries a trading day</dt>
+              <dd class="num">{{ days(r.overtrading.entries_per_active_day) }}</dd>
+            </div>
+            <div>
+              <dt>Most in a day</dt>
+              <dd class="num">{{ num(r.overtrading.max_entries_in_a_day) }}</dd>
+            </div>
+            <div>
+              <dt>Busy days</dt>
+              <dd class="num">{{ num(r.overtrading.busy_days) }}</dd>
+            </div>
+            <div>
+              <dt>P&amp;L on busy days</dt>
+              <dd class="num" [class]="tone(r.overtrading.busy_day_pnl)">
+                {{ money(r.overtrading.busy_day_pnl) }}
+              </dd>
+            </div>
+            <div>
+              <dt>P&amp;L on other days</dt>
+              <dd class="num" [class]="tone(r.overtrading.other_day_pnl)">
+                {{ money(r.overtrading.other_day_pnl) }}
+              </dd>
+            </div>
+            <div>
+              <dt>Revenge trades</dt>
+              <dd class="num">{{ num(r.revenge.trades) }}</dd>
+            </div>
+            <div>
+              <dt>P&amp;L from revenge trades</dt>
+              <dd class="num" [class]="tone(r.revenge.pnl)">{{ money(r.revenge.pnl) }}</dd>
+            </div>
+          </dl>
         </section>
       </div>
     }
 
     <ng-template #table let-rows="rows" let-caption="caption">
-      <table class="grid">
+      <table class="table grid">
         <caption class="visually-hidden">
           {{
             caption
@@ -210,7 +202,7 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
         </caption>
         <thead>
           <tr>
-            <th scope="col"></th>
+            <th scope="col"><span class="visually-hidden">Group</span></th>
             <th scope="col" class="num">Trades</th>
             <th scope="col" class="num">Win rate</th>
             <th scope="col" class="num">P&amp;L</th>
@@ -232,81 +224,91 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
   styles: `
     @use 'breakpoints' as bp;
 
-    /* Figures: a small label, the value in mono 4px under it. */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-      gap: var(--space-3) var(--space-4);
+    /* The summary: label over a mono figure, hairlines between the cells. */
+    .strip {
       margin: 0;
-    }
-    .stats > div {
-      min-width: 0;
+
+      > div {
+        padding: var(--space-3) var(--space-4) var(--space-4) 0;
+      }
+
+      > div + div {
+        padding-left: var(--space-4);
+      }
     }
     .stats dt {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
     }
     .stats dd {
       margin: var(--space-1) 0 0;
-      font-size: var(--text-lg);
-      overflow-wrap: anywhere;
+      font-size: var(--text-stat);
+      font-weight: var(--weight-semibold);
+      letter-spacing: -0.03em;
       white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .findings-box {
+      margin-top: var(--space-5);
     }
     .findings {
       display: grid;
       gap: var(--space-1);
-      max-width: 70ch;
-      margin: var(--space-4) 0 0;
-      padding-left: var(--space-4);
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
+      margin: var(--space-2) 0 0;
+      padding-left: var(--space-5);
+    }
+    .body {
+      margin-top: var(--section-gap);
+    }
+    /* Habits: fact rows, the label left and the figure right. */
+    .habits {
+      margin: 0;
+
+      > div {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-1) var(--space-4);
+        padding: 11px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      > div:last-child {
+        border-bottom: 0;
+      }
+
+      dt {
+        color: var(--ink-2);
+        font-size: var(--text-md);
+        font-weight: var(--weight-regular);
+      }
+
+      dd {
+        margin: 0;
+        font-size: var(--text-lead);
+        text-align: right;
+      }
     }
     .table-note {
       margin: 0;
-      padding: var(--space-3) var(--space-4);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
       font-size: var(--text-sm);
-    }
-    /* The same look as the shared data table: 34px rows, an inset header. */
-    .grid {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--text-sm);
-    }
-    .grid th,
-    .grid td {
-      height: var(--row-h);
-      padding: 0 var(--space-3);
-      border-bottom: 1px solid var(--color-border);
-      text-align: left;
-      vertical-align: middle;
-    }
-    .grid tbody tr:last-child > * {
-      border-bottom: 0;
-    }
-    .grid th:first-child,
-    .grid td:first-child {
-      padding-left: var(--space-4);
-    }
-    .grid th:last-child,
-    .grid td:last-child {
-      padding-right: var(--space-4);
-    }
-    .grid thead th {
-      background: var(--color-surface-2);
-      color: var(--color-ink-2);
-      font-size: var(--text-xs);
-      font-weight: 600;
     }
     .grid tbody th {
-      font-weight: var(--weight-medium);
-    }
-    .grid tbody tr:hover {
-      background: var(--color-hover);
-    }
-    .grid .num {
-      text-align: right;
+      font-weight: var(--weight-semibold);
+      text-align: left;
     }
     @include bp.phone {
+      .strip > div,
+      .strip > div + div {
+        padding: var(--space-3) var(--space-3) var(--space-3) 0;
+      }
+      .strip > div:nth-child(even) {
+        padding-left: var(--space-3);
+      }
       .grid thead {
         position: absolute;
         width: 1px;
@@ -316,41 +318,30 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
       }
       .grid tr {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: var(--space-1) var(--space-3);
-        padding: var(--space-3);
-        border-bottom: 1px solid var(--color-border);
-      }
-      .grid tbody tr:last-child {
-        border-bottom: 0;
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--rule);
       }
       .grid th[scope='row'] {
         grid-column: 1 / -1;
-        font-weight: var(--weight-semibold);
       }
       .grid th,
-      .grid td,
-      .grid th:first-child,
-      .grid td:first-child,
-      .grid th:last-child,
-      .grid td:last-child {
+      .grid td {
         height: auto;
-        border: 0;
         padding: 0;
+        border: 0;
       }
       .grid td {
         display: grid;
-        gap: var(--space-1);
-        font-family: var(--font-mono);
+        gap: 2px;
+        text-align: left;
       }
       .grid td::before {
         content: attr(data-label);
-        color: var(--color-ink-3);
+        color: var(--muted);
         font-family: var(--font-sans);
         font-size: var(--text-xs);
-      }
-      .grid .num {
-        text-align: left;
       }
     }
   `,
@@ -382,6 +373,18 @@ export class BehaviourPage {
           .versus_strategies.map((b) => ({ ...b, label: STANCE_LABELS[b.label] ?? b.label }))
       : [],
   );
+
+  /** "24 closed trades, 58% of them winners." The default while it loads. */
+  protected readonly standfirst = computed(() => {
+    if (!this.report.hasValue() || !this.report.value().trades) {
+      return 'How you trade by hand: your manual orders and synced broker trades.';
+    }
+    const r = this.report.value();
+    const trades = `${this.num(r.trades)} closed ${r.trades === 1 ? 'trade' : 'trades'}`;
+    return r.win_rate == null
+      ? `${trades} by hand or from your broker.`
+      : `${trades}, ${this.pct(r.win_rate)} of them winners.`;
+  });
 
   protected readonly tone = toneClass;
   protected num(v: number): string {
