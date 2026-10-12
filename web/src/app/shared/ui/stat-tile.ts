@@ -60,15 +60,13 @@ export type StatTone = 'gain' | 'loss' | '';
     } @else {
       <div class="figure-line">
         @if (counting()) {
-          @let parts = split(shown());
           <p class="value" aria-hidden="true">
-            {{ parts[0] }}<span class="minor">{{ parts[1] }}</span>
+            <span [textContent]="sw()"></span><span class="minor" [textContent]="sc()"></span>
           </p>
           <span class="visually-hidden">{{ finalText() }}</span>
         } @else {
-          @let parts = split(finalText());
           <p class="value">
-            {{ parts[0] }}<span class="minor">{{ parts[1] }}</span>
+            <span [textContent]="fw()"></span><span class="minor" [textContent]="fc()"></span>
           </p>
         }
         @if (detail()) {
@@ -215,6 +213,14 @@ export class StatTile {
     const money = /[^\d\s.,+\-−%]/u.test(t) && !t.endsWith('%');
     return this.featured() && !this.isText() && money ? splitMoney(t) : [t, ''];
   }
+
+  private readonly shownParts = computed(() => this.split(this.shown()));
+  private readonly finalParts = computed(() => this.split(this.finalText()));
+  /** The figure while counting and at rest: whole part and muted cents. */
+  protected readonly sw = computed(() => this.shownParts()[0]);
+  protected readonly sc = computed(() => this.shownParts()[1]);
+  protected readonly fw = computed(() => this.finalParts()[0]);
+  protected readonly fc = computed(() => this.finalParts()[1]);
 
   protected readonly helpTerm = computed(() => {
     const help = this.help();
