@@ -13,13 +13,17 @@ import { UniversesService } from '../../api/universes.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
-import { DateTimePipe } from '../../shared/format.pipes';
+import { formatDateTime, formatNumber } from '../../core/format/format';
+import { DateTimePipe, NumPipe } from '../../shared/format.pipes';
+import { StatTile } from '../../shared/ui/stat-tile';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { UniverseEditor } from './universe-editor';
 import { KIND_LABEL, isStale, readFileText } from './universe-form';
+
+type KindFilter = 'all' | UniverseView['kind'];
 
 /**
  * Stored universes: the list with kind, member count and last refresh
@@ -30,6 +34,7 @@ import { KIND_LABEL, isStale, readFileText } from './universe-form';
   selector: 'app-universes-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    StatTile,
     PageHeader,
     DataTable,
     TableCell,
@@ -38,6 +43,7 @@ import { KIND_LABEL, isStale, readFileText } from './universe-form';
     ErrorState,
     RouterLink,
     DateTimePipe,
+    NumPipe,
     PermissionNote,
     UniverseEditor,
   ],
@@ -62,11 +68,52 @@ export class UniversesPage {
 
   protected readonly columns: TableColumn<UniverseView>[] = [
     { key: 'name', label: 'Universe', value: (u) => u.name || u.id, mobile: 'title' },
-    { key: 'id', label: 'Id', mobile: 'hide' },
-    { key: 'kind', label: 'Kind', value: (u) => KIND_LABEL[u.kind] },
-    { key: 'member_count', label: 'Members', format: 'number' },
+    { key: 'kind', label: 'Kind', value: (u) => KIND_LABEL[u.kind], mobile: 'inline' },
+    { key: 'member_count', label: 'Members', format: 'number', mobile: 'figure' },
     { key: 'refreshed_at', label: 'Last refresh', format: 'datetime' },
   ];
+
+  protected readonly kindLabel = KIND_LABEL;
+  protected readonly kindFilter = signal<KindFilter>('all');
+  protected readonly kinds = computed(() => {
+    const rows = this.universes.hasValue() ? this.universes.value() : [];
+    const count = (k: KindFilter) => (k === 'all' ? rows.length : rows.filter((u) => u.kind === k).length);
+    return (['all', 'list', 'exchange', 'rule', 'index'] as const).map((k) => ({
+      value: k,
+      label: k === 'all' ? 'All' : KIND_LABEL[k],
+      count: count(k),
+    }));
+  });
+  protected readonly shown = computed(() => {
+    const rows = this.universes.hasValue() ? this.universes.value() : [];
+    const k = this.kindFilter();
+    return k === 'all' ? rows : rows.filter((u) => u.kind === k);
+  });
+
+  /** The summary strip: how many, how many members, how many behind, the last refresh. */
+  protected readonly summary = computed(() => {
+    const rows = this.universes.hasValue() ? this.universes.value() : [];
+    const members = rows.reduce((n, u) => n + (u.member_count ?? 0), 0);
+    const behind = rows.filter((u) => isStale(u) || !u.refreshed_at).length;
+    const last = rows
+      .map((u) => u.refreshed_at)
+      .filter((d): d is string => !!d)
+      .sort()
+      .at(-1);
+    return { count: rows.length, members, behind, last: last ? formatDateTime(last) : 'Never' };
+  });
+
+  /** "5 universes with 1,240 members. 1 needs a refresh." */
+  protected readonly standfirst = computed(() => {
+    if (!this.universes.hasValue()) {
+      return 'Ticker lists a strategy may trade or be tested on, with every past member kept.';
+    }
+    const s = this.summary();
+    if (!s.count) return 'Save the tickers a strategy may trade or be tested on. Past members stay in.';
+    const head = `${s.count} ${s.count === 1 ? 'universe' : 'universes'} with ${formatNumber(s.members)} members.`;
+    if (!s.behind) return `${head} All are up to date.`;
+    return `${head} ${s.behind} ${s.behind === 1 ? 'needs' : 'need'} a refresh.`;
+  });
 
   // ---- create -------------------------------------------------------------
   protected readonly creating = signal(false);

@@ -77,7 +77,9 @@ describe('UniversesPage', () => {
 
   it('lists universes with kind, members and last refresh', () => {
     const list = el.querySelector('[aria-labelledby="list-title"]')!;
-    expect(list.textContent).toContain('2 stored');
+    expect(list.querySelector('#list-title .count')?.textContent?.trim()).toBe('2');
+    // The strip sums the members and counts the universes behind.
+    expect(el.querySelector('.summary-strip')?.textContent).toContain('Need a refresh');
     expect(list.textContent).toContain('Rule');
     expect(list.textContent).toContain('480');
     expect(list.textContent).toContain('Never');

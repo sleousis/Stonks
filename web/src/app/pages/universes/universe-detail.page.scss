@@ -1,87 +1,127 @@
 @use 'breakpoints' as bp;
 
-// The universe's facts: one divided strip on the page, a hairline between
-// the cells. Inside a panel (.compact) each fact is a borderless well.
+// Facts as a summary strip: a label over the value, hairlines between the
+// cells, no box. The member counts read as figures.
 .facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0 0 var(--space-4);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  margin: 0;
 
   @include bp.from-tablet {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  div {
-    display: grid;
-    gap: var(--space-1);
-    min-width: 0;
-    margin-inline-start: -1px;
-    margin-top: -1px;
-    padding: var(--space-3) var(--space-4);
-    border-inline-start: 1px solid var(--color-border);
-    border-top: 1px solid var(--color-border);
+  &.result-strip {
+    margin-top: var(--space-4);
 
-    @include bp.phone {
-      padding: var(--space-3);
-    }
-  }
-
-  &.compact {
-    gap: var(--space-2);
-    margin: 0;
-    overflow: visible;
-    border: 0;
-    border-radius: 0;
-    background: none;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
-
-    div {
-      margin: 0;
-      padding: var(--space-2) var(--space-3);
-      border: 0;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+    @include bp.from-tablet {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
   &.result {
-    margin-top: var(--space-4);
+    margin-top: var(--space-5);
+
+    @include bp.from-tablet {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+
+  .fact {
+    display: grid;
+    align-content: start;
+    gap: var(--space-1);
+    min-width: 0;
+    padding: var(--space-3) var(--space-4) var(--space-4);
+
+    &:first-child {
+      padding-left: 0;
+    }
   }
 
   dt {
+    color: var(--muted);
     font-size: var(--text-xs);
-    color: var(--color-ink-3);
+    font-weight: var(--weight-medium);
   }
 
   dd {
     margin: 0;
+    font-size: var(--text-lead);
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
+
+  .stat {
+    font-size: var(--text-stat);
+    letter-spacing: -0.03em;
+  }
+
+  @include bp.phone {
+    .fact {
+      padding-left: var(--space-3);
+    }
+
+    .fact:nth-child(odd) {
+      padding-left: 0;
+    }
+  }
+}
+
+.notice {
+  margin: var(--space-4) 0 0;
+}
+
+.lab-hint {
+  max-width: 68ch;
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-sm);
+}
+
+.body {
+  margin-top: var(--section-gap);
+}
+
+.edit {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.edit-title {
+  font-size: var(--text-section);
 }
 
 .date-row {
   display: grid;
-  gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-3);
   max-width: 28rem;
-  padding-bottom: var(--space-3);
+  padding: var(--space-4) 0 var(--space-3);
+}
+
+.members .date-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .intro {
+  max-width: 68ch;
   margin-bottom: var(--space-4);
   font-size: var(--text-sm);
-  max-width: 70ch;
+}
+
+.history-intro {
+  margin: 0;
+  padding: 0 0 var(--space-3);
+}
+
+.more {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--space-4);
 }
 
 .ensure-grid {
   display: grid;
-  gap: var(--space-3);
   grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
 
   @include bp.from-tablet {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -90,8 +130,8 @@
 
 .error {
   margin-top: var(--space-2);
-  font-size: var(--text-xs);
-  color: var(--color-loss);
+  color: var(--down);
+  font-size: var(--text-sm);
 }
 
 .form-actions {
@@ -107,13 +147,13 @@
   }
 }
 
+// A warn callout holding a list: room for the bullets.
 .warnings {
   display: grid;
   gap: var(--space-1);
-  margin: var(--space-3) 0 0;
-  padding-left: var(--space-5);
+  margin: var(--space-4) 0 0;
+  padding-left: var(--space-6);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
   overflow-wrap: anywhere;
 }
 
@@ -132,58 +172,22 @@
   overflow-wrap: anywhere;
 }
 
-.head-action {
-  display: grid;
-  justify-items: end;
-  min-width: 0;
-}
-
-@include bp.phone {
-  .head-action {
-    width: 100%;
-    justify-items: stretch;
-  }
-
-  .panel-head .btn {
-    width: 100%;
-  }
-}
-
-.notice {
-  margin: 0 0 var(--space-3);
-}
-
-.lab-hint {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
-}
-
 // The definition as JSON is an admin tool, folded away under Advanced.
-// The summary reads left to right: the shared chevron, the title, a note.
 details.advanced > summary {
   justify-content: flex-start;
   min-height: var(--touch-min);
-  cursor: pointer;
   list-style: none;
+  cursor: pointer;
 
   &::-webkit-details-marker {
     display: none;
   }
 
   .muted {
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
   }
 }
 
 details.advanced:not([open]) > summary {
   border-bottom: 0;
-}
-
-.history-intro {
-  padding: 0 var(--space-4);
-}
-
-.more {
-  display: flex;
-  justify-content: center;
 }

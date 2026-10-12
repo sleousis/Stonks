@@ -23,7 +23,7 @@ import { UniversesService } from '../../api/universes.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
-import { formatDate, isoDay } from '../../core/format/format';
+import { formatDate, formatNumber, isoDay } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { DateTimePipe, NumPipe } from '../../shared/format.pipes';
 import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
@@ -152,6 +152,20 @@ export class UniverseDetailPage {
   protected readonly stale = computed(
     () => this.universe.hasValue() && isStale(this.universe.value()),
   );
+
+  /** The description, else "A rule universe with 480 members, refreshed 2026-10-10." */
+  protected readonly standfirst = computed(() => {
+    if (!this.universe.hasValue()) return null;
+    const u = this.universe.value();
+    if (u.description) return u.description;
+    const kind = KIND_LABEL[u.kind].toLowerCase();
+    const article = /^[aeiou]/.test(kind) ? 'An' : 'A';
+    if (u.member_count == null || !u.refreshed_at) {
+      return `${article} ${kind} universe, not filled yet. Refresh it to build its members.`;
+    }
+    const members = `${formatNumber(u.member_count, { digits: 0 })} ${u.member_count === 1 ? 'member' : 'members'}`;
+    return `${article} ${kind} universe with ${members}, refreshed ${formatDate(u.refreshed_at)}.`;
+  });
 
   // ---- membership history -------------------------------------------------
   /** Tickers containing this text, applied on Enter or when the field loses focus. */
