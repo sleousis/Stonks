@@ -43,20 +43,20 @@ export function barTime(timestamp: string, interval: string): string {
   imports: [DataTable, TableCell, StatusPill, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss'],
   template: `
-    <section class="panel panel-flush" aria-labelledby="coverage-title">
-      <div class="panel-head">
+    <section class="page-section section-flush" aria-labelledby="coverage-title">
+      <div class="section-head">
         <h2 id="coverage-title">
           Coverage
           @if (ticker(); as t) {
-            <span class="muted">· {{ t }}</span>
+            <span class="count">{{ t }}</span>
           }
         </h2>
         @if (ticker()) {
-          <button type="button" class="btn btn-tertiary" (click)="cleared.emit()">
+          <button type="button" class="btn btn-ghost" (click)="cleared.emit()">
             Show all tickers
           </button>
         } @else if (page(); as p) {
-          <span class="muted num count">{{ p.total }} series</span>
+          <span class="muted num">{{ p.total }} series</span>
         }
       </div>
       @if (list.error(); as err) {

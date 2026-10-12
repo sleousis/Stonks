@@ -1,12 +1,68 @@
-.page-grid > * {
-  display: block;
-  min-width: 0;
+@use 'breakpoints' as bp;
+
+.trouble {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-6);
+
+  p {
+    max-width: 68ch;
+    color: var(--ink);
+  }
 }
 
-// Instruments and Coverage are wide tables: side by side only on very wide
-// screens. Below 1600px each takes the full row, so no column clips.
-@media (max-width: 1599.98px) {
-  .page-grid > .browse {
-    grid-column: 1 / -1;
+.trouble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.summary-strip {
+  margin-bottom: var(--section-gap);
+}
+
+// Coverage and its search side by side, prices across the page, then the
+// updates table beside the update form. One column below 1100px, in the
+// same order.
+.layout {
+  display: grid;
+  gap: var(--section-gap) var(--column-gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+
+  > * {
+    display: block;
+    min-width: 0;
+  }
+
+  @include bp.from-desktop {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-areas:
+      'coverage search'
+      'prices prices'
+      'runs ingest';
+
+    .coverage {
+      grid-area: coverage;
+    }
+
+    .search {
+      grid-area: search;
+    }
+
+    .prices {
+      grid-area: prices;
+    }
+
+    .runs {
+      grid-area: runs;
+    }
+
+    .ingest {
+      grid-area: ingest;
+    }
   }
 }

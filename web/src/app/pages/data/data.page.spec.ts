@@ -117,6 +117,17 @@ describe('DataPage', () => {
     expect(el.querySelector('a[href="/universes"]')?.textContent).toContain('Universes');
   });
 
+  it('sums up the last update and warns when tickers failed', () => {
+    expect(el.querySelector('.standfirst')?.textContent).toContain(
+      'The last update of daily prices ran',
+    );
+    const strip = el.querySelector('.summary-strip')!;
+    expect(strip.textContent).toContain('Tickers failed');
+    expect(strip.textContent).toContain('Partly done');
+    const band = el.querySelector('.band-warn')!;
+    expect(band.textContent).toContain('The last update had tickers that failed.');
+  });
+
   it('shows coverage with a freshness pill per series', () => {
     const coverage = el.querySelector('[aria-labelledby="coverage-title"]')!;
     expect(coverage.textContent).toContain('AAPL.US');

@@ -1,31 +1,64 @@
-<app-page-header
-  title="Data"
-  description="The price data we hold, how fresh it is, and the data updates that fill it."
->
-  <a actions class="btn btn-tertiary" routerLink="/universes">Universes</a>
+<app-page-header title="Data" [description]="standfirst()">
+  <button actions type="button" class="btn" (click)="goToUpdate()">Update data</button>
   <button actions type="button" class="btn" (click)="refresh()">Refresh</button>
+  <a actions class="btn btn-ghost" routerLink="/universes">Universes</a>
 </app-page-header>
 
-<div class="page-grid">
-  <app-instrument-search
-    class="span-5 browse"
-    [selected]="ticker()"
-    (picked)="pickTicker($event)"
-  />
+@if (troubled(); as n) {
+  <div class="band-warn trouble" role="status">
+    <p>
+      <strong>
+        @if (recent()!.length === 1) {
+          The last update had tickers that failed.
+        } @else {
+          {{ n }} of the last {{ recent()!.length }} updates had tickers that failed.
+        }
+      </strong>
+      Prices that fail the checks are set aside for review, never stored.
+    </p>
+    <div class="trouble-actions">
+      <button type="button" class="btn btn-compact" (click)="goToRuns()">See the updates</button>
+      @if (session.can('operations.run')) {
+        <a class="btn btn-ghost btn-compact" routerLink="/ops/data-quality">Data quality</a>
+      }
+    </div>
+  </div>
+}
+
+@if (last(); as l) {
+  <div class="summary-strip">
+    <app-stat-tile label="Last update" [value]="lastAgo()" [detail]="lastStatus()" />
+    <app-stat-tile label="Tickers updated" [value]="'' + (l.tickers_ok ?? 0)" />
+    <app-stat-tile
+      label="Tickers failed"
+      [value]="'' + (l.tickers_failed ?? 0)"
+      [detailTone]="l.tickers_failed ? 'loss' : ''"
+      [detail]="l.tickers_failed ? 'in the last update' : 'none'"
+    />
+    <app-stat-tile
+      label="Problem updates"
+      [value]="'' + troubled()"
+      [detail]="'of the last ' + recent()!.length"
+    />
+  </div>
+}
+
+<div class="layout">
   <app-coverage-panel
-    class="span-7 browse"
+    class="coverage"
     [ticker]="ticker()"
     [refresh]="refreshKey()"
     (picked)="pickSeries($event)"
     (cleared)="ticker.set(null)"
   />
+  <app-instrument-search class="search" [selected]="ticker()" (picked)="pickTicker($event)" />
   <app-price-panel
-    class="span-12"
+    class="prices"
     [(ticker)]="ticker"
     [(interval)]="interval"
     [intervals]="priceIntervals()"
     [refresh]="refreshKey()"
   />
-  <app-ingest-panel class="span-5" [intervals]="intervals()" (finished)="refresh()" />
-  <app-ingest-runs-panel class="span-7" [refresh]="refreshKey()" />
+  <app-ingest-runs-panel class="runs" [refresh]="refreshKey()" (latest)="recent.set($event)" />
+  <app-ingest-panel class="ingest" [intervals]="intervals()" (finished)="refresh()" />
 </div>

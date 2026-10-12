@@ -1,165 +1,251 @@
 @use 'breakpoints' as bp;
 
-.finder {
+// The quote: the last close as the headline figure, the changes beside it.
+.quote {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-.finder .input {
-  flex: 1 1 12rem;
-  min-width: 0;
-  max-width: 22rem;
-  text-transform: uppercase;
-}
-.finder .input::placeholder {
-  text-transform: none;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-5);
 }
 
+.price {
+  font-size: 40px;
+}
+
+.day-change,
+.range-change {
+  font-size: var(--text-lead);
+  font-weight: var(--weight-semibold);
+}
+
+.range-change {
+  color: var(--ink-2);
+}
+
+.change-label {
+  margin-left: 2px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+// The toolbar: one row on the ink rule, the chart right under it.
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) 0;
+  border-top: 2px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
+}
+
+.finder {
+  display: flex;
+  flex: 0 1 22rem;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.finder-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+
+  svg {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .input {
+    width: 100%;
+    padding-left: 36px;
+    text-transform: uppercase;
+  }
+
+  .input::placeholder {
+    font-family: var(--font-sans);
+    text-transform: none;
+  }
+}
+
+// Range and window pickers: a sunk track, the picked one filled with ink.
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
+}
+
+.seg {
+  min-width: 2.5rem;
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--r-tag);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-label);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+
+  &:hover:not([aria-pressed='true']) {
+    color: var(--ink);
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--ink);
+    color: var(--bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.segmented.small .seg {
+  min-height: 26px;
+}
+
+// What to draw: compact toggles, a checkbox and the line's swatch.
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  margin-left: auto;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-label);
+  cursor: pointer;
+
+  input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+  }
+}
+
+.swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+
+  &[data-color='info'] {
+    background: var(--accent);
+  }
+
+  &[data-color='violet'] {
+    background: var(--chart-violet);
+  }
+
+  &[data-color='ink'] {
+    background: var(--ink-2);
+  }
+
+  &.dashed {
+    background: repeating-linear-gradient(90deg, var(--ink-2) 0 4px, transparent 4px 7px);
+  }
+}
+
+// Watchlist tickers to jump between: one row that scrolls inside itself.
 .jump {
   display: flex;
   gap: var(--space-1);
-  margin-bottom: var(--space-4);
+  padding: var(--space-3) 0 0;
   overflow-x: auto;
-  scrollbar-width: thin;
-  padding-bottom: 2px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
+
 .chip {
   display: inline-flex;
   flex: none;
   align-items: center;
-  min-height: var(--control-h);
+  gap: var(--space-1);
+  height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-xs);
-  color: var(--color-ink);
-  font-size: var(--text-sm);
+  border: 1px solid var(--rule-control);
+  border-radius: var(--r-tag);
+  background: var(--raise);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   text-decoration: none;
-  transition:
-    background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-a.chip:hover:not([aria-current='page']) {
-  background: var(--color-hover);
-  border-color: var(--color-ink-3);
-}
-.chip[aria-current='page'] {
-  border-color: var(--color-ink);
-  background: var(--color-ink);
-  color: var(--color-surface);
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 
-.chart-panel {
+a.chip:hover:not([aria-current='page']) {
+  border-color: var(--muted);
+}
+
+.chip[aria-current='page'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+// The chart: full width, no box.
+.chart-area {
   min-width: 0;
-}
-.controls {
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-}
-.segmented {
-  display: inline-flex;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.seg {
-  min-width: 2.75rem;
-  min-height: var(--control-h);
-  padding: 0 var(--space-2);
-  border: 0;
-  border-left: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease);
-}
-.seg:hover:not([aria-pressed='true']) {
-  background: var(--color-hover);
-  color: var(--color-ink);
-}
-.seg:active:not([aria-pressed='true']) {
-  background: var(--color-pressed);
-}
-.seg:first-child {
-  border-left: 0;
-}
-// Strong emphasis, the same on every width: the picked range is an ink block.
-.seg[aria-pressed='true'] {
-  background: var(--color-ink);
-  color: var(--color-surface);
-  font-weight: var(--weight-semibold);
-}
-.seg:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: -2px;
-}
-.toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-}
-.toggle {
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-}
-.swatch {
-  width: 12px;
-  height: 3px;
-  border-radius: var(--radius-xs);
-}
-.swatch[data-color='info'] {
-  background: var(--color-info);
-}
-.swatch[data-color='violet'] {
-  background: var(--chart-violet);
-}
-.swatch[data-color='ink'] {
-  background: var(--color-ink-2);
-}
-.swatch.dashed {
-  background: repeating-linear-gradient(90deg, var(--color-ink-2) 0 4px, transparent 4px 7px);
+  padding-top: var(--space-4);
 }
 
 .key {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
-  margin-top: var(--space-2);
-  color: var(--color-ink-2);
+  gap: var(--space-1) var(--space-5);
+  margin-top: var(--space-3);
+  color: var(--muted);
   font-size: var(--text-xs);
 }
-.mark {
-  display: inline-grid;
-  place-items: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-right: -4px;
-  border-radius: var(--radius-xs);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: var(--weight-bold);
+
+.key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-.mark.buy {
-  background: var(--color-primary);
-  color: var(--color-primary-ink);
-}
-.mark.sell {
-  border: 1.5px solid var(--color-ink-2);
-  color: var(--color-ink-2);
-}
+
 .mark.dot {
-  width: 0.6rem;
-  height: 0.6rem;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--chart-violet);
 }
 
-.analysis {
+// Compare and the rolling Sharpe side by side, then fills and signals.
+.analysis,
+.lists {
   display: grid;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
+  gap: var(--section-gap) var(--column-gap);
+  margin-top: var(--section-gap);
   grid-template-columns: minmax(0, 1fr);
 
   @include bp.from-desktop {
@@ -167,26 +253,33 @@ a.chip:hover:not([aria-current='page']) {
     align-items: start;
   }
 }
-.analysis .panel {
-  min-width: 0;
+
+.head-note {
+  font-size: var(--text-sm);
 }
+
 .compare-body {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
+
 .compare-form {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+
+  .input {
+    flex: 1 1 10rem;
+    min-width: 0;
+    text-transform: uppercase;
+  }
+
+  .input::placeholder {
+    font-family: var(--font-sans);
+    text-transform: none;
+  }
 }
-.compare-form .input {
-  flex: 1 1 10rem;
-  min-width: 0;
-  text-transform: uppercase;
-}
-.compare-form .input::placeholder {
-  text-transform: none;
-}
+
 .compared {
   display: flex;
   flex-wrap: wrap;
@@ -194,108 +287,119 @@ a.chip:hover:not([aria-current='page']) {
   margin: 0;
   padding: 0;
   list-style: none;
+
+  .chip {
+    padding-right: 0;
+  }
 }
-.compared .chip {
-  gap: var(--space-1);
-  padding-right: 0;
-}
+
 .chip-remove {
   display: inline-grid;
   place-items: center;
-  min-width: var(--control-h);
-  min-height: var(--control-h);
+  width: 28px;
+  height: 26px;
   border: 0;
   background: none;
-  color: var(--color-ink-2);
-  font-size: var(--text-lg);
+  color: var(--muted);
   cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    color: var(--ink);
+  }
 }
-.chip-remove:hover {
-  color: var(--color-ink);
-}
+
 .hint {
-  max-width: 70ch;
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
-}
-.figures-scroll {
-  overflow-x: auto;
-  padding: var(--space-1) var(--space-3);
-}
-.figures-table {
-  width: 100%;
-  border-collapse: collapse;
+  max-width: 68ch;
+  color: var(--muted);
   font-size: var(--text-sm);
 }
-.figures-table th,
-.figures-table td {
-  height: var(--row-h);
-  padding: 0 var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  text-align: right;
-  white-space: nowrap;
-}
-.figures-table tbody tr:last-child > * {
-  border-bottom: 0;
-}
-.figures-table th[scope='row'],
-.figures-table thead th:first-child {
-  text-align: left;
-}
-.figures-table thead th {
-  color: var(--color-ink-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-.figures-table td[data-tone='gain'] {
-  color: var(--color-gain);
-}
-.figures-table td[data-tone='loss'] {
-  color: var(--color-loss);
-}
 
-.lists {
-  display: grid;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-  grid-template-columns: minmax(0, 1fr);
-
-  @include bp.from-desktop {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+.figures-table {
+  .ticker-cell {
+    font-weight: 650;
   }
+
+  td[data-tone='gain'] {
+    color: var(--up);
+  }
+
+  td[data-tone='loss'] {
+    color: var(--down);
+  }
+}
+
+.empty-line {
+  padding: var(--space-4) 0;
 }
 
 @include bp.coarse {
   .seg,
-  .chip,
-  .chip-remove {
+  .toggle {
     min-height: var(--touch-min);
   }
+
+  .chip,
   .chip-remove {
-    min-width: var(--touch-min);
+    height: var(--touch-min);
+  }
+
+  .chip-remove {
+    width: var(--touch-min);
   }
 }
+
 @include bp.phone {
+  .price {
+    font-size: 34px;
+  }
+
+  .toolbar {
+    gap: var(--space-3);
+  }
+
+  .finder {
+    flex: 1 1 100%;
+  }
+
   .seg,
-  .chip,
-  .chip-remove {
+  .toggle {
     min-height: var(--touch-min);
   }
+
+  .chip,
   .chip-remove {
-    min-width: var(--touch-min);
+    height: var(--touch-min);
   }
+
+  .chip-remove {
+    width: var(--touch-min);
+  }
+
   .segmented {
+    display: flex;
     width: 100%;
   }
+
   .seg {
     flex: 1 1 0;
   }
+
   // The drawing toggles: a two-column grid of 44px check rows.
   .toggles {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 var(--space-3);
     width: 100%;
+    margin-left: 0;
+  }
+
+  .figures-table th:nth-child(3),
+  .figures-table td:nth-child(3) {
+    display: none;
   }
 }

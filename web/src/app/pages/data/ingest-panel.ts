@@ -47,11 +47,11 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
   imports: [ReactiveFormsModule, JobProgress, PermissionNote],
   styleUrl: './ingest-panel.scss',
   template: `
-    <section class="panel" aria-labelledby="ingest-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="ingest-title">
+      <div class="section-head">
         <h2 id="ingest-title">Update data</h2>
       </div>
-      <form class="panel-body form-grid form-grid-2" [formGroup]="form" (ngSubmit)="run()">
+      <form class="section-body form-grid form-grid-2" [formGroup]="form" (ngSubmit)="run()">
         @if (allowed()) {
           <div class="field">
             <label for="ingest-source">Source</label>
@@ -152,7 +152,7 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
             <button
               jobActions
               type="button"
-              class="btn btn-tertiary"
+              class="btn btn-ghost"
               [disabled]="cancelling()"
               (click)="cancel(j)"
             >

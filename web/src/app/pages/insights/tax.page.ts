@@ -90,12 +90,12 @@ const CURRENCY = /^[A-Z]{3}$/;
       <app-no-book message="Tax settings and yearly files show here once you have a portfolio." />
     } @else {
       <app-tax-year-card class="year-card" [portfolio]="portfolioId()" [paper]="paper()" />
-      <div class="page-grid">
-        <section class="panel span-7" aria-labelledby="tax-settings-title">
-          <div class="panel-head">
+      <div class="cols">
+        <section class="page-section" aria-labelledby="tax-settings-title">
+          <div class="section-head">
             <h2 id="tax-settings-title">Settings</h2>
           </div>
-          <div class="panel-body">
+          <div class="section-body">
             @if (settings.error(); as err) {
               <app-error-state
                 title="Could not load the tax settings"
@@ -217,11 +217,11 @@ const CURRENCY = /^[A-Z]{3}$/;
           </div>
         </section>
 
-        <section class="panel span-5" aria-labelledby="tax-files-title">
-          <div class="panel-head">
+        <section class="page-section" aria-labelledby="tax-files-title">
+          <div class="section-head">
             <h2 id="tax-files-title">Tax files</h2>
           </div>
-          <div class="panel-body files">
+          <div class="section-body files">
             <div class="field">
               <label for="tax-year">Tax year</label>
               <select
@@ -289,24 +289,27 @@ const CURRENCY = /^[A-Z]{3}$/;
             </p>
           </div>
         </section>
-
-        @if (settings.hasValue() && settings.value().lot_method === 'specific') {
-          <section class="panel span-12" aria-labelledby="tax-lots-title">
-            <div class="panel-head">
-              <h2 id="tax-lots-title">Specific lots <app-help-tip term="specific_lots" /></h2>
-            </div>
-            <div class="panel-body">
-              <app-lot-picks [portfolioId]="portfolioId()" [canManage]="canManage()" />
-            </div>
-          </section>
-        }
       </div>
+
+      @if (settings.hasValue() && settings.value().lot_method === 'specific') {
+        <section class="page-section lots" aria-labelledby="tax-lots-title">
+          <div class="section-head">
+            <h2 id="tax-lots-title">Specific lots <app-help-tip term="specific_lots" /></h2>
+          </div>
+          <div class="section-body">
+            <app-lot-picks [portfolioId]="portfolioId()" [canManage]="canManage()" />
+          </div>
+        </section>
+      }
     }
   `,
   styles: `
     .year-card {
       display: block;
-      margin-bottom: var(--space-4);
+      margin-bottom: var(--section-gap);
+    }
+    .lots {
+      margin-top: var(--section-gap);
     }
     .base {
       max-width: 8rem;
@@ -320,7 +323,7 @@ const CURRENCY = /^[A-Z]{3}$/;
       gap: var(--space-2);
     }
     .saved {
-      font-size: var(--text-xs);
+      font-size: var(--text-sm);
     }
     .files {
       display: grid;
@@ -328,8 +331,8 @@ const CURRENCY = /^[A-Z]{3}$/;
     }
     .files .hint {
       max-width: 70ch;
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
     .field select {
       max-width: 10rem;
@@ -345,7 +348,7 @@ const CURRENCY = /^[A-Z]{3}$/;
     }
     .fixed {
       margin: 0;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
   `,
 })

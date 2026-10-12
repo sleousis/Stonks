@@ -1,32 +1,106 @@
-<app-page-header
-  [title]="symbol() || 'Charts'"
-  description="Daily candles with volume, moving averages, your fills and the strategies' signals."
->
+<app-page-header [title]="symbol() || 'Charts'" [description]="standfirst()">
   <app-watchlist-filter actions ariaLabel="Watchlist to jump between" />
 </app-page-header>
 
-<form class="finder" role="search" (submit)="open($event)">
-  <label for="chart-ticker" class="visually-hidden">Ticker</label>
-  <input
-    id="chart-ticker"
-    class="input num"
-    type="search"
-    list="chart-suggestions"
-    placeholder="Ticker, e.g. AAPL.US"
-    autocomplete="off"
-    autocapitalize="characters"
-    spellcheck="false"
-    maxlength="40"
-    [value]="query()"
-    (input)="onQuery($any($event.target).value)"
-  />
-  <datalist id="chart-suggestions">
-    @for (s of suggestions(); track s) {
-      <option [value]="s"></option>
+@if (quote(); as q) {
+  <p class="quote" aria-label="Last close and change">
+    <span class="price headline-figure"
+      >{{ q.whole }}<span class="minor">{{ q.cents }}</span></span
+    >
+    @if (q.day !== null) {
+      <span class="day-change num" [class.gain]="q.day > 0" [class.loss]="q.day < 0"
+        >{{ q.day | pct: { signed: true } }} <span class="change-label">last session</span></span
+      >
     }
-  </datalist>
-  <button type="submit" class="btn btn-primary">Open chart</button>
-</form>
+    @if (q.range !== null) {
+      <span class="range-change num"
+        >{{ q.range | pct: { signed: true } }}
+        <span class="change-label">over {{ rangeLabel() }}</span></span
+      >
+    }
+  </p>
+}
+
+<div class="toolbar">
+  <form class="finder" role="search" (submit)="open($event)">
+    <label for="chart-ticker" class="visually-hidden">Ticker</label>
+    <span class="finder-field">
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        aria-hidden="true"
+      >
+        <circle cx="7" cy="7" r="4.5" />
+        <path d="m10.5 10.5 3 3" />
+      </svg>
+      <input
+        id="chart-ticker"
+        class="input num"
+        type="search"
+        list="chart-suggestions"
+        placeholder="Ticker, e.g. AAPL.US"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        maxlength="40"
+        [value]="query()"
+        (input)="onQuery($any($event.target).value)"
+      />
+    </span>
+    <datalist id="chart-suggestions">
+      @for (s of suggestions(); track s) {
+        <option [value]="s"></option>
+      }
+    </datalist>
+    <button type="submit" class="btn btn-primary">Open chart</button>
+  </form>
+
+  @if (symbol()) {
+    <div class="segmented" role="group" aria-label="Range">
+      @for (r of ranges; track r.id) {
+        <button
+          type="button"
+          class="seg num"
+          [attr.aria-pressed]="range() === r.id"
+          (click)="range.set(r.id)"
+        >
+          {{ r.label }}
+        </button>
+      }
+    </div>
+    <div class="toggles" role="group" aria-label="What to draw">
+      @for (a of averages; track a.length) {
+        <label class="toggle">
+          <input
+            type="checkbox"
+            [checked]="shownAverages().includes(a.length)"
+            (change)="toggleAverage(a.length)"
+          />
+          <span class="swatch" [attr.data-color]="a.color" [class.dashed]="a.dashed"></span>
+          MA {{ a.length }}
+        </label>
+      }
+      <label class="toggle">
+        <input type="checkbox" [checked]="showFills()" (change)="showFills.set(!showFills())" />
+        Fills
+      </label>
+      <label class="toggle">
+        <input
+          type="checkbox"
+          [checked]="showSignals()"
+          (change)="showSignals.set(!showSignals())"
+        />
+        Signals
+      </label>
+      <label class="toggle">
+        <input type="checkbox" [checked]="showVolume()" (change)="showVolume.set(!showVolume())" />
+        Volume
+      </label>
+    </div>
+  }
+</div>
 
 @if (listTickers().length) {
   <nav class="jump" aria-label="Tickers in your watchlist">
@@ -49,101 +123,54 @@
     <a routerLink="/watchlists" class="btn">Your watchlists</a>
   </app-empty-state>
 } @else {
-  <section class="panel chart-panel" aria-labelledby="chart-title">
-    <div class="panel-head controls">
-      <h2 id="chart-title" class="visually-hidden">Price chart of {{ symbol() }}</h2>
-      <div class="segmented" role="group" aria-label="Range">
-        @for (r of ranges; track r.id) {
-          <button
-            type="button"
-            class="seg num"
-            [attr.aria-pressed]="range() === r.id"
-            (click)="range.set(r.id)"
-          >
-            {{ r.label }}
-          </button>
-        }
-      </div>
-      <div class="toggles" role="group" aria-label="What to draw">
-        @for (a of averages; track a.length) {
-          <label class="toggle check">
-            <input
-              type="checkbox"
-              [checked]="shownAverages().includes(a.length)"
-              (change)="toggleAverage(a.length)"
-            />
-            <span class="swatch" [attr.data-color]="a.color" [class.dashed]="a.dashed"></span>
-            MA {{ a.length }}
-          </label>
-        }
-        <label class="toggle check">
-          <input type="checkbox" [checked]="showFills()" (change)="showFills.set(!showFills())" />
-          Fills
-        </label>
-        <label class="toggle check">
-          <input
-            type="checkbox"
-            [checked]="showSignals()"
-            (change)="showSignals.set(!showSignals())"
-          />
-          Signals
-        </label>
-        <label class="toggle check">
-          <input
-            type="checkbox"
-            [checked]="showVolume()"
-            (change)="showVolume.set(!showVolume())"
-          />
-          Volume
-        </label>
-      </div>
-    </div>
-    <div class="panel-body">
-      @if (chart.error(); as err) {
-        <app-error-state title="Could not load the chart" [error]="err" (retry)="chart.reload()" />
-      } @else if (!chart.hasValue() || !data()) {
-        <app-loading-state label="Loading the chart" [rows]="6" />
-      } @else if (data()!.candles.length === 0) {
-        @if (session.can('operations.run')) {
-          <app-empty-state
-            title="No prices yet"
-            message="Update data for this ticker on the Data page, then come back."
-          >
-            <a routerLink="/data" class="btn">Go to Data</a>
-          </app-empty-state>
-        } @else {
-          <app-empty-state
-            title="No prices yet"
-            message="Stonks has no prices for this ticker. Check the spelling: tickers name their market, such as AAPL.US or VOD.LSE. If it is right, your admin can load its prices on the Data page."
-          >
-            <a routerLink="/watchlists" class="btn">Your watchlists</a>
-          </app-empty-state>
-        }
+  <section class="chart-area" aria-labelledby="chart-title">
+    <h2 id="chart-title" class="visually-hidden">Price chart of {{ symbol() }}</h2>
+    @if (chart.error(); as err) {
+      <app-error-state title="Could not load the chart" [error]="err" (retry)="chart.reload()" />
+    } @else if (!chart.hasValue() || !data()) {
+      <app-loading-state label="Loading the chart" [rows]="8" />
+    } @else if (data()!.candles.length === 0) {
+      @if (session.can('operations.run')) {
+        <app-empty-state
+          title="No prices yet"
+          message="Update data for this ticker on the Data page, then come back."
+        >
+          <a routerLink="/data" class="btn">Go to Data</a>
+        </app-empty-state>
       } @else {
-        <app-price-chart
-          [ariaLabel]="symbol() + ' daily candles'"
-          [summary]="summary()"
-          [data]="data()!"
-        />
-        <p class="key">
-          <span class="mark buy" aria-hidden="true">B</span> your buy
-          <span class="mark sell" aria-hidden="true">S</span> your sell
-          <span class="mark dot" aria-hidden="true"></span> a strategy signal
-          @if (chart.value().truncated) {
-            <span class="muted">Older bars are not shown.</span>
-          }
-        </p>
+        <app-empty-state
+          title="No prices yet"
+          message="Stonks has no prices for this ticker. Check the spelling: tickers name their market, such as AAPL.US or VOD.LSE. If it is right, your admin can load its prices on the Data page."
+        >
+          <a routerLink="/watchlists" class="btn">Your watchlists</a>
+        </app-empty-state>
       }
-    </div>
+    } @else {
+      <app-price-chart
+        [ariaLabel]="symbol() + ' daily candles'"
+        [summary]="summary()"
+        [data]="data()!"
+      />
+      <p class="key">
+        <span class="key-item"><app-side-tag aria-hidden="true" side="buy" /> your buy</span>
+        <span class="key-item"><app-side-tag aria-hidden="true" side="sell" /> your sell</span>
+        <span class="key-item"
+          ><span class="mark dot" aria-hidden="true"></span> a strategy signal</span
+        >
+        @if (chart.value().truncated) {
+          <span class="muted">Older bars are not shown.</span>
+        }
+      </p>
+    }
   </section>
 
   <div class="analysis">
-    <section class="panel" aria-labelledby="compare-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="compare-title">
+      <header class="section-head">
         <h2 id="compare-title">Compare</h2>
-        <span class="muted">Rebased to 100</span>
-      </div>
-      <div class="panel-body compare-body">
+        <span class="muted head-note">Rebased to 100</span>
+      </header>
+      <div class="section-body compare-body">
         <form class="compare-form" (submit)="addCompare($event)">
           <label for="compare-ticker" class="visually-hidden">Ticker to compare</label>
           <input
@@ -179,7 +206,15 @@
                   [attr.aria-label]="'Stop comparing ' + t"
                   (click)="removeCompare(t)"
                 >
-                  <span aria-hidden="true">×</span>
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    aria-hidden="true"
+                  >
+                    <path d="m4.5 4.5 7 7m0-7-7 7" />
+                  </svg>
                 </button>
               </li>
             }
@@ -205,44 +240,42 @@
             ariaLabel="Tickers compared, rebased to 100"
             [summary]="compareCaption()"
             [series]="compareLines()"
-            [height]="260"
+            [height]="240"
           />
           @if (comparison.value().missing.length) {
             <p class="hint">No prices for {{ comparison.value().missing.join(', ') }}.</p>
           }
-          <div class="figures-scroll well">
-            <table class="figures-table">
-              <caption class="visually-hidden">
-                Change, worst drawdown and rolling Sharpe of each ticker over the range
-              </caption>
-              <thead>
+          <table class="table figures-table">
+            <caption class="visually-hidden">
+              Change, worst drawdown and rolling Sharpe of each ticker over the range
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Ticker</th>
+                <th scope="col" class="num">Change</th>
+                <th scope="col" class="num">Worst drawdown</th>
+                <th scope="col" class="num">Sharpe</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of compareTable(); track r.ticker) {
                 <tr>
-                  <th scope="col">Ticker</th>
-                  <th scope="col">Change</th>
-                  <th scope="col">Worst drawdown</th>
-                  <th scope="col">Sharpe</th>
+                  <th scope="row" class="ticker-cell">{{ r.ticker }}</th>
+                  <td class="num" [attr.data-tone]="r.tone">{{ r.change }}</td>
+                  <td class="num">{{ r.worst }}</td>
+                  <td class="num">{{ r.sharpe }}</td>
                 </tr>
-              </thead>
-              <tbody>
-                @for (r of compareTable(); track r.ticker) {
-                  <tr>
-                    <th scope="row" class="num">{{ r.ticker }}</th>
-                    <td class="num" [attr.data-tone]="r.tone">{{ r.change }}</td>
-                    <td class="num">{{ r.worst }}</td>
-                    <td class="num">{{ r.sharpe }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+              }
+            </tbody>
+          </table>
         }
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="perf-title">
-      <div class="panel-head controls">
+    <section class="page-section" aria-labelledby="perf-title">
+      <header class="section-head">
         <h2 id="perf-title">Rolling Sharpe and drawdown</h2>
-        <div class="segmented" role="group" aria-label="Sharpe window">
+        <div class="segmented small" role="group" aria-label="Sharpe window">
           @for (w of sharpeWindows; track w.bars) {
             <button
               type="button"
@@ -254,8 +287,8 @@
             </button>
           }
         </div>
-      </div>
-      <div class="panel-body">
+      </header>
+      <div class="section-body">
         @if (comparison.error()) {
           <p class="muted">The panel shows once the comparison loads.</p>
         } @else if (!comparison.hasValue()) {
@@ -267,7 +300,7 @@
             [ariaLabel]="symbol() + ' rolling Sharpe, with drawdown below'"
             [summary]="performanceText()"
             [series]="performance()"
-            [height]="260"
+            [height]="240"
           />
           <p class="hint">
             Sharpe over the trailing window, per year. Drawdown is the fall from the highest close
@@ -280,53 +313,67 @@
 
   @if (chart.hasValue()) {
     <div class="lists">
-      <section class="panel" aria-labelledby="fills-title">
-        <div class="panel-head">
-          <h2 id="fills-title">Your fills</h2>
+      <section class="page-section section-flush" aria-labelledby="fills-title">
+        <header class="section-head">
+          <h2 id="fills-title">
+            Your fills
+            @if (fills().length) {
+              <span class="count">{{ fills().length }}</span>
+            }
+          </h2>
+        </header>
+        <div class="section-body">
+          @if (noBook()) {
+            <app-no-book
+              message="Your fills of this ticker show on the chart once you have a portfolio."
+            />
+          } @else if (fills().length === 0) {
+            <p class="empty-line muted">
+              {{
+                chart.value().portfolio_id
+                  ? 'No fills of this ticker in this portfolio yet.'
+                  : 'Your fills show here once this portfolio trades it.'
+              }}
+            </p>
+          } @else {
+            <app-data-table
+              [caption]="'Your fills of ' + symbol()"
+              [rows]="fills()"
+              [columns]="fillColumns"
+              [rowKey]="fillKey"
+              [pageSize]="10"
+            >
+              <ng-template appCell="side" [appCellOf]="fills()" let-f>
+                @if (f.side) {
+                  <app-side-tag [side]="f.side" />
+                }
+              </ng-template>
+            </app-data-table>
+          }
         </div>
-        @if (noBook()) {
-          <app-no-book
-            message="Your fills of this ticker show on the chart once you have a portfolio."
-          />
-        } @else if (fills().length === 0) {
-          <p class="panel-body muted">
-            {{
-              chart.value().portfolio_id
-                ? 'No fills of this ticker in this portfolio yet.'
-                : 'Your fills show here once this portfolio trades it.'
-            }}
-          </p>
-        } @else {
-          <app-data-table
-            [caption]="'Your fills of ' + symbol()"
-            [rows]="fills()"
-            [columns]="fillColumns"
-            [rowKey]="fillKey"
-            [pageSize]="10"
-          >
-            <ng-template appCell="side" [appCellOf]="fills()" let-f>
-              @if (f.side) {
-                <app-side-tag [side]="f.side" />
-              }
-            </ng-template>
-          </app-data-table>
-        }
       </section>
-      <section class="panel" aria-labelledby="signals-title">
-        <div class="panel-head">
-          <h2 id="signals-title">Strategy signals</h2>
+      <section class="page-section section-flush" aria-labelledby="signals-title">
+        <header class="section-head">
+          <h2 id="signals-title">
+            Strategy signals
+            @if (signals().length) {
+              <span class="count">{{ signals().length }}</span>
+            }
+          </h2>
+        </header>
+        <div class="section-body">
+          @if (signals().length === 0) {
+            <p class="empty-line muted">No strategy has signalled this ticker in this range.</p>
+          } @else {
+            <app-data-table
+              [caption]="'Strategy signals for ' + symbol()"
+              [rows]="signals()"
+              [columns]="signalColumns"
+              [rowKey]="signalKey"
+              [pageSize]="10"
+            />
+          }
         </div>
-        @if (signals().length === 0) {
-          <p class="panel-body muted">No strategy has signalled this ticker in this range.</p>
-        } @else {
-          <app-data-table
-            [caption]="'Strategy signals for ' + symbol()"
-            [rows]="signals()"
-            [columns]="signalColumns"
-            [rowKey]="signalKey"
-            [pageSize]="10"
-          />
-        }
       </section>
     </div>
   }

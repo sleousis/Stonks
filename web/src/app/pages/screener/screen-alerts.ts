@@ -51,11 +51,11 @@ export function alertBody(when: string): ScreenAlertSet {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, PermissionNote, EmptyState, ErrorState, LoadingState],
   template: `
-    <section class="panel" aria-labelledby="alerts-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="alerts-title">
+      <header class="section-head">
         <h2 id="alerts-title">Screen alerts</h2>
-      </div>
-      <div class="panel-body body">
+      </header>
+      <div class="section-body body">
         <p class="hint intro">
           A saved screen can tell you when new names start to match. It runs after each data
           refresh. The first run only notes today's matches. Choose where alerts go in
@@ -124,7 +124,7 @@ export function alertBody(when: string): ScreenAlertSet {
                   @if (a) {
                     <button
                       type="button"
-                      class="btn btn-tertiary"
+                      class="btn btn-ghost btn-compact"
                       [attr.aria-label]="'Remove the alert on ' + s.name"
                       [disabled]="!canEdit() || busy() === s.id"
                       (click)="remove(s)"
@@ -144,10 +144,15 @@ export function alertBody(when: string): ScreenAlertSet {
           <ul class="events">
             @for (e of events.value().items; track e.id) {
               <li>
-                <span class="num">{{ day(e.as_of) }}</span>
-                <strong>{{ e.screen_name || e.screen_id }}</strong
-                >:
-                {{ e.tickers.join(', ') }}
+                <span class="num when">{{ day(e.as_of) }}</span>
+                <span class="event-text"
+                  ><strong>{{ e.screen_name || e.screen_id }}</strong>
+                  <span class="tickers">
+                    @for (t of e.tickers; track t) {
+                      <span class="ticker-tag">{{ t }}</span>
+                    }
+                  </span></span
+                >
               </li>
             }
           </ul>
@@ -157,91 +162,99 @@ export function alertBody(when: string): ScreenAlertSet {
   `,
   styles: `
     @use 'breakpoints' as bp;
-
+    :host {
+      display: block;
+      min-width: 0;
+    }
     .body {
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-4);
     }
     .hint {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
     .intro {
-      max-width: 70ch;
-      font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      max-width: 68ch;
     }
     .alerts,
     .events {
-      display: grid;
       margin: 0;
       padding: 0;
       list-style: none;
     }
+    /* One row per saved screen: name and state left, the cadence right. */
     .alert {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      justify-content: space-between;
-      gap: var(--space-2);
-      padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-border);
+      gap: var(--space-2) var(--space-4);
+      min-height: var(--row-h);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
     }
     .alert:first-child {
-      padding-top: 0;
+      border-top: 1px solid var(--rule);
     }
     .alert-text {
       display: grid;
-      gap: var(--space-1);
+      gap: 2px;
       min-width: 0;
     }
     .alert-name {
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
+    .error {
+      color: var(--down);
+      font-size: var(--text-sm);
+    }
     .alert-actions {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       gap: var(--space-2);
-      min-width: 0;
     }
-    /* The select fits its longest option, never wider than 16rem. */
-    .alert-actions select.input {
+    .alert-actions .input {
       width: auto;
-      max-width: 16rem;
-      min-width: 0;
-    }
-    @include bp.phone {
-      .alert-actions {
-        width: 100%;
-      }
-      .alert-actions select.input {
-        flex: 1 1 auto;
-      }
-    }
-    .error {
-      font-size: var(--text-xs);
-      color: var(--color-loss);
+      min-width: 10rem;
     }
     .events-title {
-      margin: var(--space-2) 0 0;
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-semibold);
+      padding-bottom: var(--space-2);
+      border-bottom: 2px solid var(--rule-strong);
+      font-size: var(--text-lead);
+      font-weight: var(--weight-bold);
     }
     .events li {
-      padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-border);
+      display: grid;
+      grid-template-columns: 6.5rem minmax(0, 1fr);
+      gap: var(--space-3);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .when {
+      color: var(--muted);
       font-size: var(--text-sm);
-      overflow-wrap: anywhere;
     }
-    .events li:last-child {
-      border-bottom: 0;
+    .event-text {
+      display: grid;
+      gap: var(--space-1);
+      min-width: 0;
     }
-    .events .num {
-      margin-right: var(--space-2);
-      color: var(--color-ink-3);
+    .tickers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1);
+    }
+    @include bp.phone {
+      .alert {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .alert-actions .input {
+        flex: 1;
+      }
+      .events li {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
   `,
 })

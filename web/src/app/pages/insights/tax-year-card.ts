@@ -15,11 +15,11 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ErrorState, LoadingState],
   template: `
-    <section class="panel" aria-labelledby="tax-year-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="tax-year-title">
+      <div class="section-head">
         <h2 id="tax-year-title">{{ paper() ? 'Tax if this were real' : 'Tax owed this year' }}</h2>
       </div>
-      <div class="panel-body">
+      <div class="section-body">
         @if (year.error(); as err) {
           <app-error-state
             title="Could not estimate this year's tax"
@@ -31,7 +31,7 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
         } @else {
           @let y = year.value();
           <p class="owed">
-            <span class="num big">{{ money(y.estimated_tax, y.base_currency) }}</span>
+            <span class="big headline-figure">{{ money(y.estimated_tax, y.base_currency) }}</span>
             <span class="muted">estimated on {{ num(y.disposals) }} sales in {{ y.year }}</span>
           </p>
           <dl class="sums">
@@ -72,27 +72,35 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
       gap: var(--space-2);
     }
     .big {
-      font-size: var(--text-xl);
-      font-weight: var(--weight-bold);
+      font-size: 40px;
+    }
+    .owed {
+      margin-bottom: var(--space-4);
     }
     .sums {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-      gap: var(--space-2);
-      margin: var(--space-3) 0;
+      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      margin: 0 0 var(--space-3);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+    .sums > div {
+      padding: var(--space-3) var(--space-4) var(--space-3) 0;
     }
     .sums dt {
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
+      color: var(--muted);
+      font-size: var(--text-xs);
     }
     .sums dd {
-      margin: 0;
+      margin: var(--space-1) 0 0;
+      font-size: var(--text-lead);
+      font-weight: var(--weight-semibold);
     }
     .gain {
-      color: var(--color-gain);
+      color: var(--up);
     }
     .loss {
-      color: var(--color-loss);
+      color: var(--down);
     }
   `,
 })
