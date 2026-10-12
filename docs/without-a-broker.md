@@ -77,7 +77,7 @@ For a person who only wants alerts, turning a strategy on means **following it i
 
 Approving is optional. You may still want it, for example so other people can follow it. Approving needs a passing go-live check. A new strategy has no trial days yet, so an admin approves it with an override and a reason of at least 20 characters:
 
-- Console: on the strategy's page click Override…, give the reason, type override and click Override and approve. Admins also find every strategy on trial under Advanced, Strategy review.
+- Console: on the strategy's page click Override…, give the reason, type override and click Override and approve. Admins also find every strategy on trial in the Research workspace, under Strategy review.
 - Shell: `uv run stonks registry promote STRATEGY_ID --override --reason "Alerts only for me, nothing trades it."`
 
 The override and its reason are kept in the strategy's history.
