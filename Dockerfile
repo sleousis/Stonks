@@ -66,6 +66,11 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     STONKS_DATA_DIR=/data
 
+# The commit this image was built from. The image has no .git, so lab
+# manifests read it from here (release.yml passes it as a build arg).
+ARG STONKS_GIT_SHA=""
+ENV STONKS_GIT_SHA=${STONKS_GIT_SHA}
+
 USER stonks
 EXPOSE 8000
 

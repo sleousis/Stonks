@@ -19,7 +19,7 @@ src/stonks/lab/
 ├── tuning/          # grid.py, random.py, optuna.py, tune_and_fit in base.py
 ├── heatmap.py       # 2D parameter sweeps around the tuned set
 ├── trials.py        # trial ledger: lab_runs, lab_trials
-├── manifest.py      # reproducibility manifest (git sha, config hash, data fingerprint)
+├── manifest.py      # reproducibility manifest (code identity, config hash, data fingerprint, recipe)
 ├── parallel.py      # the one spawn process pool (tuning, sweeps, reruns)
 ├── lake_copy.py     # read-only snapshot lakes for workers
 ├── backtesting.py   # backtest helpers shared by the lab and the API
@@ -157,11 +157,34 @@ The trial family is the run's own trials plus every run of the same research fam
 
 `stonks lab verify [RUN_OR_STRATEGY ...]` reruns a stored lab result from its manifest and says whether it still holds (P2, P12):
 
-1. It recomputes the data fingerprint over the same tickers, window and interval, and names the tickers whose bars, corporate actions or statement versions changed since. Restated statements are listed apart (`restated_tickers`).
-2. It compares the config hash and the git sha with today's.
-3. It rebuilds the chosen parameters on the run's dataset, scores them with the run's objective and seed, and compares with the stored score.
+1. It recomputes the data fingerprint over the same tickers, window, interval and lake tables, and names the tickers whose bars, corporate actions or statement versions changed since. Restated statements are listed apart (`restated_tickers`), and so are changed tables (`changed_tables`).
+2. It compares the config hash and the code identity with today's. That is the git sha, or the source hash when the deploy has no `.git`.
+3. It takes the trial the tuner chose (`lab_runs.best_trial_index`). A heatmap cell that scored higher is never picked. An old run without that column falls back to the best tuner trial.
+4. It rebuilds the run's dataset from the manifest: windows, costs, lots, shorting, the fill model and settlement, construction, benchmark and embargo. An old manifest without the `backtest` block takes what it lacks from today's settings.
+5. It scores the trial's params with the run's objective on the train window, seeded with the trial's own seed (`lab_trials.seed`), and compares with the stored score.
 
 A result has moved when the score changed by more than `[lab.verify] tolerance`, or can no longer be scored. Changed data alone is reported, not judged: a restated revenue figure does not move a price-only strategy. The CLI exits 1 when a result moved.
+
+### The manifest (BL-06, P46)
+
+Every lab run stores a manifest in `lab_runs.manifest_json` and in the artifact's `meta.json`. It holds what it takes to rerun the result:
+
+| Part | What it records |
+| --- | --- |
+| `git_sha`, `git_dirty` | The checkout's commit. An image without `.git` reads `STONKS_GIT_SHA`, which the Dockerfile takes as a build arg and `release.yml` sets. |
+| `source_hash` | sha256 over every `.py` file of the `stonks` package (`stonks/code_identity.py`), line endings normalised, computed once per process. |
+| `libraries` | Versions of numpy, pandas, scipy, duckdb, scikit-learn, pydantic, optuna, cvxpy, statsmodels, arch, exchange-calendars and QuantLib, plus `uv.lock`, the lock file's sha256 in a checkout. |
+| `config_hash` | sha256 of the resolved settings, secrets left out. |
+| `data_fingerprint` | Per ticker, every bar from the first stored one to the window end, corporate actions and statement versions. Plus one hash per table in the strategy's `data_tables`. |
+| `costs`, `lots`, `shorting`, `backtest` | What every backtest used: costs, lots, shorting, and the fill model, construction, benchmark and embargo. |
+| `seeds` | The tuner's seed and every seeded survival test's, from a seed attribute or the `seed` of its options or config. |
+| `recipe` | The suite with each test's options, the tuner with its class, seed and options, the objective, the budget, the heatmap and the pinned params. |
+
+A strategy that reads a lake table beyond bars, corporate actions and statements names it in `data_tables` (for example `macro_indicators`, `defi_tvl`, `earnings_calendar`, `corporate_filings`). Each table is hashed up to the window end, only the run's tickers for a per-ticker table. Where a `*_versions` table with `known_at` exists, its rows are hashed too, so a vendor revision changes the hash (P12). A wrapper such as `MacroRegimeFilter` adds the tables of its inner strategy, read from `inner_class_path`. Bookkeeping columns such as `updated_at` are left out, so a re-fetch of the same values changes nothing.
+
+An older fingerprint made with the 550-day warm-up is recomputed with that warm-up, so old runs do not all report changed data.
+
+The factor panel cache puts the source hash in every slot, so a code change misses the cache and never serves a panel the old code computed.
 
 The weekly `lab_verify` job (Sunday 07:00 UTC, all three scheduler backends) reruns every strategy of `[lab.verify] statuses` and sends one operator alert naming the ones that moved. REST: `POST /api/lab/verify` then `GET /api/lab/verify/jobs/{job_id}/result`. MCP: `verify_lab_results`.
 

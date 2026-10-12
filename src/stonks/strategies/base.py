@@ -155,6 +155,11 @@ class BaseStrategy:
     label_horizon_bars: ClassVar[int] = 0
     #: Bars of history ``decide`` needs before it can act.
     required_history_bars: ClassVar[int] = 0
+    #: Lake tables beyond bars, corporate actions and statement versions
+    #: that the strategy reads (``macro_indicators``, ``defi_tvl``, ...).
+    #: The lab manifest's data fingerprint hashes each of them, so a vendor
+    #: revision shows in ``stonks lab verify`` (P12, P46).
+    data_tables: ClassVar[tuple[str, ...]] = ()
     # AssetClass intersection — the Ranker drops universe tickers whose
     # asset class isn't in this tuple. Default keeps every existing
     # strategy equity-only without an opt-in change. Cross-class

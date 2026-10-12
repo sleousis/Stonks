@@ -51,7 +51,7 @@ from stonks.core.protocols import (
 from stonks.ingest.redact import format_exception
 from stonks.lab.dataset import LabDataset
 from stonks.lab.heatmap import HeatmapOptions, ParameterHeatmap, pick_axes, plateau_overlay
-from stonks.lab.manifest import build_manifest, collect_seeds
+from stonks.lab.manifest import build_manifest, build_recipe, collect_seeds
 from stonks.lab.offload.settings import LabOffloadSettings
 from stonks.lab.parallel import ParallelSettings, run_max_workers
 from stonks.lab.preflight import (
@@ -278,7 +278,7 @@ class LabRunner:
             strategy_cls, dataset, class_path, fixed_params
         )
         seeds = collect_seeds(self._tuner, self._suite.tests)
-        manifest = self._manifest(dataset, seeds)
+        manifest = self._manifest(dataset, seeds, strategy_cls, fixed_params)
         if ensured is not None:
             manifest["ensure"] = ensured.model_dump(mode="json")
         if preflight_record is not None:
@@ -594,9 +594,30 @@ class LabRunner:
             raise PreflightError(report)
         return report, report.to_dict()
 
-    def _manifest(self, dataset: LabDataset, seeds: dict[str, Any]) -> dict[str, Any]:
+    def _manifest(
+        self,
+        dataset: LabDataset,
+        seeds: dict[str, Any],
+        strategy_cls: type[Strategy] | None = None,
+        fixed_params: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         try:
-            return build_manifest(self._settings, dataset, seeds)
+            recipe = build_recipe(
+                self._tuner,
+                self._objective,
+                self._suite.tests,
+                budget=self._budget,
+                heatmap=self._heatmap,
+                fixed_params=fixed_params,
+            )
+            return build_manifest(
+                self._settings,
+                dataset,
+                seeds,
+                strategy=strategy_cls,
+                params=fixed_params,
+                recipe=recipe,
+            )
         except Exception as exc:  # provenance must never block a lab run
             _log.warning("lab.manifest.failed", error=str(exc))
             return {"seeds": seeds, "error": str(exc)}

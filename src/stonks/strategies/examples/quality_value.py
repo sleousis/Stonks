@@ -124,6 +124,7 @@ class QualityValue(BaseStrategy):
     alpha_family = "value"
     premise = "mean_reversion"
     label_horizon_bars = 63
+    data_tables = ("income_statement", "balance_sheet", "cash_flow_statement", "shares_outstanding")
     applicable_asset_classes = ("equity",)
 
     def __init__(self, params: Any) -> None:
