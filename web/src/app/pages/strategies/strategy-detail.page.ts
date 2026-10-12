@@ -248,10 +248,7 @@ export function detailStandfirst(
   const head = kind ? `${kind}.` : '';
   if (!perf) return `${head} ${STATUS_MEANING[status]}`.trim();
   const ret = perf.totalReturn ?? 0;
-  const move =
-    ret === 0
-      ? 'Flat'
-      : `${ret > 0 ? 'Up' : 'Down'} ${formatPercent(Math.abs(ret))}`;
+  const move = ret === 0 ? 'Flat' : `${ret > 0 ? 'Up' : 'Down'} ${formatPercent(Math.abs(ret))}`;
   const days = perf.days === 1 ? '1 trial day' : `${perf.days} trial days`;
   return `${head} ${move} over ${days}, worst drop ${formatPercent(perf.maxDrawdown)}.`.trim();
 }

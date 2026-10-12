@@ -311,9 +311,7 @@ export class StrategiesPage {
       .map((r) => r.paper_days!)
       .sort((a, b) => a - b);
     if (!days.length) return null;
-    return days.length === 1
-      ? `day ${days[0]}`
-      : `day ${days[0]} to day ${days[days.length - 1]}`;
+    return days.length === 1 ? `day ${days[0]}` : `day ${days[0]} to day ${days[days.length - 1]}`;
   });
   protected readonly approvedDetail = computed(() => {
     const following = this.rows().filter((r) => r.status === 'active' && r.following).length;

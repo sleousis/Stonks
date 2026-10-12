@@ -91,8 +91,9 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     legend {
       padding: 0;
       margin-bottom: var(--space-1);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      color: var(--ink-2);
+      font-size: 0.8125rem;
+      font-weight: var(--weight-label);
     }
     .desc {
       max-width: 70ch;
@@ -109,16 +110,14 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     .group + .group {
       border-top: 1px solid var(--rule);
     }
-    /* Group labels (Yardsticks, Trend following): the one overline style. */
+    /* Group labels (Yardsticks, Trend following): small muted headers. */
     .group-label {
       position: sticky;
       top: 0;
       z-index: 1;
       padding: var(--space-2) var(--space-3) var(--space-1);
       font-size: var(--text-xs);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: var(--tracking-overline);
+      font-weight: var(--weight-label);
       color: var(--muted);
       background: var(--sunk);
     }
@@ -130,7 +129,7 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       min-height: var(--touch-min);
       padding: var(--space-2) var(--space-3);
       cursor: pointer;
-      box-shadow: inset 2px 0 0 transparent;
+      box-shadow: inset 3px 0 0 transparent;
       transition:
         background-color var(--dur-fast) var(--ease-out),
         box-shadow var(--dur-fast) var(--ease-out);
@@ -142,8 +141,8 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       background: var(--sunk);
     }
     .option.selected {
-      background: var(--raise);
-      box-shadow: inset 2px 0 0 var(--accent);
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
     }
     input[type='radio'] {
       margin: 2px 0 0;

@@ -70,23 +70,21 @@
 }
 
 .compare {
-  padding: var(--space-2);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-ctl);
-  background: var(--raise);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
 }
 
-// A group is an inset well with an accent rule on its edge; nested groups
-// keep the rule, so the tree reads without a box round every level.
+// A group is a 2px accent rule on its left edge, no box; nested groups step
+// in, so the tree reads without a box round any level.
 .group,
 .not {
   margin: 0;
   min-width: 0;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
   border: 0;
-  border-left: 2px solid var(--accent);
-  border-radius: var(--r-ctl);
-  background: var(--sunk);
+  border-left: 2px solid var(--accent-line);
+  border-radius: 0;
+  background: none;
 
   @include bp.phone {
     padding-left: var(--space-2);
@@ -118,9 +116,7 @@
 
 .not-label {
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: var(--tracking-overline);
-  text-transform: uppercase;
+  font-weight: var(--weight-semibold);
   color: var(--warn);
 }
 

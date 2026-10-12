@@ -1,7 +1,4 @@
-<app-page-header
-  title="Studio"
-  description="Build a strategy, test it, put it on trial, then approve it when it earns it."
->
+<app-page-header title="Studio" [description]="standfirst()">
   @if (!creating()) {
     <button
       actions
@@ -20,12 +17,12 @@
 
 <!-- Create ------------------------------------------------------------------>
 @if (creating()) {
-  <section class="panel create" aria-labelledby="create-title">
-    <div class="panel-head">
+  <section class="sheet-box create" aria-labelledby="create-title">
+    <div class="create-head">
       <h2 id="create-title">New draft</h2>
-      <button type="button" class="btn btn-tertiary" (click)="creating.set(false)">Cancel</button>
+      <button type="button" class="btn btn-ghost" (click)="creating.set(false)">Cancel</button>
     </div>
-    <form class="panel-body create-body" (submit)="$event.preventDefault(); create()">
+    <form class="create-body" (submit)="$event.preventDefault(); create()">
       <fieldset class="starts">
         <legend>Start from</legend>
         @if (templates.error()) {
@@ -85,13 +82,15 @@
 }
 
 <!-- Drafts ------------------------------------------------------------------>
-<section class="panel" aria-labelledby="drafts-title">
-  <div class="panel-head">
-    <h2 id="drafts-title">Drafts</h2>
-    @if (drafts.hasValue()) {
-      <span class="muted num">{{ drafts.value().total }} total</span>
-    }
-  </div>
+<section class="page-section section-flush" aria-labelledby="drafts-title">
+  <header class="section-head">
+    <h2 id="drafts-title">
+      Drafts
+      @if (drafts.hasValue()) {
+        <span class="count">{{ drafts.value().total }} total</span>
+      }
+    </h2>
+  </header>
   @if (!canLab()) {
     <div class="lock-note"><app-permission-note permission="lab.run" /></div>
   }
@@ -137,7 +136,6 @@
               <a class="draft-name" [routerLink]="['/studio', d.id]">{{ d.name }}</a>
               <p class="draft-meta">
                 <span>{{ summary(d) }}</span>
-                <span aria-hidden="true">·</span>
                 <span>edited {{ d.updated_at | ago }}</span>
               </p>
             </div>
@@ -156,10 +154,10 @@
               }
             </div>
             <div class="draft-actions">
-              <a class="btn" [routerLink]="['/studio', d.id]">Open</a>
+              <a class="btn btn-compact" [routerLink]="['/studio', d.id]">Open</a>
               <button
                 type="button"
-                class="btn btn-tertiary"
+                class="btn btn-ghost"
                 [attr.data-rename-for]="d.id"
                 [disabled]="!canLab()"
                 (click)="startRename(d)"
@@ -168,7 +166,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-tertiary danger"
+                class="btn btn-ghost danger"
                 [disabled]="deletingId() === d.id || !canLab()"
                 (click)="remove(d)"
               >

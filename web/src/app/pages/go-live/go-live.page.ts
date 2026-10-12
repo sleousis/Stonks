@@ -15,6 +15,8 @@ import { SystemService } from '../../api/system.service';
 import { brokerName, isRealMoneyBroker } from '../../shared/governance';
 import { rowStrategyName, strategyKindName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { StatTile } from '../../shared/ui/stat-tile';
+import { DaysRing } from '../strategies/days-ring';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -62,6 +64,8 @@ export function reviewOrder(rows: readonly LeaderboardRow[]): LeaderboardRow[] {
     StatusPill,
     StrategyVerdict,
     ModeStamp,
+    StatTile,
+    DaysRing,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -103,6 +107,25 @@ export class GoLivePage {
   protected readonly onTrial = computed(
     () => this.rows().filter((r) => r.status === 'shadow').length,
   );
+  protected readonly approvedCount = computed(
+    () => this.rows().filter((r) => r.status === 'active').length,
+  );
+  /** The standfirst, from the queue: "2 ready to approve, 5 on trial." */
+  protected readonly standfirst = computed(() => {
+    if (!this.board.hasValue()) {
+      return 'Strategies on trial and whether each is ready to approve.';
+    }
+    if (!this.onTrial()) return 'Nothing is on trial. Test a strategy in Lab and put it on trial.';
+    const ready = this.readyCount();
+    return ready
+      ? `${ready} ready to approve, ${this.onTrial()} on trial. Approve one from its Review tab.`
+      : `${this.onTrial()} on trial, none ready to approve yet.`;
+  });
+  /** The go-live check as a chip: passed, failed, or not checked yet. */
+  protected checkStatus(r: LeaderboardRow): 'pass' | 'fail' | 'not_yet' {
+    return r.golive_passed === true ? 'pass' : r.golive_passed === false ? 'fail' : 'not_yet';
+  }
+  protected readonly goliveLabel = reviewGoliveLabel;
 
   protected readonly columns: TableColumn<LeaderboardRow>[] = [
     { key: 'strategy_id', label: 'Strategy', mobile: 'title', sortable: false },

@@ -1,10 +1,9 @@
 @use 'breakpoints' as bp;
 
-// The queue and the side column: two page sections, 24px apart.
-.review-grid {
-  @include bp.from-desktop {
-    column-gap: var(--space-5);
-  }
+// The summary strip, then the queue with the broker and risk notes in a
+// side column from desktop.
+.summary-strip {
+  margin-bottom: var(--section-gap);
 }
 
 // The strategy name: an ink link, underlined on hover or focus.
@@ -68,53 +67,16 @@
 }
 
 .aside {
-  display: grid;
   align-content: start;
-  gap: var(--space-4);
-  min-width: 0;
-
-  @include bp.phone {
-    gap: var(--space-3);
-  }
 }
 
-.facts {
-  margin: 0;
-  padding: var(--space-1) var(--space-4) var(--space-3);
-
-  > div {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-3);
-    min-height: var(--row-h);
-    padding: var(--space-1) 0;
-    border-top: 1px solid var(--rule);
-
-    &:first-child {
-      border-top: 0;
-    }
-  }
-
-  dt {
-    color: var(--ink-2);
-    font-size: var(--text-sm);
-  }
-
-  dd {
-    margin: 0;
-    text-align: right;
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-  }
-
-  @include bp.phone {
-    padding: var(--space-1) var(--space-3) var(--space-3);
-  }
+.facts dd {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
 }
 
 .note {
-  max-width: 70ch;
+  max-width: 68ch;
   color: var(--ink-2);
   font-size: var(--text-sm);
 
@@ -123,4 +85,8 @@
     align-items: center;
     min-height: var(--touch-min);
   }
+}
+
+.callout.note {
+  margin-top: var(--space-4);
 }

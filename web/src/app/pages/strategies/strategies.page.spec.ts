@@ -74,7 +74,8 @@ const SUBS = [
 ];
 
 const isPaper = (req: { url: string }) => req.url.split('?')[0] === '/api/shadow/pnl';
-const isCurve = (req: { url: string }) => /^\/api\/shadow\/strategies\/[^/]+\/pnl$/.test(req.url.split('?')[0]);
+const isCurve = (req: { url: string }) =>
+  /^\/api\/shadow\/strategies\/[^/]+\/pnl$/.test(req.url.split('?')[0]);
 const isSubs = (req: { url: string }) => req.url.split('?')[0] === '/api/subscriptions';
 
 /** A test book's daily rows, rising from 10,000. */

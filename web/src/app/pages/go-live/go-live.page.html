@@ -1,74 +1,102 @@
-<app-page-header
-  title="Strategy review"
-  description="Strategies on trial and whether each is ready to approve. Read a strategy's Review tab, then approve it there with a reason."
-/>
+<app-page-header title="Strategy review" [description]="standfirst()" />
 
-<div class="page-grid review-grid">
-  <section class="panel span-8" aria-labelledby="queue-title">
-    <div class="panel-head">
+<section class="summary-strip" aria-label="Review summary">
+  <app-stat-tile
+    label="Ready to approve"
+    [loading]="!board.hasValue() && !board.error()"
+    [value]="'' + readyCount()"
+    detail="passed the go-live check"
+    [help]="false"
+  />
+  <app-stat-tile
+    label="On trial"
+    [loading]="!board.hasValue() && !board.error()"
+    [value]="'' + onTrial()"
+    detail="still collecting days"
+    [help]="false"
+  />
+  <app-stat-tile
+    label="Approved"
+    [loading]="!board.hasValue() && !board.error()"
+    [value]="'' + approvedCount()"
+    [help]="false"
+  />
+</section>
+
+<div class="cols review-grid">
+  <section class="page-section section-flush" aria-labelledby="queue-title">
+    <header class="section-head">
       <h2 id="queue-title">To review</h2>
       @if (board.hasValue()) {
-        <span class="muted num" aria-live="polite"
+        <span class="count" aria-live="polite"
           >{{ readyCount() }} ready to approve, {{ onTrial() }} on trial</span
         >
       }
+    </header>
+    <div class="section-body">
+      @if (board.error(); as err) {
+        <app-error-state
+          title="Could not load the strategies"
+          [error]="err"
+          (retry)="board.reload()"
+        />
+      } @else if (!board.hasValue()) {
+        <app-loading-state label="Loading the strategies" [rows]="5" />
+      } @else if (rows().length === 0) {
+        <app-empty-state
+          title="No strategies yet"
+          message="Test one in Lab and put it on trial. Strategies on trial are the ones that can be approved."
+        >
+          <a routerLink="/lab" class="btn btn-primary">Open Lab</a>
+        </app-empty-state>
+      } @else {
+        <app-data-table
+          caption="Strategies to review, the ones ready to approve first"
+          [rows]="rows()"
+          [columns]="columns"
+          [rowKey]="rowKey"
+          [pageSize]="25"
+        >
+          <ng-template appCell="strategy_id" [appCellOf]="rows()" let-r>
+            <a class="name" [routerLink]="['/strategies', r.strategy_id]">
+              <span class="id">{{ name(r) }}</span>
+              <span class="cls muted">{{ kind(r.class_path) }}</span>
+            </a>
+          </ng-template>
+          <ng-template appCell="status" [appCellOf]="rows()" let-r>
+            <app-status-pill [status]="r.status" />
+          </ng-template>
+          <ng-template appCell="golive" [appCellOf]="rows()" let-r>
+            <app-status-pill [status]="checkStatus(r)" [label]="goliveLabel(r)" />
+          </ng-template>
+          <ng-template appCell="days" [appCellOf]="rows()" let-r>
+            <app-days-ring [days]="r.paper.days" />
+          </ng-template>
+          <ng-template appCell="verdict" [appCellOf]="rows()" let-r>
+            <span class="verdict-cell" [title]="verdict(r).label">
+              <app-strategy-verdict compact [verdict]="verdict(r)" />
+            </span>
+          </ng-template>
+          <ng-template appCell="review" [appCellOf]="rows()" let-r>
+            <a
+              class="btn btn-compact review"
+              [class.btn-primary]="r.status === 'shadow' && r.golive_passed"
+              [routerLink]="['/strategies', r.strategy_id]"
+              [queryParams]="{ tab: 'review' }"
+              [attr.aria-label]="'Review ' + name(r)"
+              >Review</a
+            >
+          </ng-template>
+        </app-data-table>
+      }
     </div>
-    @if (board.error(); as err) {
-      <app-error-state
-        title="Could not load the strategies"
-        [error]="err"
-        (retry)="board.reload()"
-      />
-    } @else if (!board.hasValue()) {
-      <app-loading-state label="Loading the strategies" [rows]="5" />
-    } @else if (rows().length === 0) {
-      <app-empty-state
-        title="No strategies yet"
-        message="Test one in Lab and put it on trial. Strategies on trial are the ones that can be approved."
-      >
-        <a routerLink="/lab" class="btn">Open Lab</a>
-      </app-empty-state>
-    } @else {
-      <app-data-table
-        caption="Strategies to review, the ones ready to approve first"
-        [rows]="rows()"
-        [columns]="columns"
-        [rowKey]="rowKey"
-        [pageSize]="25"
-      >
-        <ng-template appCell="strategy_id" [appCellOf]="rows()" let-r>
-          <a class="name" [routerLink]="['/strategies', r.strategy_id]">
-            <span class="id">{{ name(r) }}</span>
-            <span class="cls muted">{{ kind(r.class_path) }}</span>
-          </a>
-        </ng-template>
-        <ng-template appCell="status" [appCellOf]="rows()" let-r>
-          <app-status-pill [status]="r.status" />
-        </ng-template>
-        <ng-template appCell="verdict" [appCellOf]="rows()" let-r>
-          <span class="verdict-cell" [title]="verdict(r).label">
-            <app-strategy-verdict compact [verdict]="verdict(r)" />
-          </span>
-        </ng-template>
-        <ng-template appCell="review" [appCellOf]="rows()" let-r>
-          <a
-            class="btn review"
-            [class.btn-primary]="r.status === 'shadow' && r.golive_passed"
-            [routerLink]="['/strategies', r.strategy_id]"
-            [queryParams]="{ tab: 'review' }"
-            [attr.aria-label]="'Review ' + name(r)"
-            >Review <span aria-hidden="true">→</span></a
-          >
-        </ng-template>
-      </app-data-table>
-    }
   </section>
 
-  <div class="aside span-4">
-    <section class="panel" aria-labelledby="broker-title">
-      <div class="panel-head">
+  <div class="aside section-stack">
+    <section class="page-section" aria-labelledby="broker-title">
+      <header class="section-head">
         <h2 id="broker-title">Broker</h2>
-      </div>
+      </header>
       @if (broker.error(); as err) {
         <app-error-state
           title="Could not load the broker"
@@ -79,7 +107,7 @@
         <app-loading-state label="Loading broker" [rows]="3" />
       } @else {
         @let b = broker.value();
-        <dl class="facts">
+        <dl class="fact-list facts">
           <div>
             <dt>Broker</dt>
             <dd>{{ brokerName(b) }}</dd>
@@ -97,7 +125,7 @@
             <dd>{{ b.credentials_configured ? 'Saved' : 'Not saved' }}</dd>
           </div>
         </dl>
-        <p class="panel-body muted note">
+        <p class="callout note">
           @if (realMoney(b)) {
             Approving a strategy lets portfolios at this broker send real orders for it.
           } @else {
@@ -107,11 +135,11 @@
       }
     </section>
 
-    <section class="panel" aria-labelledby="limits-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="limits-title">
+      <header class="section-head">
         <h2 id="limits-title">Risk limits</h2>
-      </div>
-      <p class="panel-body muted note">
+      </header>
+      <p class="section-body note">
         Every order an approved strategy sends passes the risk limits first. They are set in one
         place: <a routerLink="/settings">Settings</a>.
       </p>

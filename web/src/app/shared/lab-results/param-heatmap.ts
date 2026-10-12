@@ -74,8 +74,8 @@ export function cellTint(score: number, min: number, max: number): string {
   const t = Math.min(1, Math.abs(score - mid) / span);
   const pct = Math.round(t * MAX_TINT);
   if (pct === 0) return '';
-  const color = score >= mid ? 'var(--color-gain)' : 'var(--color-loss)';
-  return `color-mix(in srgb, ${color} ${pct}%, var(--color-surface))`;
+  const color = score >= mid ? 'var(--up)' : 'var(--down)';
+  return `color-mix(in srgb, ${color} ${pct}%, var(--bg))`;
 }
 
 /** Rows of cells for the table: scores, tints, the tuned cell and the plateau. */
@@ -225,23 +225,23 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
     }
     .fixed {
       display: block;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .foot {
       font-size: var(--text-xs);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .plateau {
       display: grid;
       gap: var(--space-2);
-      padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-gain);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface);
+      padding: var(--space-4);
+      border-left: 3px solid var(--up);
+      border-radius: var(--r-sheet);
+      background: var(--up-soft);
     }
     .plateau.failed {
-      border-left-color: var(--color-loss);
+      border-left-color: var(--down);
+      background: var(--down-soft);
     }
     .plateau-head {
       display: flex;
@@ -261,7 +261,7 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
     }
     dt {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     dd {
       margin: 0;
@@ -270,11 +270,10 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
     .wrap {
       max-width: 100%;
       overflow-x: auto;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
+      border-top: 2px solid var(--rule-strong);
     }
     .wrap:focus-visible {
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
     table {
@@ -287,12 +286,12 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
       caption-side: top;
       text-align: start;
       padding: var(--space-2);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-xs);
     }
     th {
       font-weight: var(--weight-medium);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       padding: var(--space-1) var(--space-2);
       white-space: nowrap;
     }
@@ -320,20 +319,20 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
       padding: 0 var(--space-2);
       text-align: center;
       border-radius: 3px;
-      background: var(--color-surface-2);
-      color: var(--color-ink);
+      background: var(--sunk);
+      color: var(--ink);
       @include bp.coarse {
         height: var(--touch-min);
       }
     }
     .cell.na {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .cell.plateau {
-      box-shadow: inset 0 0 0 1px var(--color-ink-3);
+      box-shadow: inset 0 0 0 1px var(--muted);
     }
     .cell.best {
-      box-shadow: inset 0 0 0 2px var(--color-ink);
+      box-shadow: inset 0 0 0 2px var(--ink);
       font-weight: var(--weight-semibold);
     }
     .legend {
@@ -344,7 +343,7 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
       padding: 0;
       list-style: none;
       font-size: var(--text-xs);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .legend li {
       display: inline-flex;
@@ -356,19 +355,19 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
       width: 0.9rem;
       height: 0.9rem;
       border-radius: 2px;
-      background: var(--color-surface-2);
+      background: var(--sunk);
     }
     .swatch.low {
-      background: color-mix(in srgb, var(--color-loss) 45%, var(--color-surface));
+      background: color-mix(in srgb, var(--down) 45%, var(--raise));
     }
     .swatch.high {
-      background: color-mix(in srgb, var(--color-gain) 45%, var(--color-surface));
+      background: color-mix(in srgb, var(--up) 45%, var(--raise));
     }
     .swatch.tuned {
-      box-shadow: inset 0 0 0 2px var(--color-ink);
+      box-shadow: inset 0 0 0 2px var(--ink);
     }
     .swatch.hood {
-      box-shadow: inset 0 0 0 1px var(--color-ink-3);
+      box-shadow: inset 0 0 0 1px var(--muted);
     }
   `,
 })

@@ -107,7 +107,7 @@ export function searchName(tuner: string): string {
               [detail]="r.error_detail"
             />
           }
-          <div class="tiles tile-grid">
+          <div class="tiles summary-strip">
             <app-stat-tile label="Settings tried" [value]="count(r.n_trials)" detail="This run" />
             <app-stat-tile
               label="Settings with errors"

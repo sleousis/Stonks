@@ -47,14 +47,8 @@
 .job {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-
-  @include bp.phone {
-    padding: var(--space-3);
-  }
-
+  padding: var(--space-3) 0;
   border-bottom: 1px solid var(--rule);
-  background: var(--sunk);
 }
 
 .job-line {
@@ -90,7 +84,7 @@ progress {
   }
   &::-webkit-progress-value {
     background: var(--accent);
-    transition: width var(--dur) var(--ease-out);
+    transition: width var(--dur-fast) var(--ease-out);
   }
   &::-moz-progress-bar {
     background: var(--accent);
@@ -132,7 +126,7 @@ fieldset.plain {
 
 .suites {
   display: grid;
-  gap: var(--space-2);
+  gap: 0 var(--space-6);
   margin-bottom: var(--space-3);
   grid-template-columns: minmax(0, 1fr);
 
@@ -144,21 +138,19 @@ fieldset.plain {
 .suite {
   align-items: flex-start;
   padding: var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--r-ctl);
-  background: var(--sunk);
+  border-bottom: 1px solid var(--rule);
+  box-shadow: inset 3px 0 0 transparent;
   transition:
     background-color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    box-shadow var(--dur-fast) var(--ease-out);
 
   &:hover {
-    border-color: var(--rule-control);
+    background: var(--sunk);
   }
 
   &.chosen {
-    border-color: var(--accent);
-    background: var(--raise);
-    box-shadow: inset 2px 0 0 var(--accent);
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
 
   input {

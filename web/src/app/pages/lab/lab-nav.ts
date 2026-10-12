@@ -66,7 +66,7 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       max-width: 100%;
     }
     .lab-nav {
-      margin-bottom: var(--space-4);
+      margin-bottom: var(--space-7);
       border-bottom: 1px solid var(--rule);
     }
     /* One row like the page tabs: it scrolls sideways, and a fading right
@@ -74,7 +74,7 @@ export const LAB_SECTIONS: readonly LabSection[] = [
     ul {
       display: flex;
       align-items: stretch;
-      gap: 0 var(--space-1);
+      gap: 0 var(--space-5);
       margin: 0;
       padding: 0;
       list-style: none;
@@ -96,49 +96,38 @@ export const LAB_SECTIONS: readonly LabSection[] = [
     a {
       display: inline-flex;
       align-items: center;
-      min-height: 36px;
-      padding: 0 var(--space-3);
+      min-height: var(--touch-min);
+      padding: 0 2px;
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
-      color: var(--ink-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      color: var(--muted);
+      font-size: var(--text-md);
+      font-weight: var(--weight-label);
       text-decoration: none;
       transition:
         color var(--dur-fast) var(--ease-out),
         background-color var(--dur-fast) var(--ease-out);
-      @include bp.phone {
-        min-height: var(--touch-min);
-        padding: 0 var(--space-2);
-      }
-      @include bp.coarse {
-        min-height: var(--touch-min);
-      }
     }
     a:hover {
-      background: var(--sunk);
       color: var(--ink);
     }
     a.active {
       color: var(--ink);
-      font-weight: var(--weight-semibold);
-      border-bottom-color: var(--accent);
+      border-bottom-color: var(--ink);
     }
     a:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: -2px;
     }
-    /* "More tools": an overline set off by a hairline, inside the row. */
+    /* "More tools": a quiet label set off by a hairline, inside the row. */
     .more-label {
       align-items: center;
-      margin-left: var(--space-2);
-      padding: 0 var(--space-2) 0 var(--space-3);
+      padding-left: var(--space-5);
       border-left: 1px solid var(--rule);
+      margin: var(--space-3) 0;
       color: var(--muted);
       font-size: var(--text-xs);
-      font-weight: 600;
-      letter-spacing: var(--tracking-overline);
-      text-transform: uppercase;
+      font-weight: var(--weight-medium);
     }
     @media (prefers-reduced-motion: reduce) {
       a {

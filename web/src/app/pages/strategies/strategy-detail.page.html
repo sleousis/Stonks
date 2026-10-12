@@ -372,7 +372,9 @@
 
             <section class="page-section" aria-labelledby="params-title">
               <header class="section-head">
-                <h2 id="params-title">Parameters <span class="count">{{ params().length }}</span></h2>
+                <h2 id="params-title">
+                  Parameters <span class="count">{{ params().length }}</span>
+                </h2>
               </header>
               @if (params().length === 0) {
                 <app-empty-state
@@ -390,7 +392,9 @@
                 </dl>
               }
               <details class="tech">
-                <summary><span class="disclosure-chev" aria-hidden="true"></span>Technical details</summary>
+                <summary>
+                  <span class="disclosure-chev" aria-hidden="true"></span>Technical details
+                </summary>
                 <span class="class-path">Id {{ s.id }}</span>
                 <span class="class-path">{{ s.class_path }}</span>
               </details>
@@ -485,7 +489,9 @@
                       <span class="glyph" [class.pass]="c.passed" aria-hidden="true"></span>
                       <span class="check-name">{{ c.label }}</span>
                       <span class="check-value num">{{ c.value }}</span>
-                      <span class="visually-hidden">{{ c.passed ? 'passes' : 'does not pass' }}</span>
+                      <span class="visually-hidden">{{
+                        c.passed ? 'passes' : 'does not pass'
+                      }}</span>
                     </li>
                   }
                 </ul>
@@ -571,7 +577,11 @@
                         <app-side-tag [side]="o.side" />
                       </ng-template>
                       <ng-template appCell="status" [appCellOf]="orders.value().items" let-o>
-                        <app-order-status [status]="o.status" [state]="o.state" [showNote]="false" />
+                        <app-order-status
+                          [status]="o.status"
+                          [state]="o.state"
+                          [showNote]="false"
+                        />
                       </ng-template>
                     </app-data-table>
                   }

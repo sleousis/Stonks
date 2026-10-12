@@ -82,13 +82,13 @@ describe('ParamHeatmap', () => {
   });
 
   it('tints gain for high and loss for low, centred on 0 across signs', () => {
-    expect(cellTint(1, -1, 1)).toContain('--color-gain');
-    expect(cellTint(-1, -1, 1)).toContain('--color-loss');
+    expect(cellTint(1, -1, 1)).toContain('--up');
+    expect(cellTint(-1, -1, 1)).toContain('--down');
     expect(cellTint(0, -1, 1)).toBe('');
     expect(cellTint(1, 1, 1)).toBe('');
     // All positive: centred on the middle of the range.
-    expect(cellTint(1, 1, 3)).toContain('--color-loss');
-    expect(heatmapRows(HEATMAP)[1].cells[0].background).toContain('--color-loss');
+    expect(cellTint(1, 1, 3)).toContain('--down');
+    expect(heatmapRows(HEATMAP)[1].cells[0].background).toContain('--down');
   });
 
   it('names the metrics in words', () => {

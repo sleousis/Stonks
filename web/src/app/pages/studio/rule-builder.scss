@@ -6,27 +6,33 @@
   min-width: 0;
 }
 
+// Each block (Basics, Universe, Indicators, Buy when, ...) is a field group:
+// a 15px title on the 2px ink rule, no box. Blocks sit 32px apart.
+:host {
+  gap: var(--space-7);
+}
+
 .block {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4);
-  border-top: 1px solid var(--rule);
 
-  &:first-child {
-    border-top: 0;
-  }
-
-  // Section titles (Basics, Universe, Indicators): 13px semibold, second
-  // ink. The hairline above each block separates them.
   h3 {
-    color: var(--ink-2);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semibold);
+    padding-bottom: var(--space-2);
+    border-bottom: 2px solid var(--rule-strong);
+    color: var(--ink);
+    font-size: var(--text-lead);
+    font-weight: var(--weight-bold);
   }
+}
 
-  @include bp.phone {
-    padding: var(--space-3);
+.block-head {
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--rule-strong);
+
+  h3 {
+    padding: 0;
+    border: 0;
   }
 }
 
@@ -59,7 +65,7 @@
 }
 
 .hint {
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--muted);
 }
 
@@ -113,11 +119,12 @@ fieldset.plain {
 
 .indicators {
   display: grid;
-  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--rule);
   container-type: inline-size;
+  counter-reset: indicator;
 }
 
 // Narrow: name + remove, then kind, then period + source. Wide: one row.
@@ -126,9 +133,28 @@ fieldset.plain {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: end;
-  padding: var(--space-3);
-  border-radius: var(--r-ctl);
-  background: var(--sunk);
+  position: relative;
+  padding: var(--space-3) 0 var(--space-3) 36px;
+  border-bottom: 1px solid var(--rule);
+  counter-increment: indicator;
+
+  // The row's place in the list, in a small sunk squircle.
+  &::before {
+    content: counter(indicator);
+    position: absolute;
+    top: calc(var(--space-3) + 26px);
+    left: 0;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-tag);
+    background: var(--sunk);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+  }
 
   .field:nth-child(1) {
     grid-column: 1 / 3;

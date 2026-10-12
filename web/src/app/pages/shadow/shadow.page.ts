@@ -25,6 +25,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { TrialMeter } from '../strategies/trial-meter';
 import { type ShadowComparison, compareToReal, comparisonSeries } from './shadow-compare';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
@@ -89,6 +90,7 @@ export interface ShadowRow extends ShadowPnlSummary {
     TimeSeriesChart,
     UpdatedAgo,
     SideTag,
+    TrialMeter,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -197,6 +199,19 @@ export class ShadowPage {
     return c ? aheadOrBehind(c.excess) : null;
   });
   protected readonly leaderTone = computed(() => toneClass(this.leader()?.comparison?.excess));
+  /** The standfirst, from the data: "3 strategies on trial. Momentum is 2.10% ahead of your portfolio." */
+  protected readonly standfirst = computed(() => {
+    if (!this.summaries.hasValue()) {
+      return 'Each strategy on its own paper test book, next to your portfolio over the same days.';
+    }
+    const n = this.summaries.value().total;
+    if (!n) return 'No strategy is on trial yet. Put one on trial from its page.';
+    const head = n === 1 ? '1 strategy on trial.' : `${n} strategies on trial.`;
+    const lead = this.leader();
+    const words = aheadOrBehind(lead?.comparison?.excess ?? null);
+    if (!lead || !words) return head;
+    return `${head} ${lead.name} is ${words.charAt(0).toLowerCase()}${words.slice(1)}.`;
+  });
 
   // Chart -------------------------------------------------------------------
   /** '' shows every test book; an id shows one, with its drawdown below. */
