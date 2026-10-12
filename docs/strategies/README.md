@@ -1,6 +1,6 @@
 # Strategies
 
-Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 39 in all. All are long-only by default, so short signals mean "flat".
+Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 43 in all. All are long-only by default, so short signals mean "flat".
 
 Four strategies can short: `ewmac_trend`, `tsmom` and the two long/short strategies below. Set `"short_mode": "short"` in their params. A short then opens only in a book that allows shorts (a portfolio with `allow_short`, or a lab dataset with `shorting`). Anywhere else the short legs are dropped. See [short selling](../design/shorting.md).
 
@@ -35,6 +35,30 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | `factor` | Holds the top slice of a universe by any library factor or formula, equal weight, month-end rebalance. |
 | `learning_ranker` | A gradient-boosting model ranks the universe from many factors (Alpha158 by default), trained on purged windows, retrained through the model lifecycle ([details](learning-ranker.md)). |
 | `filing_events` | Holds a stock for a few days after a chosen kind of 8-K filing (earnings by default), read by SEC acceptance time. Built for the event study. See [EDGAR filings](../edgar.md). |
+| `earnings_drift` | Post-earnings drift: buys a company whose earnings surprise is in the top bucket against other recent reports and holds it 40 weekdays. Reads the earnings calendar point in time. See [below](#earnings-drift). |
+
+## Mean reversion
+
+| Id | What it does |
+|----|--------------|
+| `rsi2_reversion` | Connors: buys when the close is above its 200-day average and the 2-day RSI is below 10, sells at the first close above the 5-day average or an RSI above 70. Made for equity index ETFs. |
+
+```bash
+uv run stonks lab run rsi2_reversion --start 2015-01-01 --end 2025-01-01 --tickers SPY.US,QQQ.US,IWM.US,DIA.US
+```
+
+The position is rebuilt from the bars on every call, so a restart holds what the rules say. Tunable: `entry_rsi`, `exit_rsi` and `exit_ma_bars`. The 200-day and 2-day lengths are fixed, as Connors set them.
+
+## Earnings drift
+
+`earnings_drift` reads `earnings_calendar`, so load past reports first: `uv run stonks calendars refresh --start 2018-01-01`. The daily refresh only fetches from a week back to five weeks ahead.
+
+1. The surprise is reported EPS less the estimate, divided by the spread of the company's last 8 surprises (at least 4). This is the standardized surprise.
+2. It is ranked against every report from the 90 days before, from the companies in `universe` (or the whole calendar when it is empty). The top of 10 buckets, with a positive surprise, is a pick. It needs at least 20 such reports.
+3. A report counts from the latest moment its timing allows (P12). A daily decision on the report day sees it and fills at the next open. Mid-session, a report due in the session or after the close is not known yet.
+4. The hold of `hold_days` (40) weekdays starts at the first session that can react: the report day for a report before the open, the next weekday for one after the close.
+
+Set `universe` to the run's tickers in the lab, so the tests on modified bars rank against the same reports.
 
 ## Book strategies ([details](book-strategies.md))
 
