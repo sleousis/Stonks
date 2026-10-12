@@ -64,9 +64,12 @@ describe('registerShellCommands', () => {
       expect.arrayContaining(['Trial results', 'Trade costs', 'Strategies']),
     );
     // Strategy review is the admin's approval queue: a trader never finds it.
+    const gg = () => shortcuts.allSequences.find((s) => s.prefix === 'g' && s.key === 'g');
     expect(labels()).not.toContain('Strategy review');
+    expect(gg()).toBeUndefined();
     me.set(ADMIN);
     expect(labels()).toContain('Strategy review');
+    expect(gg()?.path).toBe('/go-live');
   });
 
   it('follows the signed-in user: admin pages and g r appear for an admin, reactively', () => {

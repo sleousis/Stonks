@@ -39,10 +39,18 @@ describe('app routes', () => {
   it('guards Strategy review for admins, after the old ?strategy= link redirect', () => {
     const route = goLiveRoutes.find((r) => r.path === '');
     expect(route?.canActivate).toEqual([oldReviewLinkGuard, adminGuard]);
+    expect(adminGuarded('/go-live')).toBe(true);
     expect(NAV_ITEMS.find((i) => i.path === '/go-live')?.adminOnly).toBe(true);
   });
 
   it('leaves the halts page open for a trader', () => {
     expect(adminGuarded('/ops/halts')).toBe(false);
+  });
+
+  it('shows every admin-guarded page only to admins in the nav', () => {
+    const shownToAll = NAV_ITEMS.filter((i) => !i.adminOnly)
+      .map((i) => i.path)
+      .filter((p) => adminGuarded(p));
+    expect(shownToAll).toEqual([]);
   });
 });
