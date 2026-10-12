@@ -39,12 +39,12 @@ export function pointTime(bar: BarView, interval: string): string {
   imports: [TimeSeriesChart, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss', './price-panel.scss'],
   template: `
-    <section class="panel panel-flush" aria-labelledby="price-title">
-      <div class="panel-head">
+    <section class="page-section section-flush" aria-labelledby="price-title">
+      <div class="section-head">
         <h2 id="price-title">
           Prices
           @if (ticker(); as t) {
-            <span class="muted">· {{ t }} · {{ intervalName(interval()) }}</span>
+            <span class="count">{{ t }}, {{ intervalName(interval()) }}</span>
           }
         </h2>
         @if (bars.hasValue() && bars.value().truncated) {

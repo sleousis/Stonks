@@ -4,16 +4,12 @@
 .filters {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--rule);
 
   @include bp.from-tablet {
     grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
     align-items: end;
-  }
-
-  @include bp.phone {
-    padding: var(--space-3);
   }
 
   // Date and search inputs have a wide intrinsic size: let them shrink.
@@ -36,8 +32,8 @@ app-status-pill {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-link);
-  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  font-weight: 650;
   text-align: start;
   cursor: pointer;
   text-decoration: underline;
@@ -49,7 +45,7 @@ app-status-pill {
   }
 
   &[aria-pressed='true'] {
-    color: var(--color-ink);
+    color: var(--ink);
     text-decoration: none;
 
     &::before {
@@ -57,8 +53,8 @@ app-status-pill {
       width: 3px;
       height: 1em;
       margin-right: var(--space-2);
-      border-radius: var(--radius-xs);
-      background: var(--color-accent);
+      border-radius: 2px;
+      background: var(--accent);
     }
   }
 
@@ -80,6 +76,17 @@ app-status-pill {
   min-width: 0;
 }
 
-:host > .panel {
+:host > .page-section {
   height: 100%;
+}
+
+// A name with its meta line under it (instruments).
+.name {
+  display: block;
+}
+
+.name-meta {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }

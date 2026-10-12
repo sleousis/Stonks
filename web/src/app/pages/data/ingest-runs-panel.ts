@@ -1,9 +1,11 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  effect,
   inject,
   input,
   linkedSignal,
+  output,
   resource,
   signal,
 } from '@angular/core';
@@ -33,20 +35,22 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
       max-width: 40ch;
       white-space: normal;
       overflow-wrap: anywhere;
-      color: var(--color-loss);
-      font-size: var(--text-xs);
+      color: var(--down);
+      font-size: var(--text-sm);
     }
   `,
   template: `
-    <section class="panel panel-flush" aria-labelledby="runs-title">
-      <div class="panel-head">
-        <h2 id="runs-title">Data updates</h2>
-        @if (page(); as p) {
-          <span class="muted num count"
-            >{{ p.total }} {{ p.total === 1 ? 'update' : 'updates' }}</span
-          >
-        }
-      </div>
+    <section class="page-section section-flush" aria-labelledby="runs-title">
+      <header class="section-head">
+        <h2 id="runs-title">
+          Data updates
+          @if (page(); as p) {
+            <span class="count"
+              >{{ p.total }} <span class="visually-hidden">{{ p.total === 1 ? 'update' : 'updates' }}</span></span
+            >
+          }
+        </h2>
+      </header>
       <div class="filters">
         <div class="field">
           <label for="runs-status">Status</label>
@@ -127,6 +131,15 @@ export class IngestRunsPanel {
 
   /** Bump to refetch (after an ingest). */
   readonly refresh = input(0);
+  /** The newest updates, unfiltered: the page's summary reads them. */
+  readonly latest = output<IngestRunView[]>();
+
+  constructor() {
+    effect(() => {
+      const p = this.page();
+      if (p && !this.status() && !this.kind() && this.offset() === 0) this.latest.emit(p.items);
+    });
+  }
 
   protected readonly pageSize = PAGE_SIZE;
   protected readonly statuses = STATUSES;
