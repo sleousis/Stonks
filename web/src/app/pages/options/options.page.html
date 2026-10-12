@@ -1,10 +1,7 @@
-<app-page-header
-  title="Options research"
-  description="Look at option prices and test option strategies on past prices. Nothing here trades."
-/>
+<app-page-header title="Options research" [description]="standfirst()" />
 <app-data-plan-note kind="options" />
 
-<p class="research-note callout" data-tone="info" role="note">
+<p class="research-note callout" role="note">
   <strong>Research only, nothing on this page trades options.</strong>
   No orders, paper portfolios or real-money portfolios use anything here. Trading options with real
   money is off by default: each real-money portfolio shows whether it is on in its Real-money
@@ -30,15 +27,20 @@
     "
   />
 } @else {
-  <div class="page-grid">
-    <section class="panel span-12" aria-labelledby="chain-title">
-      <div class="panel-head">
-        <h2 id="chain-title">Chain</h2>
+  <div class="section-stack">
+    <section class="page-section" aria-labelledby="chain-title">
+      <header class="section-head">
+        <h2 id="chain-title">
+          Chain
+          @if (chain.hasValue()) {
+            <span class="count">{{ chain.value().rows.length }} strikes</span>
+          }
+        </h2>
         @if (chain.hasValue() && chain.value().synthetic) {
           <span class="tag">Generated chains, not market quotes</span>
         }
-      </div>
-      <div class="panel-body stack">
+      </header>
+      <div class="section-body stack">
         <div class="pickers">
           <div class="field">
             <label for="op-underlying">Underlying</label>
@@ -107,122 +109,217 @@
             {{ chainTitle(c.as_of, c.spot) }}. Expiry {{ c.expiry }}, {{ c.days_to_expiry }} days
             out.
           </p>
-          <app-data-table
-            caption="Option chain by strike"
-            [rows]="c.rows"
-            [columns]="columns()"
-            [rowKey]="strikeKey"
-            [pageSize]="0"
-          />
+          <!-- Calls and puts mirrored around the strike. Shaded cells are in the money. -->
+          <div
+            class="chain-wrap"
+            role="region"
+            tabindex="0"
+            aria-label="Option chain by strike, scrollable table"
+          >
+            <table class="chain" [attr.data-side]="side()">
+              <caption class="visually-hidden">
+                Option chain by strike
+              </caption>
+              <thead>
+                @if (layout().calls.length) {
+                  <tr class="group">
+                    <th scope="colgroup" class="calls hide-phone" [attr.colspan]="layout().calls.length">
+                      Calls
+                    </th>
+                    <th scope="colgroup" class="calls phone-only" [attr.colspan]="phoneCount()">
+                      Calls
+                    </th>
+                    <td class="strike-gap"></td>
+                    <th scope="colgroup" class="puts hide-phone" [attr.colspan]="layout().puts.length">
+                      Puts
+                    </th>
+                    <th scope="colgroup" class="puts phone-only" [attr.colspan]="phoneCount()">
+                      Puts
+                    </th>
+                  </tr>
+                }
+                <tr>
+                  @for (col of layout().calls; track col.key) {
+                    <th scope="col" class="q" [class.hide-phone]="!col.phone">
+                      <span class="th-inner">
+                        <span class="visually-hidden">{{ col.prefix }} </span
+                        ><span class="short">{{ shortLabel(col) }}</span>
+                        <app-help-tip [term]="col.help || null" />
+                      </span>
+                    </th>
+                  }
+                  <th scope="col" class="strike">Strike</th>
+                  @for (col of layout().puts; track col.key) {
+                    <th scope="col" class="q" [class.hide-phone]="!col.phone">
+                      <span class="th-inner">
+                        @if (col.prefix) {
+                          <span class="visually-hidden">{{ col.prefix }} </span>
+                        }
+                        <span class="short">{{ shortLabel(col) }}</span>
+                        <app-help-tip [term]="col.help || null" />
+                      </span>
+                    </th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of chainRows(); track r.row.strike) {
+                  @if (r.spotBefore) {
+                    <tr class="spot-row">
+                      <td [attr.colspan]="colCount()">
+                        <span class="spot-tag num">Price {{ spotText(c.spot) }}</span>
+                      </td>
+                    </tr>
+                  }
+                  <tr>
+                    @for (col of layout().calls; track col.key) {
+                      <td
+                        class="q num"
+                        [class.itm]="itm(col.side, r.row.strike, c.spot)"
+                        [class.hide-phone]="!col.phone"
+                      >
+                        {{ col.show(r.row) }}
+                      </td>
+                    }
+                    <th scope="row" class="strike num">{{ strikeText(r.row.strike) }}</th>
+                    @for (col of layout().puts; track col.key) {
+                      <td
+                        class="q num"
+                        [class.itm]="itm(col.side, r.row.strike, c.spot)"
+                        [class.hide-phone]="!col.phone"
+                      >
+                        {{ col.show(r.row) }}
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
           <p class="hint prose">
-            IV is the implied volatility we work out from the price. Theta is money per share per
-            day and vega money per share per point of volatility, from {{ modelsText(c.models) }}.
+            Shaded cells are in the money. IV is the implied volatility we work out from the price.
+            Theta is money per share per day and vega money per share per point of volatility, from
+            {{ modelsText(c.models) }}. Phones show bid, ask and delta.
           </p>
         }
       </div>
     </section>
 
-    <section class="panel span-7" aria-labelledby="payoff-title">
-      <div class="panel-head">
-        <h2 id="payoff-title">Payoff at expiry</h2>
-      </div>
-      <div class="panel-body stack">
-        @if (structures.error(); as err) {
-          <app-error-state
-            title="Could not load the structures"
-            [error]="err"
-            (retry)="structures.reload()"
-          />
-        } @else if (!structures.hasValue()) {
-          <app-loading-state label="Loading the structures" [rows]="3" />
-        } @else {
-          <form class="stack" novalidate (submit)="$event.preventDefault(); drawPayoff()">
-            <div class="pickers">
-              <div class="field">
-                <label for="op-structure">Structure</label>
-                <select
-                  id="op-structure"
-                  class="input"
-                  (change)="pickStructure($any($event.target).value)"
-                >
-                  @for (s of structures.value(); track s.name) {
-                    <option [value]="s.name" [selected]="s.name === payoffForm().structure">
-                      {{ structureLabel(s.name) }}
-                    </option>
-                  }
-                </select>
-              </div>
-              @for (p of structure()?.params ?? []; track p) {
-                <div class="field">
-                  <label [for]="'op-param-' + p">{{ paramLabel(p) }}</label>
-                  <input
-                    class="input num"
-                    type="number"
-                    [id]="'op-param-' + p"
-                    [attr.inputmode]="isDte(p) ? 'numeric' : 'decimal'"
-                    [attr.min]="isDte(p) ? 1 : 0.01"
-                    [attr.max]="isDte(p) ? 400 : 0.99"
-                    [attr.step]="isDte(p) ? 1 : 0.01"
-                    [value]="payoffForm().values[p] ?? ''"
-                    (input)="setParam(p, $any($event.target).value)"
-                  />
-                </div>
-              }
-            </div>
-            @if (structure()?.holds_shares) {
-              <p class="hint">Includes one contract's worth of shares held.</p>
-            }
-            <div class="actions">
-              <button class="btn btn-primary" type="submit" [disabled]="drawing()">
-                {{ drawing() ? 'Drawing' : 'Draw payoff' }}
-              </button>
-            </div>
-          </form>
-          @if (payoffError(); as err) {
+    <div class="cols">
+      <section class="page-section" aria-labelledby="payoff-title">
+        <header class="section-head">
+          <h2 id="payoff-title">Payoff at expiry</h2>
+        </header>
+        <div class="section-body stack">
+          @if (structures.error(); as err) {
             <app-error-state
-              title="Could not draw this payoff"
+              title="Could not load the structures"
               [error]="err"
-              (retry)="drawPayoff()"
+              (retry)="structures.reload()"
             />
-          } @else if (payoff(); as p) {
-            <app-payoff-diagram [payoff]="p" />
-          }
-        }
-      </div>
-    </section>
-
-    <section class="panel span-5" aria-labelledby="strategies-title">
-      <div class="panel-head">
-        <h2 id="strategies-title">Options strategies</h2>
-      </div>
-      <div class="panel-body">
-        @if (strategies.error(); as err) {
-          <app-error-state
-            title="Could not load the strategies"
-            [error]="err"
-            (retry)="strategies.reload()"
-          />
-        } @else if (!strategies.hasValue()) {
-          <app-loading-state label="Loading the strategies" [rows]="4" />
-        } @else {
-          <ul class="strategies">
-            @for (s of strategies.value(); track s.id) {
-              <li>
-                <h3>{{ strategyName(s.id) }}</h3>
-                <p class="structures">{{ structureList(s.structures) }}</p>
-                <p class="hypothesis">{{ s.hypothesis }}</p>
-              </li>
+          } @else if (!structures.hasValue()) {
+            <app-loading-state label="Loading the structures" [rows]="3" />
+          } @else {
+            <form class="stack" novalidate (submit)="$event.preventDefault(); drawPayoff()">
+              <div class="pickers">
+                <div class="field">
+                  <label for="op-structure">Structure</label>
+                  <select
+                    id="op-structure"
+                    class="input"
+                    (change)="pickStructure($any($event.target).value)"
+                  >
+                    @for (s of structures.value(); track s.name) {
+                      <option [value]="s.name" [selected]="s.name === payoffForm().structure">
+                        {{ structureLabel(s.name) }}
+                      </option>
+                    }
+                  </select>
+                </div>
+                @for (p of structure()?.params ?? []; track p) {
+                  <div class="field">
+                    <label [for]="'op-param-' + p">{{ paramLabel(p) }}</label>
+                    <input
+                      class="input num"
+                      type="number"
+                      [id]="'op-param-' + p"
+                      [attr.inputmode]="isDte(p) ? 'numeric' : 'decimal'"
+                      [attr.min]="isDte(p) ? 1 : 0.01"
+                      [attr.max]="isDte(p) ? 400 : 0.99"
+                      [attr.step]="isDte(p) ? 1 : 0.01"
+                      [value]="payoffForm().values[p] ?? ''"
+                      (input)="setParam(p, $any($event.target).value)"
+                    />
+                  </div>
+                }
+              </div>
+              @if (structure()?.holds_shares) {
+                <p class="hint">Includes one contract's worth of shares held.</p>
+              }
+              <div class="actions">
+                <button class="btn btn-primary" type="submit" [disabled]="drawing()">
+                  {{ drawing() ? 'Drawing' : 'Draw payoff' }}
+                </button>
+              </div>
+            </form>
+            @if (payoffError(); as err) {
+              <app-error-state
+                title="Could not draw this payoff"
+                [error]="err"
+                (retry)="drawPayoff()"
+              />
+            } @else if (payoff(); as p) {
+              <app-payoff-diagram [payoff]="p" />
             }
-          </ul>
-        }
-      </div>
-    </section>
+          }
+        </div>
+      </section>
 
-    <section class="panel span-12" aria-labelledby="backtest-title">
-      <div class="panel-head">
+      <section class="page-section section-flush" aria-labelledby="strategies-title">
+        <header class="section-head">
+          <h2 id="strategies-title">
+            Options strategies
+            @if (strategies.hasValue()) {
+              <span class="count">{{ strategies.value().length }}</span>
+            }
+          </h2>
+        </header>
+        <div class="section-body">
+          @if (strategies.error(); as err) {
+            <app-error-state
+              title="Could not load the strategies"
+              [error]="err"
+              (retry)="strategies.reload()"
+            />
+          } @else if (!strategies.hasValue()) {
+            <app-loading-state label="Loading the strategies" [rows]="4" />
+          } @else {
+            <ul class="strategies">
+              @for (s of strategies.value(); track s.id) {
+                <li>
+                  <details>
+                    <summary>
+                      <span class="name-line">
+                        <h3>{{ strategyName(s.id) }}</h3>
+                        <span class="structures">{{ structureList(s.structures) }}</span>
+                      </span>
+                      <span class="disclosure-chev" aria-hidden="true"></span>
+                    </summary>
+                    <p class="hypothesis">{{ s.hypothesis }}</p>
+                  </details>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </section>
+    </div>
+
+    <section class="page-section" aria-labelledby="backtest-title">
+      <header class="section-head">
         <h2 id="backtest-title">Backtest</h2>
-      </div>
-      <div class="panel-body">
+      </header>
+      <div class="section-body">
         <app-options-backtest
           [strategies]="strategies.hasValue() ? strategies.value() : []"
           [underlyings]="underlyings.value()"

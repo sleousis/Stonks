@@ -11,14 +11,16 @@ import {
 import type { OptionChainRow, OptionPayoffView, OptionStructureView } from '../../api/models';
 import { OptionsService } from '../../api/options.service';
 import { formatDate, formatNumber } from '../../core/format/format';
-import { DataTable } from '../../shared/ui/data-table/data-table';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { OptionsBacktest } from './options-backtest';
 import {
+  type ChainCell,
   type ChainSide,
-  chainColumns,
+  chainLayout,
+  inTheMoney,
   optionsStrategyName,
   paramLabel,
   pricingModelsText,
@@ -60,7 +62,7 @@ const DEFAULTS: Record<string, number> = {
     DataPlanNote,
     PageHeader,
     Segmented,
-    DataTable,
+    HelpTip,
     LoadingState,
     ErrorState,
     EmptyState,
@@ -98,8 +100,50 @@ export class OptionsPage {
     loader: ({ params }) => this.api.chain(params.underlying, params.asOf, params.expiry),
   });
 
-  protected readonly columns = computed(() => chainColumns(this.side()));
-  protected readonly strikeKey = (row: OptionChainRow) => String(row.strike);
+  /** The mirrored chain's columns: calls, the strike, puts. */
+  protected readonly layout = computed(() => chainLayout(this.side()));
+  /** Columns each side keeps on phones (bid, ask, delta). */
+  protected readonly phoneCount = computed(
+    () => this.layout().puts.filter((c) => c.phone).length,
+  );
+  protected readonly colCount = computed(
+    () => this.layout().calls.length + this.layout().puts.length + 1,
+  );
+  /** The rows by strike, with the underlying's price marked between two strikes. */
+  protected readonly chainRows = computed(() => {
+    if (!this.chain.hasValue()) return [];
+    const { rows, spot } = this.chain.value();
+    let marked = spot === null || spot === undefined;
+    return rows.map((row: OptionChainRow) => {
+      const spotBefore = !marked && row.strike >= (spot as number);
+      if (spotBefore) marked = true;
+      return { row, spotBefore };
+    });
+  });
+  protected readonly itm = inTheMoney;
+
+  /** The header's visible words: "bid" under Calls, the short form for IV. */
+  protected shortLabel(col: ChainCell): string {
+    return col.prefix ? col.label.slice(col.prefix.length + 1) : col.label;
+  }
+
+  protected strikeText(strike: number): string {
+    return formatNumber(strike, { digits: 2 });
+  }
+
+  protected spotText(spot: number | null | undefined): string {
+    return spot === null || spot === undefined ? '' : formatNumber(spot, { digits: 2 });
+  }
+
+  /** "AAA.US at 97.04. 14 strikes, expiry in 42 days." */
+  protected readonly standfirst = computed(() => {
+    if (!this.chain.hasValue()) {
+      return 'Look at option prices and test option strategies on past prices. Nothing here trades.';
+    }
+    const c = this.chain.value();
+    const price = c.spot === null || c.spot === undefined ? '' : ` at ${this.spotText(c.spot)}`;
+    return `${this.underlying()}${price}. ${c.rows.length} strikes, expiry in ${c.days_to_expiry} days. Nothing here trades.`;
+  });
 
   protected readonly payoffForm = signal<PayoffForm>({ structure: '', values: {} });
   protected readonly payoff = signal<OptionPayoffView | null>(null);

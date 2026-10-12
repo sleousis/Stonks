@@ -112,14 +112,13 @@ import {
       gap: var(--space-4);
       min-width: 0;
     }
-    /* The four figures: one inset well, label over value. */
+    /* The four figures: a summary strip, 1px rules between cells. */
     .figures {
       display: grid;
-      gap: var(--space-3);
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      padding: var(--space-3);
-      border-radius: var(--r-ctl);
-      background: var(--sunk);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      overflow: hidden;
       @include bp.from-tablet {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
@@ -128,6 +127,10 @@ import {
       display: grid;
       gap: var(--space-1);
       min-width: 0;
+      margin: -1px 0 0 -1px;
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--rule);
+      border-left: 1px solid var(--rule);
     }
     .label {
       color: var(--muted);
@@ -135,7 +138,8 @@ import {
     }
     .value {
       font-family: var(--font-mono);
-      font-size: var(--text-lg);
+      font-size: var(--text-stat);
+      letter-spacing: -0.03em;
       font-variant-numeric: tabular-nums slashed-zero;
       font-weight: var(--weight-medium);
       overflow-wrap: anywhere;
@@ -158,6 +162,7 @@ import {
     .grid {
       stroke: var(--chart-grid);
       stroke-width: 1;
+      stroke-dasharray: 2 3;
     }
     .tick {
       fill: var(--chart-text);
@@ -176,7 +181,8 @@ import {
     .line {
       fill: none;
       stroke: var(--chart-line);
-      stroke-width: 2;
+      stroke-width: 1.75;
+      stroke-linejoin: round;
     }
     .area-gain {
       fill: var(--up-soft);
@@ -204,6 +210,8 @@ import {
     }
     li {
       display: flex;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--rule);
       flex-wrap: wrap;
       justify-content: space-between;
       gap: var(--space-2);
