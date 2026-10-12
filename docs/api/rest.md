@@ -1349,6 +1349,7 @@ Which CSV column holds which field. Only ``date`` is required, plus either a ``t
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `commission_multiplier` | number | no |  |
 | `ibkr_fixed` | [IbkrFixedFees](#ibkrfixedfees) | no |  |
 | `ibkr_tiered` | [IbkrTieredFees](#ibkrtieredfees) | no |  |
 | `us_regulatory` | [UsRegulatoryFees](#usregulatoryfees) | no |  |

@@ -1987,6 +1987,10 @@ export type ColumnMapping = {
  * asset class picks its schedule with ``commission``.
  */
 export type CommissionSettings = {
+    /**
+     * Commission Multiplier
+     */
+    commission_multiplier?: number;
     ibkr_fixed?: IbkrFixedFees;
     ibkr_tiered?: IbkrTieredFees;
     us_regulatory?: UsRegulatoryFees;

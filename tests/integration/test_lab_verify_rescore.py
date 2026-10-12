@@ -205,3 +205,26 @@ def test_an_old_manifest_falls_back_to_the_settings(lake_trending):
     rebuilt = verify_mod._dataset(manifest, lake_trending, settings)
     assert rebuilt.execution == ExecutionSettings(settlement_days=2)
     assert rebuilt.embargo_bars == 3
+
+
+def test_verify_knows_every_registered_objective(ledger, lake_trending):
+    """A run scored by a ``cv_`` objective (or a plugin objective) is
+    rescored through the objective registry, not a fixed list."""
+    from dataclasses import replace
+
+    state, artifacts = ledger
+    runner = LabRunner(
+        tuner=GridTuner(grid_size=2, parallel=SERIAL),
+        objective=SharpeObjective(),
+        suite=_suite(),
+        budget=2,
+        ledger=TrialLedger(state, artifacts),
+        settings=Settings(),
+    )
+    result = runner.run(Momentum, _ds(lake_trending))
+    target = resolve_target(state, StrategyRegistry(state, artifacts), artifacts, result.run_id)
+    score = verify_mod._rescore(
+        replace(target, objective="cv_sharpe"), lake_trending, Settings(), None
+    )
+    assert isinstance(score, float)
+    assert verify_mod._direction("cv_sharpe") == "maximize"

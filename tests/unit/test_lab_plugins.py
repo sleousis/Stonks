@@ -109,13 +109,16 @@ def fake_plugins(monkeypatch):
             if g == group
         ]
 
-    monkeypatch.setattr(plugins, "entry_points", fake_entry_points)
     from stonks.lab import objectives
     from stonks.lab.tuning import registry as tuners
 
+    # Snapshot the registries before the fake entry points are in place:
+    # tuner_classes() loads plugins, which would register the fakes into
+    # the real registry and leak them into later tests.
     monkeypatch.setattr(objectives, "_PLAIN", dict(objectives._PLAIN))
     monkeypatch.setattr(objectives, "_CV", list(objectives._CV))
     monkeypatch.setattr(tuners, "_TUNERS", dict(tuners.tuner_classes()))
+    monkeypatch.setattr(plugins, "entry_points", fake_entry_points)
     plugins.clear_cache()
     yield
     plugins.clear_cache()

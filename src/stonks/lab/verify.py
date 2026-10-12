@@ -272,11 +272,11 @@ def _rescore(
     settings: Any,
     objectives: Mapping[str, Callable[[], Any]] | None,
 ) -> float:
-    from stonks.lab.objectives import OBJECTIVES
+    from stonks.lab.objectives import objective_factories
     from stonks.lab.parallel import _call_seeded, task_seeds
     from stonks.lab.tuning.base import _run_trial, _TrialState
 
-    catalog = dict(objectives or OBJECTIVES)
+    catalog = dict(objectives or objective_factories())
     make = catalog.get(str(target.objective))
     if make is None:
         raise ValueError(f"unknown objective {target.objective!r}")
@@ -358,9 +358,9 @@ def _model(cls: Any, value: Any) -> Any:
 
 
 def _direction(objective: Any) -> str:
-    from stonks.lab.objectives import OBJECTIVES
+    from stonks.lab.objectives import objective_factories
 
-    make = OBJECTIVES.get(str(objective))
+    make = objective_factories().get(str(objective))
     return str(getattr(make(), "direction", "maximize")) if make else "maximize"
 
 

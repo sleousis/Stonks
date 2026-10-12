@@ -3584,6 +3584,12 @@
         "additionalProperties": false,
         "description": "``[backtest.costs.commissions]``: the rates of every schedule. An\nasset class picks its schedule with ``commission``.",
         "properties": {
+          "commission_multiplier": {
+            "default": 1.0,
+            "minimum": 0.0,
+            "title": "Commission Multiplier",
+            "type": "number"
+          },
           "ibkr_fixed": {
             "$ref": "#/components/schemas/IbkrFixedFees",
             "default": {
@@ -4229,6 +4235,7 @@
           "commissions": {
             "$ref": "#/components/schemas/CommissionSettings",
             "default": {
+              "commission_multiplier": 1.0,
               "ibkr_fixed": {
                 "max_fraction": 0.01,
                 "minimum": 1.0,
