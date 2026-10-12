@@ -91,7 +91,8 @@ describe('ScreenAlerts', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.textContent).toContain('Weekly on Friday');
     expect(root.textContent).toContain('7 matched');
-    expect(root.textContent).toContain('AAA.US, BBB.US');
+    const tags = [...root.querySelectorAll('.events .ticker-tag')].map((t) => t.textContent);
+    expect(tags).toEqual(['AAA.US', 'BBB.US']);
     const select = root.querySelector('select') as HTMLSelectElement;
     expect(select.labels?.[0]?.textContent).toContain(`When ${SAVED.name} alerts`);
   });

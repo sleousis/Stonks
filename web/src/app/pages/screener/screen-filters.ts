@@ -76,7 +76,7 @@ import { type FilterRow, MAX_FILTERS, NEEDS_PLAN, filterRow } from './screen-for
           </div>
           <button
             type="button"
-            class="btn btn-tertiary remove"
+            class="btn btn-ghost btn-compact remove"
             [attr.aria-label]="'Remove filter ' + (i + 1)"
             (click)="remove(f.key)"
           >
@@ -92,35 +92,36 @@ import { type FilterRow, MAX_FILTERS, NEEDS_PLAN, filterRow } from './screen-for
     </div>
   `,
   styles: `
-    @use 'breakpoints' as bp;
-
+    /* Filter rows on hairlines. In a narrow column (the screener's 320px
+       builder) the metric takes the row and the bounds share the next. */
     :host {
       display: grid;
       gap: var(--space-3);
       min-width: 0;
+      container-type: inline-size;
     }
 
     .hint {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
 
     .filters {
-      display: grid;
-      gap: var(--space-3);
       margin: 0;
       padding: 0;
       list-style: none;
     }
 
+    .filters:not(:empty) {
+      border-top: 1px solid var(--rule);
+    }
+
     .filter {
       display: grid;
-      gap: var(--space-2) var(--space-3);
-      /* A borderless inset well: a panel never holds a bordered card. */
-      padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-2) var(--space-3);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
 
       .metric {
         grid-column: 1 / -1;
@@ -130,8 +131,10 @@ import { type FilterRow, MAX_FILTERS, NEEDS_PLAN, filterRow } from './screen-for
         grid-column: 1 / -1;
         justify-self: start;
       }
+    }
 
-      @include bp.from-tablet {
+    @container (min-width: 560px) {
+      .filter {
         grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
         align-items: start;
 
