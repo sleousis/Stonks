@@ -143,8 +143,16 @@ describe('CalendarPage', () => {
     req.flush(view());
     await settle(fixture);
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('h2#cal-events-title')?.textContent).toContain('Earnings reports');
+    // Everything coming up, grouped by day, each event with its type.
+    expect(el.querySelector('h2#cal-events-title')?.textContent).toContain('Coming up');
+    expect(el.querySelectorAll('.day-row').length).toBe(4);
+    const kinds = [...el.querySelectorAll('.event .kind')].map((k) => k.textContent?.trim());
+    expect(kinds).toEqual(['Ex-dividend', 'Economic', 'Economic', 'Economic', 'Earnings']);
     expect(el.textContent).toContain('After the close');
+    expect(radio(el, 'All').textContent).toContain('(5)');
+    radio(el, 'Earnings').click();
+    fixture.detectChanges();
+    expect(el.querySelector('h2#cal-events-title')?.textContent).toContain('Earnings reports');
     expect(el.querySelector('a[href="/charts/AAPL.US"]')).not.toBeNull();
     // The tabs count each calendar.
     expect(radio(el, 'Earnings').textContent).toContain('(1)');
@@ -277,6 +285,8 @@ describe('CalendarPage', () => {
     expect(qs(req).get('tickers')).toBe('MSFT.US,NVDA.US');
     req.flush(view({ scope: 'tickers', earnings: [] }));
     await settle(fixture);
+    radio(el, 'Earnings').click();
+    fixture.detectChanges();
     expect(el.textContent).toContain('No earnings in these days');
   });
 

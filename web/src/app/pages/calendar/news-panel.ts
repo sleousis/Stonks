@@ -26,11 +26,11 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, LoadingState, ErrorState, EmptyState, DataPlanNote, HelpTip],
   template: `
-    <section class="panel" aria-labelledby="news-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="news-title">
+      <header class="section-head">
         <h2 id="news-title">News and sentiment <app-help-tip term="sentiment_score" /></h2>
-      </div>
-      <app-data-plan-note class="panel-body" kind="news" />
+      </header>
+      <app-data-plan-note class="plan" kind="news" />
       @if (!query()) {
         <app-empty-state
           title="Pick whose news to show"
@@ -46,7 +46,7 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
           message="Articles and sentiment arrive with each data update for these tickers. Not every ticker has news every day."
         />
       } @else {
-        <div class="panel-body body">
+        <div class="body">
           @if (summary().length) {
             <div class="mood" role="list" aria-label="Sentiment by ticker, last 30 days">
               @for (s of summary(); track s.ticker) {
@@ -66,28 +66,30 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
             <ul class="articles" aria-label="Newest articles">
               @for (a of news.value().items; track a.ticker + a.published_at + a.title) {
                 <li class="article">
-                  <p class="article-head">
-                    <span class="ticker">{{ a.ticker }}</span>
-                    @if (a.source_name) {
-                      <span class="source">{{ a.source_name }}</span>
+                  <span class="when num" [title]="date(a.published_at)">{{
+                    ago(a.published_at)
+                  }}</span>
+                  <div class="article-body">
+                    @if (link(a); as href) {
+                      <a class="title" [href]="href" target="_blank" rel="noopener noreferrer"
+                        >{{ a.title }}<span class="visually-hidden"> (opens in a new tab)</span></a
+                      >
+                    } @else {
+                      <p class="title">{{ a.title }}</p>
                     }
-                    <span class="when num" [title]="date(a.published_at)">{{
-                      ago(a.published_at)
-                    }}</span>
-                    @if (a.sentiment !== null && a.sentiment !== undefined) {
-                      <span class="tag" [class]="tone(a.sentiment)">
-                        <span aria-hidden="true">{{ shape(a.sentiment) }}</span>
-                        {{ word(a.sentiment) }}
-                      </span>
-                    }
-                  </p>
-                  @if (link(a); as href) {
-                    <a class="title" [href]="href" target="_blank" rel="noopener noreferrer"
-                      >{{ a.title }}<span class="visually-hidden"> (opens in a new tab)</span></a
-                    >
-                  } @else {
-                    <p class="title">{{ a.title }}</p>
-                  }
+                    <p class="article-head">
+                      <span class="ticker-tag">{{ a.ticker }}</span>
+                      @if (a.source_name) {
+                        <span class="source">{{ a.source_name }}</span>
+                      }
+                      @if (a.sentiment !== null && a.sentiment !== undefined) {
+                        <span class="tag" [class]="tone(a.sentiment)">
+                          <span aria-hidden="true">{{ shape(a.sentiment) }}</span>
+                          {{ word(a.sentiment) }}
+                        </span>
+                      }
+                    </p>
+                  </div>
                 </li>
               }
             </ul>
@@ -102,111 +104,123 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
       display: block;
       min-width: 0;
     }
+    .plan {
+      display: block;
+      margin-top: var(--space-4);
+    }
     .body {
       display: grid;
-      gap: var(--space-4);
+      gap: var(--space-6);
     }
+    /* Each ticker's mood: a cell in a strip of hairline-ruled cells. */
     .mood {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-      gap: var(--space-2);
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      border-bottom: 1px solid var(--rule);
+      overflow: hidden;
     }
-    /* Each ticker's mood: a borderless inset well, not a card in the panel. */
     .mood-card {
       display: grid;
-      gap: var(--space-1);
+      gap: 2px;
       min-width: 0;
-      padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      margin-left: -1px;
+      padding: var(--space-3) var(--space-4);
+      border-left: 1px solid var(--rule);
     }
     .mood-ticker {
       display: inline-flex;
       align-items: center;
       min-height: var(--touch-min);
-      font-family: var(--font-mono);
-      font-weight: var(--weight-semibold);
+      color: var(--ink);
+      font-weight: 650;
+      text-decoration: none;
       @include bp.from-tablet {
         min-height: 24px;
       }
+    }
+    .mood-ticker:hover {
+      text-decoration: underline;
     }
     .mood-word {
       display: flex;
       align-items: baseline;
       gap: var(--space-1);
-      font-weight: var(--weight-medium);
+      font-size: var(--text-lead);
+      font-weight: var(--weight-semibold);
     }
     .mood-meta {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
     .articles {
-      display: grid;
       margin: 0;
       padding: 0;
       list-style: none;
     }
+    /* One article: the age in mono on the left, the title, then a meta line. */
     .article {
       display: grid;
-      gap: var(--space-1);
-      padding: var(--space-3) 0;
-      border-bottom: 1px solid var(--color-border);
+      grid-template-columns: 5.5rem minmax(0, 1fr);
+      gap: var(--space-1) var(--space-4);
       min-width: 0;
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
     }
     .article:last-child {
       border-bottom: 0;
     }
-    .article:first-child {
-      padding-top: 0;
+    .when {
+      padding-top: 2px;
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
-    /* One article: a 12px meta line, the title under it, a hairline between. */
+    .article-body {
+      display: grid;
+      gap: var(--space-1);
+      min-width: 0;
+    }
     .article-head {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: var(--space-1) var(--space-3);
+      color: var(--muted);
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
     }
     .source {
-      color: var(--color-ink-2);
-    }
-    .ticker {
-      font-family: var(--font-mono);
-      font-weight: var(--weight-semibold);
-      color: var(--color-ink);
+      color: var(--ink-2);
     }
     .tag {
       display: inline-flex;
       gap: var(--space-1);
-      padding: 0 var(--space-2);
-      border: 1px solid currentColor;
-      border-radius: var(--radius-xs);
+      font-weight: var(--weight-label);
     }
     .title {
-      display: inline-block;
-      max-width: 70ch;
-      min-height: var(--touch-min);
-      padding: var(--space-1) 0;
-      color: var(--color-ink);
-      font-size: var(--text-md);
+      max-width: 72ch;
+      color: var(--ink);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
-      line-height: var(--leading-tight);
+      line-height: 1.4;
       overflow-wrap: anywhere;
       text-decoration: none;
-      @include bp.from-tablet {
-        min-height: 0;
-      }
     }
     a.title:hover,
     a.title:focus-visible {
       text-decoration: underline;
     }
-    .gain {
-      color: var(--color-gain);
-    }
-    .loss {
-      color: var(--color-loss);
+    @include bp.phone {
+      .article {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .when {
+        order: 2;
+        padding: 0;
+      }
+      a.title {
+        display: inline-block;
+        min-height: var(--touch-min);
+        padding: var(--space-1) 0;
+      }
     }
   `,
 })

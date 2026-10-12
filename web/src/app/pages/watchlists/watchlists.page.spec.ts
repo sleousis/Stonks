@@ -9,7 +9,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { WatchlistsPage, labLink } from './watchlists.page';
+import { WatchlistsPage, labLink, quoteFrom } from './watchlists.page';
 
 const TECH: WatchlistView = {
   id: 'wl_1',
@@ -40,7 +40,26 @@ describe('WatchlistsPage', () => {
     await loading;
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    flushBars();
+    http.verify();
+  });
+
+  /** Answer every pending bars read: closes 100 then 102 (+2%). */
+  function flushBars(): void {
+    for (const r of http.match((x) => x.url.split('?')[0] === '/api/market/bars')) {
+      const ticker = r.request.params.get('ticker') ?? new URL(r.request.urlWithParams, 'http://x').searchParams.get('ticker');
+      r.flush({
+        ticker,
+        interval: '1d',
+        truncated: false,
+        bars: [
+          { timestamp: '2026-10-08', open: 99, high: 101, low: 98, close: 100, adj_close: 100, volume: 1 },
+          { timestamp: '2026-10-09', open: 100, high: 103, low: 99, close: 102, adj_close: 102, volume: 1 },
+        ],
+      });
+    }
+  }
 
   async function render(lists: WatchlistView[]) {
     const fixture = TestBed.createComponent(WatchlistsPage);
@@ -60,13 +79,38 @@ describe('WatchlistsPage', () => {
   it('links each ticker to its chart and the list to the lab', async () => {
     const fixture = await render([TECH]);
     const el: HTMLElement = fixture.nativeElement;
-    const chips = [...el.querySelectorAll('.chip')].map((a) => a.getAttribute('href'));
-    expect(chips).toEqual(['/charts/AAPL.US', '/charts/MSFT.US']);
+    const links = [...el.querySelectorAll('.ticker-link')].map((a) => a.getAttribute('href'));
+    expect(links).toEqual(['/charts/AAPL.US', '/charts/MSFT.US']);
     const lab = [...el.querySelectorAll('a')].find((a) =>
       a.textContent?.includes('Open in the lab'),
     );
     expect(lab?.getAttribute('href')).toBe('/lab?tickers=AAPL.US,MSFT.US');
     expect(labLink(TECH)).toEqual({ tickers: 'AAPL.US,MSFT.US' });
+  });
+
+  it('shows each ticker with its last close, day change and a sparkline', async () => {
+    const fixture = await render([TECH]);
+    const el: HTMLElement = fixture.nativeElement;
+    await tick(5);
+    flushBars();
+    await tick(5);
+    fixture.detectChanges();
+    const row = el.querySelector('tbody tr')!;
+    expect(row.textContent).toContain('102');
+    expect(row.textContent).toContain('+2.00%');
+    expect(row.querySelector('app-sparkline svg')).not.toBeNull();
+    expect(el.querySelector('[role="tab"]')?.textContent).toContain('Tech');
+    expect(el.textContent).toContain('2 of 2 rose');
+  });
+
+  it('reads a quote from daily bars', () => {
+    expect(quoteFrom('A', [{ close: 10 }, { close: 11, adj_close: 11 }])).toEqual({
+      ticker: 'A',
+      last: 11,
+      change: expect.closeTo(0.1, 6),
+      closes: [10, 11],
+    });
+    expect(quoteFrom('A', [])).toEqual({ ticker: 'A', last: null, change: null, closes: [] });
   });
 
   it('creates a watchlist from typed tickers', async () => {

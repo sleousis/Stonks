@@ -1,91 +1,166 @@
 @use 'breakpoints' as bp;
 
-.layout {
+.main,
+.side {
   display: grid;
-  gap: var(--space-4);
-  grid-template-columns: minmax(0, 1fr);
-
-  @include bp.from-desktop {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-    align-items: start;
-  }
-}
-.lists {
-  display: grid;
-  gap: var(--space-4);
+  align-content: start;
+  gap: var(--section-gap);
   min-width: 0;
 }
-.panel-body {
-  display: grid;
-  gap: var(--space-3);
+
+.side {
+  gap: var(--space-5);
 }
-.tickers {
-  min-height: 4.5rem;
-  padding: var(--space-2) var(--space-3);
-  text-transform: uppercase;
-  resize: vertical;
-}
-.tickers::placeholder {
-  text-transform: none;
-}
+
+.head-actions,
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
-.error {
-  color: var(--color-loss);
-  font-size: var(--text-xs);
-}
-.count {
-  font-size: var(--text-xs);
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-// Ticker chips: 36px on desktop, 44px on touch, the tag radius.
-.chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-xs);
-  color: var(--color-ink);
-  font-size: var(--text-sm);
-  text-decoration: none;
-  transition:
-    background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-.chip:hover {
-  border-color: var(--color-ink-3);
-  background: var(--color-hover);
-}
-.chip:active {
-  background: var(--color-pressed);
-}
-.danger {
-  color: var(--color-loss);
+
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
 }
 
-@include bp.coarse {
-  .chip {
-    min-height: var(--touch-min);
+.edit {
+  margin-top: var(--space-2);
+}
+
+.edit-title {
+  font-size: var(--text-section);
+  font-weight: var(--weight-bold);
+}
+
+.tickers {
+  min-height: 4.5rem;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  resize: vertical;
+}
+
+.tickers::placeholder {
+  font-family: var(--font-sans);
+  text-transform: none;
+}
+
+.form-error {
+  color: var(--down);
+  font-size: var(--text-sm);
+}
+
+.danger {
+  color: var(--down);
+}
+
+// The quotes table: the whole row opens the ticker's chart.
+.quotes {
+  tr {
+    position: relative;
+  }
+
+  .ticker-cell {
+    font-weight: var(--weight-bold);
+    text-align: left;
+  }
+
+  .ticker-link {
+    color: var(--ink);
+    font-size: var(--text-md);
+    font-weight: 650;
+    text-decoration: none;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+    }
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .spark-col {
+    width: 152px;
+  }
+
+  .chev-cell {
+    width: 32px;
+    color: var(--muted);
+
+    svg {
+      width: 16px;
+      height: 16px;
+      margin-left: auto;
+    }
   }
 }
+
+.skeleton-line {
+  display: inline-block;
+  width: 4rem;
+  height: 10px;
+  border-radius: var(--r-tag);
+  background: var(--sunk);
+}
+
+// Phones: each ticker is a list item, the name left and the figures right.
 @include bp.phone {
-  .layout,
-  .lists {
-    gap: var(--space-3);
-  }
-  .chip {
-    min-height: var(--touch-min);
+  .quotes {
+    thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+
+    tbody,
+    tr {
+      display: block;
+    }
+
+    tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        'name last'
+        'name day';
+      align-items: center;
+      column-gap: var(--space-3);
+      min-height: var(--touch-min);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    th,
+    td {
+      height: auto;
+      padding: 0;
+      border: 0;
+    }
+
+    .ticker-cell {
+      grid-area: name;
+    }
+
+    td.num:nth-of-type(1) {
+      grid-area: last;
+      font-size: var(--text-lead);
+    }
+
+    td.num:nth-of-type(2) {
+      grid-area: day;
+      font-size: var(--text-sm);
+    }
+
+    .spark-col,
+    .chev-cell {
+      display: none;
+    }
   }
 }

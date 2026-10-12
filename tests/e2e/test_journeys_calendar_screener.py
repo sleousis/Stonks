@@ -46,11 +46,14 @@ def test_a_trader_reads_the_calendar_and_news(browse, stack, viewport):
 
     v.open_nav().get_by_role("link", name="Calendar", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Calendar")
-    expect(page.get_by_role("heading", name="Earnings reports")).to_be_visible()
-    expect(page.get_by_text("No earnings in these days")).to_be_visible()
+    expect(page.get_by_role("heading", name="Coming up")).to_be_visible()
+    expect(page.get_by_text("Nothing coming up in these days")).to_be_visible()
     v.check_page("calendar")
 
     show = page.get_by_role("radiogroup", name="Show")
+    show.get_by_role("radio", name=re.compile(r"^Earnings")).click()
+    expect(page.get_by_role("heading", name="Earnings reports")).to_be_visible()
+    expect(page.get_by_text("No earnings in these days")).to_be_visible()
     show.get_by_role("radio", name=re.compile(r"^Ex-dividend")).click()
     expect(page.get_by_role("heading", name="Ex-dividend dates")).to_be_visible()
     show.get_by_role("radio", name=re.compile(r"^Economic")).click()

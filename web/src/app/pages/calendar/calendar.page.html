@@ -1,0 +1,267 @@
+<app-page-header title="Calendar" [description]="standfirst()" />
+<app-data-plan-note kind="calendars" />
+
+<div class="layout">
+  <aside class="filters" aria-labelledby="cal-filter-title">
+    <section class="page-section">
+      <header class="section-head">
+        <h2 id="cal-filter-title">Whose events</h2>
+      </header>
+      <form class="section-body form" novalidate (submit)="$event.preventDefault(); apply()">
+        <app-segmented
+          label="Whose events"
+          [options]="scopes"
+          [value]="scope()"
+          (valueChange)="scope.set($any($event))"
+        />
+
+        @if (scope() === 'watchlists') {
+          <div class="field">
+            <label for="cal-watchlist">Watchlist</label>
+            <select
+              id="cal-watchlist"
+              class="input"
+              (change)="watchlistId.set($any($event.target).value || null)"
+            >
+              <option value="" [selected]="!watchlistId()">All your watchlists</option>
+              @for (w of watchlists.lists(); track w.id) {
+                <option [value]="w.id" [selected]="watchlistId() === w.id">{{ w.name }}</option>
+              }
+            </select>
+          </div>
+        } @else if (scope() === 'tickers') {
+          <div class="field">
+            <label for="cal-tickers">Tickers</label>
+            <input
+              id="cal-tickers"
+              class="input num"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="AAPL.US, MSFT.US"
+              aria-describedby="cal-tickers-hint"
+              [value]="tickersText()"
+              (input)="tickersText.set($any($event.target).value)"
+              (change)="apply()"
+            />
+            <span id="cal-tickers-hint" class="hint">Separate with commas or spaces.</span>
+          </div>
+        } @else if (scope() === 'holdings') {
+          <p class="hint">What your portfolios hold now.</p>
+        } @else {
+          <p class="hint">Every event we have. Economic releases show for every choice.</p>
+        }
+
+        <div class="dates">
+          <div class="field">
+            <label for="cal-start">From</label>
+            <input
+              id="cal-start"
+              class="input num"
+              type="date"
+              [value]="start()"
+              (change)="setRange({ start: $any($event.target).value })"
+            />
+          </div>
+          <div class="field">
+            <label for="cal-end">To</label>
+            <input
+              id="cal-end"
+              class="input num"
+              type="date"
+              [value]="end()"
+              (change)="setRange({ end: $any($event.target).value })"
+            />
+          </div>
+        </div>
+        @if (rangeError(); as e) {
+          <p class="form-error" role="alert">{{ e }}</p>
+        }
+        @if (scope() === 'tickers') {
+          <div class="actions">
+            <button type="submit" class="btn">Show events</button>
+          </div>
+        }
+      </form>
+    </section>
+
+    @if (tab() === 'economic' || tab() === 'all') {
+      <form class="countries" novalidate (submit)="$event.preventDefault(); applyCountries()">
+        <div class="field">
+          <label for="cal-countries">Countries</label>
+          <input
+            id="cal-countries"
+            class="input num"
+            autocapitalize="characters"
+            spellcheck="false"
+            placeholder="US, DE, EU"
+            aria-describedby="cal-countries-hint"
+            [value]="countriesText()"
+            (input)="countriesText.set($any($event.target).value)"
+            (change)="applyCountries()"
+          />
+          <span id="cal-countries-hint" class="hint"
+            >Two-letter codes for economic releases. Leave empty for every country.</span
+          >
+        </div>
+      </form>
+    }
+  </aside>
+
+  <div class="main">
+    <div class="show">
+      <app-segmented
+        label="Show"
+        [options]="tabOptions()"
+        [value]="tab()"
+        (valueChange)="pickTab($any($event))"
+      />
+    </div>
+
+    @if (tab() === 'news') {
+      <app-news-panel [query]="newsQuery()" />
+    } @else {
+      <section class="page-section section-flush agenda" aria-labelledby="cal-events-title">
+        <header class="section-head">
+          <h2 id="cal-events-title">
+            {{ tabTitle() }}
+            @if (shown().hasValue()) {
+              <span class="count">{{ eventCount() }}</span>
+            }
+          </h2>
+        </header>
+        <div class="section-body">
+          @if (!query()) {
+            <app-empty-state
+              title="Name some tickers"
+              message="Type the tickers whose events you want, then show them."
+            />
+          } @else if (shown().error(); as err) {
+            <app-error-state
+              title="Could not load the calendar"
+              [error]="err"
+              (retry)="shown().reload()"
+            />
+          } @else if (!shown().hasValue()) {
+            <app-loading-state label="Loading the calendar" [rows]="6" />
+          } @else {
+            @if (shown().value()!.truncated) {
+              <p class="callout note" data-tone="warn" role="status">
+                Only the first events show. Pick fewer days or fewer tickers to see them all.
+              </p>
+            }
+            @if (eventCount() === 0) {
+              @switch (tab()) {
+                @case ('earnings') {
+                  <app-empty-state title="No earnings in these days" [message]="emptyMessage()" />
+                }
+                @case ('dividends') {
+                  <app-empty-state
+                    title="No ex-dividend dates in these days"
+                    [message]="emptyMessage()"
+                  />
+                }
+                @case ('economic') {
+                  <app-empty-state
+                    title="No economic releases in these days"
+                    message="Releases arrive with the morning calendar update. Try more days or other countries."
+                  />
+                }
+                @case ('filings') {
+                  <app-empty-state
+                    title="No filings in these days"
+                    [message]="filingsEmptyMessage()"
+                  />
+                }
+                @default {
+                  <app-empty-state
+                    title="Nothing coming up in these days"
+                    [message]="emptyMessage()"
+                  />
+                }
+              }
+            } @else {
+              @for (d of shownDays(); track d.day) {
+                <div class="day" role="group" [attr.aria-labelledby]="'day-' + d.day">
+                  <h3 class="day-row" [id]="'day-' + d.day">
+                    <span class="day-date num">{{ dayLabel(d.day) }}</span>
+                    @if (relative(d.day); as rel) {
+                      <span class="day-rel">{{ rel }}</span>
+                    }
+                    <span class="day-count num"
+                      >{{ d.items.length }}
+                      <span class="visually-hidden">events</span></span
+                    >
+                  </h3>
+                  <ul class="events">
+                    @for (e of d.items; track e.key) {
+                      <li class="event" [attr.data-kind]="e.kind">
+                        <span class="when num">{{ e.when }}</span>
+                        <span class="kind" [attr.data-kind]="e.kind">{{ kindLabels[e.kind] }}</span>
+                        <div class="what">
+                          <p class="title">
+                            @if (e.ticker) {
+                              <a class="ticker-link" [routerLink]="['/charts', e.ticker]">{{
+                                e.title
+                              }}</a>
+                            } @else {
+                              <span>{{ e.title }}</span>
+                            }
+                            @if (e.form) {
+                              <span class="form-tag num">{{ e.form }}</span>
+                            }
+                            @if (e.importance) {
+                              <span class="importance" [attr.data-level]="e.importance"
+                                >{{ e.importance }}<span class="visually-hidden">
+                                  importance</span
+                                ></span
+                              >
+                            }
+                          </p>
+                          @if (e.meta) {
+                            <p class="meta">{{ e.meta }}</p>
+                          }
+                        </div>
+                        @if (e.figures.length) {
+                          <dl class="figures">
+                            @for (f of e.figures; track f.label) {
+                              <div>
+                                <dt>{{ f.label }}</dt>
+                                <dd class="num">{{ f.value }}</dd>
+                              </div>
+                            }
+                          </dl>
+                        } @else if (e.kind === 'filing') {
+                          <div class="figures">
+                            @if (e.url; as href) {
+                              <a
+                                class="filing-link text-link"
+                                [href]="href"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                >Open on SEC<span class="visually-hidden">
+                                  : {{ e.form }} of {{ e.ticker }}, opens in a new tab</span
+                                ></a
+                              >
+                            } @else {
+                              <span class="muted">No link</span>
+                            }
+                          </div>
+                        }
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+              @if (eventCount() > limit()) {
+                <div class="more">
+                  <button type="button" class="btn" (click)="showMore()">Show more</button>
+                  <span class="muted num">{{ limit() }} of {{ eventCount() }}</span>
+                </div>
+              }
+            }
+          }
+        </div>
+      </section>
+    }
+  </div>
+</div>
