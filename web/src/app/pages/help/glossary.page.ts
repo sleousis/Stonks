@@ -1,8 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   type ElementRef,
   afterNextRender,
+  afterRenderEffect,
   computed,
   inject,
   signal,
@@ -17,6 +19,9 @@ import { PageHeader } from '../../shared/ui/page-header';
  * Every term the console explains, in one list with an anchor per term
  * (`/help/glossary#sharpe`). Help tips link here. Built from
  * `core/help/glossary.ts`, so a new metric shows up without touching this page.
+ * From 1024px a sticky contents column sits on the left: the sections, the
+ * one in view marked and opened to its terms. Narrower screens get the
+ * section pills on top instead.
  */
 @Component({
   selector: 'app-glossary-page',
@@ -103,30 +108,58 @@ import { PageHeader } from '../../shared/ui/page-header';
           >
         }
       </nav>
-      <div #list class="groups">
-        @for (g of groups(); track g.title) {
-          <section class="group page-section" [attr.aria-labelledby]="'glossary-' + $index">
-            <div class="section-head">
-              <h2 [id]="'glossary-' + $index" tabindex="-1">
-                {{ g.title }} <span class="count">{{ g.entries.length }}</span>
-              </h2>
-            </div>
-            <dl class="terms">
-              @for (e of g.entries; track e.key) {
-                <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
-                  <dt>{{ e.term }}</dt>
-                  <dd>{{ e.short }}</dd>
-                  @if (e.example) {
-                    <dd class="example">For example: {{ e.example }}</dd>
-                  }
-                  @if (e.aliases.length) {
-                    <dd class="aliases">Also shown as {{ e.aliases.join(', ') }}</dd>
-                  }
-                </div>
-              }
-            </dl>
-          </section>
-        }
+      <div class="layout">
+        <nav class="toc" aria-label="Glossary contents">
+          <ol>
+            @for (g of groups(); track g.title; let gi = $index) {
+              <li [class.current]="gi === active()">
+                <a
+                  class="toc-group"
+                  [href]="'/help/glossary#glossary-' + gi"
+                  [attr.aria-current]="gi === active() ? 'true' : null"
+                  (click)="jump($event, 'glossary-' + gi)"
+                  >{{ g.title }} <span class="num toc-count">{{ g.entries.length }}</span></a
+                >
+                @if (gi === active()) {
+                  <ol class="toc-terms">
+                    @for (e of g.entries; track e.key) {
+                      <li>
+                        <a [href]="'/help/glossary#' + e.key" (click)="jump($event, e.key)">{{
+                          e.term
+                        }}</a>
+                      </li>
+                    }
+                  </ol>
+                }
+              </li>
+            }
+          </ol>
+        </nav>
+        <div #list class="groups">
+          @for (g of groups(); track g.title) {
+            <section class="group page-section" [attr.aria-labelledby]="'glossary-' + $index">
+              <div class="section-head">
+                <h2 [id]="'glossary-' + $index" tabindex="-1">
+                  {{ g.title }} <span class="count">{{ g.entries.length }}</span>
+                </h2>
+              </div>
+              <dl class="terms">
+                @for (e of g.entries; track e.key) {
+                  <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
+                    <dt>{{ e.term }}</dt>
+                    <dd>{{ e.short }}</dd>
+                    @if (e.example) {
+                      <dd class="example">For example: {{ e.example }}</dd>
+                    }
+                    @if (e.aliases.length) {
+                      <dd class="aliases">Also shown as {{ e.aliases.join(', ') }}</dd>
+                    }
+                  </div>
+                }
+              </dl>
+            </section>
+          }
+        </div>
       </div>
     }
   `,
@@ -212,10 +245,77 @@ import { PageHeader } from '../../shared/ui/page-header';
     .groups {
       display: grid;
       gap: var(--section-gap);
+      min-width: 0;
+    }
+    /* The contents column: wide screens only, the pills stand in below. */
+    .toc {
+      display: none;
+    }
+    @media (min-width: 1024px) {
+      .jump {
+        display: none;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: var(--space-8);
+        align-items: start;
+      }
+      .toc {
+        position: sticky;
+        top: calc(var(--header-h) + var(--space-4));
+        display: block;
+        max-height: calc(100dvh - var(--header-h) - var(--space-8));
+        overflow-y: auto;
+        padding-top: var(--space-2);
+        border-top: 2px solid var(--rule-strong);
+        overscroll-behavior: contain;
+      }
+    }
+    .toc ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .toc a {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2);
+      min-height: 32px;
+      padding: 6px var(--space-2) 6px var(--space-3);
+      border-left: 2px solid transparent;
+      color: var(--ink-2);
+      font-size: var(--text-sm);
+      text-decoration: none;
+    }
+    .toc a:hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+    .toc-group {
+      font-weight: var(--weight-medium);
+    }
+    .toc li.current > .toc-group {
+      border-left-color: var(--accent);
+      color: var(--ink);
+      font-weight: var(--weight-semibold);
+    }
+    .toc-count {
+      color: var(--muted);
+      font-size: var(--text-xs);
+    }
+    .toc-terms {
+      padding-bottom: var(--space-2);
+    }
+    .toc-terms a {
+      min-height: 28px;
+      padding-left: var(--space-5);
+      color: var(--muted);
     }
     .group h2 {
       outline: none;
-      scroll-margin-top: calc(var(--chrome-h) + var(--rail-h) + var(--space-4));
+      scroll-margin-top: calc(var(--header-h) + var(--space-4));
     }
     /* Two columns: the term on the left, what it means on the right. */
     .terms {
@@ -226,7 +326,7 @@ import { PageHeader } from '../../shared/ui/page-header';
       gap: var(--space-1) var(--space-8);
       padding: var(--space-4) 0;
       border-bottom: 1px solid var(--rule);
-      scroll-margin-top: calc(var(--chrome-h) + var(--rail-h) + var(--space-4));
+      scroll-margin-top: calc(var(--header-h) + var(--space-4));
     }
     @include bp.from-tablet {
       .term {
@@ -309,16 +409,21 @@ export class GlossaryPage {
 
   protected readonly entries = computed(() => this.groups().flatMap((g) => g.entries));
 
+  /** The section in view, for the contents column (scroll-spy). */
+  protected readonly active = signal(0);
+
   /** One sentence, counted from the glossary. */
   protected readonly standfirst = `How Stonks works, and what each of the ${this.all.reduce(
     (n, g) => n + g.entries.length,
     0,
   )} words and figures in the console means.`;
 
-  /** Jump to a glossary section and put focus on its heading. */
+  /** Jump to a glossary section or term and put focus on it. */
   protected jump(event: Event, id: string): void {
     event.preventDefault();
-    const heading = this.list()?.nativeElement.querySelector<HTMLElement>(`#${id}`);
+    const heading = this.list()?.nativeElement.querySelector<HTMLElement>(
+      `[id="${CSS.escape(id)}"]`,
+    );
     if (!heading) return;
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     heading.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'start' });
@@ -326,6 +431,7 @@ export class GlossaryPage {
   }
 
   constructor() {
+    this.watchSections();
     // Bring the linked term into view and focus it, so keyboard and screen
     // reader users land on it too.
     afterNextRender(() => {
@@ -334,6 +440,37 @@ export class GlossaryPage {
       const el = this.list()?.nativeElement.querySelector<HTMLElement>(`[id="${CSS.escape(key)}"]`);
       el?.scrollIntoView?.({ block: 'start' });
       el?.focus({ preventScroll: true });
+    });
+  }
+
+  /**
+   * Marks the section in view: the last heading above 30% of the screen.
+   * An IntersectionObserver on the sections says when to look again.
+   */
+  private watchSections(): void {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const pick = () => {
+      const root = this.list()?.nativeElement;
+      if (!root) return;
+      const line = window.innerHeight * 0.3;
+      let at = 0;
+      root.querySelectorAll<HTMLElement>('.group h2').forEach((h, i) => {
+        if (h.getBoundingClientRect().top <= line) at = i;
+      });
+      if (at !== this.active()) this.active.set(at);
+    };
+    const observer = new IntersectionObserver(pick, {
+      rootMargin: '0px 0px -70% 0px',
+      threshold: [0, 1],
+    });
+    inject(DestroyRef).onDestroy(() => observer.disconnect());
+    afterRenderEffect(() => {
+      this.groups();
+      const root = this.list()?.nativeElement;
+      observer.disconnect();
+      if (!root) return;
+      root.querySelectorAll('.group').forEach((el) => observer.observe(el));
+      pick();
     });
   }
 }

@@ -241,7 +241,7 @@ function gatewayStep(f: GoingLiveFacts): GoingLiveStep | null {
 function brokerStep(f: GoingLiveFacts): GoingLiveStep {
   const title = 'Broker connected';
   const p = f.portfolio;
-  const connect: StepLink = { label: 'Open Broker connections', path: '/connections' };
+  const connect: StepLink = { label: 'Connect a broker', path: '/connections' };
   if (!atBroker(p)) {
     return {
       key: 'broker',

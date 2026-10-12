@@ -1,4 +1,4 @@
-<app-page-header title="Studio" [description]="standfirst()">
+<app-page-header title="Build a strategy" [description]="standfirst()">
   @if (!creating()) {
     <button
       actions
@@ -100,15 +100,32 @@
     <app-loading-state label="Loading drafts" [rows]="4" />
   } @else if (drafts.value().items.length === 0) {
     <app-empty-state
+      icon="doc"
       title="No drafts yet"
-      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then put it on trial."
-    >
-      @if (!creating()) {
-        <button type="button" class="btn btn-primary" [disabled]="!canLab()" (click)="openCreate()">
-          New draft
-        </button>
-      }
-    </app-empty-state>
+      message="A draft is a strategy you are building. Pick a starting point, test it, then put it on trial."
+    />
+    @if (!creating() && canLab()) {
+      <ul class="starters" aria-label="Start a draft from">
+        @for (o of starters(); track o.id) {
+          <li>
+            <button type="button" class="starter" (click)="startFrom(o)">
+              <span class="starter-title">{{ o.title }}</span>
+              <span class="starter-desc">{{ o.description }}</span>
+              <svg
+                class="chev"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="m6 3.5 4.5 4.5L6 12.5" />
+              </svg>
+            </button>
+          </li>
+        }
+      </ul>
+    }
   } @else {
     <ul class="drafts">
       @for (d of drafts.value().items; track d.id) {

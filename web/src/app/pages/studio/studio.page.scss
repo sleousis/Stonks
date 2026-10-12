@@ -242,3 +242,61 @@
 .lock-note {
   padding: var(--space-3) 0 0;
 }
+
+// The empty page: starting points as rows, each opening a new draft.
+.starters {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+}
+
+.starter {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-5);
+  align-items: baseline;
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: var(--space-3) var(--space-1);
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--sunk);
+  }
+
+  .chev {
+    width: 16px;
+    height: 16px;
+    align-self: center;
+    color: var(--muted);
+  }
+
+  @include bp.phone {
+    grid-template-columns: minmax(0, 1fr) auto;
+
+    .starter-desc {
+      grid-column: 1;
+    }
+
+    .chev {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+  }
+}
+
+.starter-title {
+  font-weight: var(--weight-semibold);
+}
+
+.starter-desc {
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}

@@ -151,6 +151,7 @@ type Kind = 'expression' | 'fundamental';
           <app-loading-state label="Loading the factor library" [rows]="8" />
         } @else if (shown().length === 0) {
           <app-empty-state
+            icon="search"
             title="No factor matches"
             message="Clear the search or pick another set, family or kind. You can also write a formula of your own."
           />

@@ -45,7 +45,7 @@ describe('TotalsCard', () => {
     expect(el.querySelector('.live-frame, .live')).toBeNull();
   });
 
-  it('says in one line when totals are held back, never an empty panel (M3)', async () => {
+  it('shows nothing when totals are held back, never an empty panel (M3)', async () => {
     const { fixture, el } = await render();
     (await nextRequest(http, '/api/portfolio/totals')).flush({
       cash: 0,
@@ -56,8 +56,7 @@ describe('TotalsCard', () => {
     });
     await settle(fixture);
     const text = el.textContent ?? '';
-    expect(text).toContain('totals appear once three or more traders have real money.');
-    expect(text).not.toContain('$0.00');
+    expect(text.trim()).toBe('');
     expect(el.querySelector('app-stat-tile')).toBeNull();
     expect(el.querySelector('section.panel')).toBeNull();
   });

@@ -105,12 +105,52 @@ export class LoadingState {
 @Component({
   selector: 'app-empty-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '[class.compact]': 'compact()' },
+  host: { '[class.compact]': 'compact()', '[class.good]': "tone() === 'good'" },
   template: `
     <div class="empty">
       <span class="mark" aria-hidden="true">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
-          <path d="M3 14.5 7.5 10l3 3L17 6.5" stroke-linecap="round" stroke-linejoin="round" />
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          @switch (icon()) {
+            @case ('orders') {
+              <path d="M5 3.5h10v13H5z" />
+              <path d="M8 7.5h4M8 10.5h4M8 13.5h2" />
+            }
+            @case ('inbox') {
+              <path d="M3 11.5 5 4.5h10l2 7v4H3z" />
+              <path d="M3 11.5h4l1 2h4l1-2h4" />
+            }
+            @case ('check') {
+              <circle cx="10" cy="10" r="7" />
+              <path d="m6.8 10.2 2.2 2.2 4.2-4.6" />
+            }
+            @case ('search') {
+              <circle cx="8.5" cy="8.5" r="5" />
+              <path d="m12.5 12.5 4 4" />
+            }
+            @case ('plug') {
+              <path d="M7.5 3v4M12.5 3v4" />
+              <path d="M5 7h10v2.5a5 5 0 0 1-10 0z" />
+              <path d="M10 14.5V17" />
+            }
+            @case ('pause') {
+              <circle cx="10" cy="10" r="7" />
+              <path d="M8.2 7.2v5.6M11.8 7.2v5.6" />
+            }
+            @case ('doc') {
+              <path d="M5 2.5h6.5L15 6v11.5H5z" />
+              <path d="M11.5 2.5V6H15M7.5 10h5M7.5 13h5" />
+            }
+            @default {
+              <path d="M3 14.5 7.5 10l3 3L17 6.5" />
+            }
+          }
         </svg>
       </span>
       <div class="body">
@@ -150,6 +190,11 @@ export class LoadingState {
       width: 20px;
       height: 20px;
     }
+    /* Good news (nothing halted, no failures) reads apart from missing data. */
+    :host(.good) .mark {
+      background: var(--up-soft);
+      color: var(--up);
+    }
     .body {
       display: grid;
       justify-items: start;
@@ -182,7 +227,14 @@ export class EmptyState {
   readonly message = input<string | null>(null);
   /** The panel's only content: a 7rem floor instead of 9.5rem. */
   readonly compact = input(false, { transform: booleanAttribute });
+  /** The glyph in the squircle: what kind of thing would fill this space. */
+  readonly icon = input<EmptyIcon>('chart');
+  /** `good` for all-clear states ("Trading is not halted"): tinted in --up. */
+  readonly tone = input<'default' | 'good'>('default');
 }
+
+export type EmptyIcon =
+  'chart' | 'orders' | 'inbox' | 'check' | 'search' | 'plug' | 'pause' | 'doc';
 
 /**
  * A failed load: the error band with the API's plain message and a retry.

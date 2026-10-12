@@ -247,6 +247,13 @@ export function initials(name: string): string {
         line-height: 1.2;
       }
     }
+    @include bp.coarse {
+      a,
+      .row-button,
+      .theme button {
+        min-height: var(--touch-min);
+      }
+    }
   `,
 })
 export class AccountMenu {

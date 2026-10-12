@@ -492,7 +492,7 @@ export function orderLines(
       background: var(--raise);
       @include bp.from-desktop {
         position: sticky;
-        top: calc(var(--chrome-h) + var(--rail-h) + var(--space-4));
+        top: calc(var(--header-h) + var(--space-4));
       }
     }
     /* Real money: a brass edge on the ticket. */
@@ -514,7 +514,7 @@ export function orderLines(
       align-items: center;
       gap: var(--space-2) var(--space-3);
       padding-bottom: var(--space-4);
-      border-bottom: 1px dashed var(--rule-control);
+      border-bottom: 1px solid var(--rule);
     }
     .sheet-head h2 {
       font-size: var(--text-section);
@@ -554,7 +554,8 @@ export function orderLines(
       font-weight: var(--weight-regular);
       text-transform: none;
     }
-    /* Buy or Sell fills the whole width; the picked side turns green or red. */
+    /* Buy or Sell fills the whole width; the picked side takes the side tag's
+       soft green or red with a 1px edge. The solid fill is for the confirm step. */
     .side-seg {
       display: block;
     }
@@ -566,13 +567,13 @@ export function orderLines(
     /* Doubled classes win over the segmented's strong emphasis. */
     .side-seg ::ng-deep .segmented .segment.segment:nth-child(1)[aria-checked='true'] {
       border-color: var(--up);
-      background: var(--up);
-      color: var(--raise);
+      background: var(--up-soft);
+      color: var(--up);
     }
     .side-seg ::ng-deep .segmented .segment.segment:nth-child(2)[aria-checked='true'] {
       border-color: var(--down);
-      background: var(--down);
-      color: var(--raise);
+      background: var(--down-soft);
+      color: var(--down);
     }
     app-earnings-warning:not(:has(*)) {
       display: none;
@@ -586,7 +587,7 @@ export function orderLines(
       font-size: var(--text-sm);
       line-height: 20px;
     }
-    /* The plan: a dashed rule and a title, no box inside the sheet. */
+    /* The plan: a hairline and a title, no box inside the sheet. */
     .plan {
       display: grid;
       gap: var(--space-3);
@@ -594,7 +595,7 @@ export function orderLines(
       margin: 0;
       padding: var(--space-4) 0 0;
       border: 0;
-      border-top: 1px dashed var(--rule-control);
+      border-top: 1px solid var(--rule);
     }
     .plan legend {
       float: left;

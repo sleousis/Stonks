@@ -95,6 +95,13 @@ export function agreementLine(h: HoldingAgreement): string {
  * strategies agree with each holding, and the snapshot history. Admins also
  * get totals across every book, never holdings.
  */
+/** The split bar's colours by rank. */
+const SHADES = [
+  'var(--accent)',
+  'color-mix(in srgb, var(--accent) 55%, var(--bg))',
+  'color-mix(in srgb, var(--accent) 30%, var(--bg))',
+];
+
 @Component({
   selector: 'app-insights-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -194,8 +201,8 @@ export class InsightsPage {
   protected readonly num = (value: number | null | undefined) => formatNumber(value, { digits: 2 });
 
   /**
-   * One sentence from the data: "Most of it sits in Equity, at 62.40%. The largest
-   * holding is AAPL.US at 26.10%." The default stays while the page loads.
+   * One sentence from the data: "Most of it sits in equity, at 62.40%. AAPL.US
+   * is 26.10% of your holdings." The default stays while the page loads.
    */
   protected readonly description = computed(() => {
     const fallback = 'Where your money sits, how it did and which strategies agree.';
@@ -203,11 +210,12 @@ export class InsightsPage {
     const i = this.insights.value();
     const top = [...i.allocation.asset_class].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))[0];
     if (!top || !top.weight) return fallback;
-    const label = ASSET_CLASS_LABELS[top.key] ?? top.key;
+    const label = (ASSET_CLASS_LABELS[top.key] ?? top.key).toLowerCase();
     const lead = `Most of it sits in ${label}, at ${this.pct(top.weight)}.`;
     const c = i.risk.concentration;
+    // The largest holding's weight is a share of the holdings, cash left out.
     return c.largest && c.top_weight
-      ? `${lead} The largest holding is ${c.largest} at ${this.pct(c.top_weight)}.`
+      ? `${lead} ${c.largest} is ${this.pct(c.top_weight)} of your holdings.`
       : lead;
   });
 
@@ -310,10 +318,13 @@ export class InsightsPage {
   );
   /** A slice's share of the split bar (shorts count by size). */
   protected readonly share = (s: AllocationSlice) => Math.abs(s.weight ?? 0);
-  /** Each slice's shade of the accent, by its rank: the largest is the strongest. */
+  /**
+   * Each slice's colour by its rank, in fixed steps so two slices never look
+   * alike: the accent, the accent at 55% and 30%, then muted for the rest.
+   */
   protected readonly shade = (s: AllocationSlice) => {
     const rank = this.splitSlices().findIndex((x) => x.key === s.key);
-    return rank < 0 ? 0.15 : Math.max(0.15, 1 - rank * 0.17);
+    return SHADES[rank] ?? 'var(--muted)';
   };
   protected readonly barWidth = (s: AllocationSlice) =>
     `${Math.max(0, Math.min(1, Math.abs(s.weight ?? 0))) * 100}%`;

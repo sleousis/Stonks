@@ -12,7 +12,8 @@ import { LoadingState } from '../../shared/ui/states';
 import { OrdersTabs } from './orders-tabs';
 
 /**
- * Orders and the trading runs that produce them. The header and view tabs
+ * Orders and the trading runs that produce them. New order is a view tab,
+ * so the header keeps Rebalance and the list's CSV. The header and view tabs
  * (shared with Trade costs) stay put; the child routes (orders, fills, runs,
  * runs/:id) render below and report their freshness to the header through
  * RefreshStatus. With no portfolio, Orders and Fills point at opening one.
@@ -39,13 +40,13 @@ import { OrdersTabs } from './orders-tabs';
       <app-updated-ago [at]="status.updatedAt()" />
       <ng-container ngProjectAs="[actions]">
         @if (book() !== 'none') {
-          @if (!onNew()) {
-            <a class="btn btn-primary paired" routerLink="/orders/new">New order</a>
-          }
           <a class="btn" routerLink="/orders/rebalance">Rebalance</a>
-          @if (showExports()) {
-            <app-export-button class="csv" kind="orders" label="Orders CSV" [ghost]="true" />
-            <app-export-button class="csv" kind="fills" label="Fills CSV" [ghost]="true" />
+          @if (exportKind(); as kind) {
+            @if (kind === 'orders') {
+              <app-export-button class="csv" kind="orders" label="Orders CSV" [ghost]="true" />
+            } @else {
+              <app-export-button class="csv" kind="fills" label="Fills CSV" [ghost]="true" />
+            }
           }
         }
       </ng-container>
@@ -66,12 +67,8 @@ import { OrdersTabs } from './orders-tabs';
   styles: `
     @use 'breakpoints' as bp;
 
-    /* Phones: New order and Rebalance share the first row of the header grid
-       and the two CSV downloads the second, so nothing sits alone. */
+    /* Phones: Rebalance and the list's CSV share one row of the header grid. */
     @include bp.phone {
-      .btn.btn-primary.paired {
-        grid-column: auto;
-      }
       /* Beats the header rule that spans a last even action. */
       .csv.csv.csv.csv.csv.csv.csv {
         grid-column: auto;
@@ -94,11 +91,10 @@ export class OrdersPage {
   );
   /** On the runs tab the CSV downloads give way to the runner. */
   protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
-  /** On the ticket itself the New order button would point to itself. */
-  protected readonly onNew = computed(() => this.url().split(/[?#]/)[0] === '/orders/new');
-  /** The CSV downloads belong to the orders and fills lists only. */
-  protected readonly showExports = computed(() => {
+  /** The CSV for the list on screen: orders on Orders, fills on Fills, none elsewhere. */
+  protected readonly exportKind = computed<'orders' | 'fills' | null>(() => {
     const path = this.url().split(/[?#]/)[0];
-    return path === '/orders' || path.startsWith('/orders/fills');
+    if (path === '/orders') return 'orders';
+    return path.startsWith('/orders/fills') ? 'fills' : null;
   });
 }

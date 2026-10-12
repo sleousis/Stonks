@@ -29,7 +29,13 @@ describe('axisFormatter', () => {
     expect(axisFormatter('number', [0.5, 2])(1.2345)).toBe('1.23');
   });
 
-  it('formats percent with one decimal', () => {
+  it('formats percent with one decimal over a wide range', () => {
     expect(axisFormatter('percent', [-0.1, 0.2])(0.123)).toBe('12.3%');
+  });
+
+  it('adds decimals for a narrow percent range so the ticks differ', () => {
+    const fmt = axisFormatter('percent', [-0.0006, 0]);
+    expect(fmt(-0.0002)).toBe('-0.02%');
+    expect(fmt(-0.0004)).toBe('-0.04%');
   });
 });

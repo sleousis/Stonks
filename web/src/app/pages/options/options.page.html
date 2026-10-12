@@ -18,6 +18,7 @@
   <app-loading-state label="Loading the stored chains" [rows]="4" />
 } @else if (underlyings.value().length === 0) {
   <app-empty-state
+    icon="doc"
     compact
     title="No option chains stored yet"
     [message]="

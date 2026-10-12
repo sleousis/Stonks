@@ -78,6 +78,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
           <app-loading-state label="Loading the calendar" [rows]="5" />
         } @else if (calendar.value().trades === 0 && calendar.value().unconverted === 0) {
           <app-empty-state
+            icon="orders"
             title="No closed trades yet"
             message="Each day fills in when a trade closes."
           />

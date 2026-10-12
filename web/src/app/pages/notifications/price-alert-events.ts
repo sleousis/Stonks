@@ -48,6 +48,7 @@ const PAGE_SIZE = 25;
         <app-loading-state label="Loading firings" [rows]="3" />
       } @else if (p.items.length === 0) {
         <app-empty-state
+          icon="inbox"
           title="No firings yet"
           message="Alerts are checked after each day's prices arrive. A firing shows here and in your feed."
         />

@@ -62,6 +62,7 @@ const STATUSES: readonly SegmentOption<Status>[] = [
         <app-loading-state label="Loading your trades" [rows]="6" />
       } @else if (page.items.length === 0) {
         <app-empty-state
+          icon="orders"
           title="No trades yet"
           message="Trades show here once an order fills in this portfolio."
         >

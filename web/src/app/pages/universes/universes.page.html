@@ -82,6 +82,7 @@
         <app-loading-state label="Loading universes" [rows]="4" />
       } @else if (universes.value().length === 0) {
         <app-empty-state
+          icon="doc"
           title="No universes yet"
           message="Create one with New universe. Lab runs and the daily trading run can then use it."
         />

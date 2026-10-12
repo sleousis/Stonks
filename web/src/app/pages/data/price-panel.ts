@@ -108,6 +108,7 @@ export function pointTime(bar: BarView, interval: string): string {
 
       @if (!ticker()) {
         <app-empty-state
+          icon="search"
           title="Choose a ticker"
           message="Pick one from Instruments or Coverage, or type it above."
         />

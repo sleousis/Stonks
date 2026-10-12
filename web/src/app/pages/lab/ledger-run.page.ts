@@ -156,6 +156,7 @@ export function searchName(tuner: string): string {
         </div>
         @if (r.trials.length === 0) {
           <app-empty-state
+            icon="doc"
             title="No settings recorded"
             message="The run stopped before its first setting finished."
           />

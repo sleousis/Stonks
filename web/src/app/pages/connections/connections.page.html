@@ -24,6 +24,7 @@
       <app-loading-state label="Loading your connections" [rows]="2" />
     } @else if (connections.value().length === 0) {
       <app-empty-state
+        icon="plug"
         title="No broker connected yet"
         message="Connecting lets Stonks read your real positions, cash and activity, so you can see them next to your strategies."
       >
@@ -106,6 +107,7 @@
     } @else {
       @if (noneEnabled()) {
         <app-empty-state
+          icon="plug"
           title="No brokers are turned on yet"
           message="An admin must turn on a broker before anyone can connect one. Ask your admin."
         />

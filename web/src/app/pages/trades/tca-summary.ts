@@ -89,6 +89,7 @@ const KEY_LABELS: Record<Grouping, string> = {
       } @else {
         <div class="none">
           <app-empty-state
+            icon="orders"
             title="No trades yet"
             message="Costs appear after the first filled order."
           />
@@ -115,6 +116,7 @@ const KEY_LABELS: Record<Grouping, string> = {
               <app-loading-state label="Loading the breakdown" [rows]="4" />
             } @else if (breakdown.value().groups.length === 0) {
               <app-empty-state
+                icon="orders"
                 title="No trades yet"
                 message="Costs appear after the first filled order."
               />

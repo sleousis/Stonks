@@ -90,6 +90,10 @@
   list-style: none;
 }
 
+.steps-head + .steps {
+  border-top: 0;
+}
+
 .step {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
@@ -209,6 +213,7 @@
   display: grid;
   gap: var(--space-4);
   justify-items: start;
+  padding-top: var(--space-2);
 }
 
 .step-panel > * {
@@ -333,7 +338,7 @@
   }
 
   .step-panel {
-    padding: var(--space-4);
+    padding: var(--space-2) 0 0;
   }
 }
 

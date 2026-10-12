@@ -23,6 +23,8 @@ interface Row {
   ret: string | null;
   tone: string;
   points: readonly number[];
+  /** "Paper day 5 of 20" while the paper days still run, else null. */
+  day: string | null;
 }
 
 /**
@@ -89,16 +91,20 @@ interface Row {
                 [sub]="row.sub"
                 [strategyName]="row.name"
                 [compact]="true"
+                [showHelp]="false"
                 (changed)="store.replaceFollow($event)"
               >
                 <span class="who">
                   <a class="strategy" [routerLink]="['/strategies', row.sub.strategy_id]">{{
                     row.name
                   }}</a>
-                  @if (row.sub.strategy_status !== 'active' || row.portfolio) {
+                  @if (row.sub.strategy_status !== 'active' || row.portfolio || row.day) {
                     <span class="meta">
                       @if (row.sub.strategy_status !== 'active') {
                         <app-status-pill [status]="row.sub.strategy_status" />
+                      }
+                      @if (row.day; as day) {
+                        <span class="where">{{ day }}</span>
                       }
                       @if (row.portfolio) {
                         <span class="where">In {{ row.portfolio }}</span>
@@ -268,6 +274,10 @@ export class StrategiesCard {
         ret: value == null ? null : formatPercent(value, { signed: true, digits: 2 }),
         tone: toneClass(value),
         points: record?.points ?? [],
+        day:
+          !isGatedMode(sub.mode) && sub.paper_days_completed < sub.paper_days_required
+            ? `Paper day ${sub.paper_days_completed} of ${sub.paper_days_required}`
+            : null,
       };
     });
   });

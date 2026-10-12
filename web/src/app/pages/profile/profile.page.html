@@ -222,7 +222,12 @@
           <app-loading-state label="Loading your tokens" [rows]="2" />
         }
       } @else if (activeTokens().length === 0) {
-        <app-empty-state compact title="No tokens" message="Tokens you create show here." />
+        <app-empty-state
+          icon="doc"
+          compact
+          title="No tokens"
+          message="Tokens you create show here."
+        />
       } @else {
         <ul class="row-list tokens" aria-label="Your tokens">
           @for (t of activeTokens(); track t.id) {

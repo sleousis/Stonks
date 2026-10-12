@@ -1,10 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  type ElementRef,
+  DestroyRef,
+  ElementRef,
+  afterRenderEffect,
   computed,
+  inject,
   input,
   model,
+  signal,
+  viewChild,
   viewChildren,
 } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
@@ -26,8 +31,8 @@ export interface PageTab {
 
 /**
  * The one tab style of the console (M4): a 2px ink underline under the
- * current tab over a 1px rule, 44px tall on phones and touch screens, scrolling sideways with a
- * fading edge when the tabs do not fit. Two kinds, one look:
+ * current tab over a 1px rule, 44px tall on phones and touch screens, scrolling sideways when the
+ * tabs do not fit, with an edge fading only while tabs hide past it. Two kinds, one look:
  *
  * - Links, when each view has its own address (Orders, Notifications):
  *
@@ -51,7 +56,14 @@ export interface PageTab {
   host: { '[attr.data-variant]': 'variant()' },
   template: `
     @if (asLinks()) {
-      <nav class="tabs" [attr.aria-label]="label()">
+      <nav
+        #row
+        class="tabs"
+        [class.fade-start]="edges().start"
+        [class.fade-end]="edges().end"
+        [attr.aria-label]="label()"
+        (scroll)="measure()"
+      >
         @for (t of tabs(); track t.path ?? t.id) {
           <a
             class="tab"
@@ -65,7 +77,15 @@ export interface PageTab {
         }
       </nav>
     } @else {
-      <div class="tabs" role="tablist" [attr.aria-label]="label()">
+      <div
+        #row
+        class="tabs"
+        role="tablist"
+        [class.fade-start]="edges().start"
+        [class.fade-end]="edges().end"
+        [attr.aria-label]="label()"
+        (scroll)="measure()"
+      >
         @for (t of tabs(); track t.id; let i = $index) {
           <button
             #tab
@@ -103,8 +123,22 @@ export interface PageTab {
       border-bottom: 1px solid var(--rule);
       overflow-x: auto;
       scrollbar-width: none;
-      /* A fading right edge hints at tabs past the edge (m9). */
-      mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    }
+    /* An edge fades only while tabs hide past it (m9). */
+    .tabs.fade-end {
+      mask-image: linear-gradient(to left, transparent, #000 24px);
+    }
+    .tabs.fade-start {
+      mask-image: linear-gradient(to right, transparent, #000 24px);
+    }
+    .tabs.fade-start.fade-end {
+      mask-image: linear-gradient(
+        to right,
+        transparent,
+        #000 24px,
+        #000 calc(100% - 24px),
+        transparent
+      );
     }
     .tabs::-webkit-scrollbar {
       display: none;
@@ -128,9 +162,6 @@ export interface PageTab {
       transition:
         color var(--dur-fast) var(--ease-out),
         border-color var(--dur-fast) var(--ease-out);
-    }
-    .tab:last-child {
-      margin-right: 24px;
     }
     .badge {
       min-width: 1.25rem;
@@ -206,6 +237,36 @@ export class PageTabs {
 
   protected readonly asLinks = computed(() => this.tabs().every((t) => !!t.path));
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('tab');
+  private readonly row = viewChild<ElementRef<HTMLElement>>('row');
+  /** Whether tabs hide past the start or end of the row. */
+  protected readonly edges = signal({ start: false, end: false });
+
+  constructor() {
+    const resize =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.measure());
+    let watched: HTMLElement | null = null;
+    inject(DestroyRef).onDestroy(() => resize?.disconnect());
+    afterRenderEffect(() => {
+      this.tabs();
+      const el = this.row()?.nativeElement ?? null;
+      if (el !== watched) {
+        if (watched) resize?.unobserve(watched);
+        if (el) resize?.observe(el);
+        watched = el;
+      }
+      this.measure();
+    });
+  }
+
+  /** Reads the scroll position into `edges`; called on scroll and resize. */
+  protected measure(): void {
+    const el = this.row()?.nativeElement;
+    const next = el
+      ? { start: el.scrollLeft > 1, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 }
+      : { start: false, end: false };
+    const now = this.edges();
+    if (now.start !== next.start || now.end !== next.end) this.edges.set(next);
+  }
 
   tabId(id: string): string {
     return `${this.idPrefix()}-tab-${id}`;

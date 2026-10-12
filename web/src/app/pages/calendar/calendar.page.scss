@@ -29,7 +29,7 @@ app-data-plan-note {
     .filters {
       grid-area: filters;
       position: sticky;
-      top: calc(var(--chrome-h) + var(--rail-h) + var(--space-5));
+      top: calc(var(--header-h) + var(--space-5));
     }
   }
 }
@@ -107,7 +107,7 @@ app-data-plan-note {
 
 .day-row {
   position: sticky;
-  top: calc(var(--chrome-h) + var(--rail-h));
+  top: var(--header-h);
   z-index: 1;
   display: flex;
   align-items: baseline;

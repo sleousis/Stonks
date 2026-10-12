@@ -5,7 +5,7 @@ import type { DraftPage } from './draft.page';
 export default [
   {
     path: '',
-    title: 'Studio',
+    title: 'Build a strategy',
     loadComponent: () => import('./studio.page').then((m) => m.StudioPage),
   },
   {

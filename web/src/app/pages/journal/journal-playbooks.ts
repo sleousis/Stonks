@@ -48,6 +48,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
         <app-loading-state label="Loading your playbooks" [rows]="3" />
       } @else if (playbooks.value().length === 0) {
         <app-empty-state
+          icon="doc"
           title="No playbooks yet"
           message="Add the setups you trade, then pick one when you review a trade."
         />

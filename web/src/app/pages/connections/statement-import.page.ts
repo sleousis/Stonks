@@ -408,6 +408,7 @@ const MAX_FILE_BYTES = 5_000_000;
         <app-loading-state label="Loading your imports" [rows]="2" />
       } @else if (imports.value().length === 0) {
         <app-empty-state
+          icon="doc"
           title="No imports yet"
           message="Each import shows here, and you can undo it."
         />

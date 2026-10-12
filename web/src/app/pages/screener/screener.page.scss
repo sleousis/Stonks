@@ -238,24 +238,35 @@
 }
 
 // The builder's actions stack: Run on top at full width.
-.actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+// Save and Start over in one wrapping row of secondary and ghost buttons.
+.secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+
+  .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+// Run screen: pinned to the foot of the form column while it scrolls.
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--rule);
+  background: var(--bg);
 
   .btn {
     justify-content: center;
     width: 100%;
   }
 
-  @include bp.from-tablet {
-    @include bp.below-desktop {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-
-      .run {
-        grid-column: 1 / -1;
-      }
-    }
+  @include bp.phone {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
   }
 }
 

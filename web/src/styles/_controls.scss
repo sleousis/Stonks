@@ -226,15 +226,20 @@ fieldset.group {
 
   &::placeholder {
     color: var(--muted);
+    // A mono field (a ticker) still shows its hint in the sans, like every field.
+    font-family: var(--font-sans);
   }
 
   &:hover:not(:disabled) {
     border-color: var(--muted);
   }
 
-  // Focus: a 2px accent ring with a 2px gap in the page colour.
+  // Focus: a 2px accent ring with a 2px gap in the page colour. The
+  // transparent outline is what forced-colors mode paints (as Highlight),
+  // since it drops box-shadows.
   &:focus-visible {
-    outline: none;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     border-color: var(--accent);
     box-shadow:
       0 0 0 2px var(--bg),

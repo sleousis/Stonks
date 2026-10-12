@@ -5,8 +5,13 @@
     <router-outlet />
   </main>
 } @else {
-  <header class="chrome" [attr.data-tone]="halts.killOn() ? 'kill' : null">
-    <div class="chrome-bar">
+  <header
+    #chrome
+    class="chrome"
+    [attr.data-tone]="halts.killOn() ? 'kill' : null"
+    [attr.data-halted]="halts.summary() ? '' : null"
+  >
+    <div #bar class="chrome-bar">
       <a routerLink="/" class="chrome-brand" aria-label="Stonks, Today">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 16 16">

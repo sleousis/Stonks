@@ -68,6 +68,7 @@ export function whenText(at: string | null | undefined): string {
         <app-loading-state label="Loading broker gateways" [rows]="2" />
       } @else if (gateways.value().gateways.length === 0) {
         <app-empty-state
+          icon="plug"
           compact
           title="No broker gateway"
           message="Trading at Interactive Brokers runs through a gateway. None is set up, so every portfolio trades on paper."

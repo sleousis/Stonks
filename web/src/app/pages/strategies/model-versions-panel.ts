@@ -291,6 +291,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
         <app-loading-state label="Loading the version log" [rows]="3" />
       } @else if (log().length === 0) {
         <app-empty-state
+          icon="inbox"
           title="Nothing logged yet"
           message="Every fit, swap and rejection is kept here with who did it and why."
         />

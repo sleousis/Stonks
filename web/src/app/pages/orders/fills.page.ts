@@ -23,11 +23,17 @@ const PAGE_SIZE = 50;
 /** Columns shared with the tick drill-down. */
 export const FILL_COLUMNS: TableColumn<FillView>[] = [
   { key: 'ticker', label: 'Ticker', mobile: 'title' },
-  { key: 'side', label: 'Side' },
+  { key: 'side', label: 'Side', mobile: 'inline' },
   { key: 'quantity', label: 'Qty', format: 'number' },
   { key: 'price', label: 'Price', format: 'money' },
-  { key: 'value', label: 'Value', format: 'money', value: (f) => f.quantity * f.price },
-  { key: 'fee', label: 'Fee', format: 'money' },
+  {
+    key: 'value',
+    label: 'Value',
+    format: 'money',
+    mobile: 'figure',
+    value: (f) => f.quantity * f.price,
+  },
+  { key: 'fee', label: 'Fee', format: 'money', mobile: 'hide' },
   { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
   { key: 'order_client_id', label: 'Order', sortable: false, mobile: 'hide' },
   { key: 'filled_at', label: 'Filled', format: 'datetime' },
@@ -102,6 +108,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
         <app-loading-state label="Loading fills" [rows]="6" />
       } @else if (p.items.length === 0) {
         <app-empty-state
+          icon="orders"
           [title]="hasFilters() ? 'No fills match these filters' : 'No fills yet'"
           [message]="
             hasFilters()

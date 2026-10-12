@@ -116,6 +116,8 @@ interface Group {
       } @else if (view() === 'waiting') {
         @if (waitingCount() === 0) {
           <app-empty-state
+            icon="check"
+            tone="good"
             title="Nothing waits for you"
             message="Orders appear here after a trading run when a strategy you follow uses Approve each trade, and when the assistant suggests an order."
           >
@@ -139,15 +141,6 @@ interface Group {
               @for (group of groups(); track group.key) {
                 <section class="run" [attr.aria-labelledby]="'run-' + group.key">
                   <div class="run-head">
-                    <label class="check run-check">
-                      <input
-                        type="checkbox"
-                        [checked]="allPicked(group)"
-                        [indeterminate]="somePicked(group) && !allPicked(group)"
-                        [attr.aria-label]="'Select every order in ' + group.portfolioName"
-                        (change)="pickGroup(group, $any($event.target).checked)"
-                      />
-                    </label>
                     <div class="run-title">
                       <h3 [id]="'run-' + group.key">
                         {{ group.portfolioName }}
@@ -173,7 +166,6 @@ interface Group {
                     }
                   </div>
                   <div class="inbox-head" aria-hidden="true">
-                    <span></span>
                     <span>Order</span>
                     <span class="end">Price</span>
                     <span class="end">About</span>
@@ -185,19 +177,8 @@ interface Group {
                         <article
                           class="ticket"
                           [class.live]="group.live"
-                          [class.picked]="picked().has(t.id)"
                           [attr.aria-labelledby]="'ticket-' + t.id"
                         >
-                          <label class="check pick">
-                            <input
-                              type="checkbox"
-                              [checked]="picked().has(t.id)"
-                              [attr.aria-label]="
-                                'Select ' + (t.side === 'buy' ? 'buy ' : 'sell ') + t.ticker
-                              "
-                              (change)="pick(t, $any($event.target).checked)"
-                            />
-                          </label>
                           <div class="order">
                             <p class="order-line">
                               <app-side-tag [side]="t.side" />
@@ -315,6 +296,7 @@ interface Group {
           </header>
           @if (history().length === 0) {
             <app-empty-state
+              icon="orders"
               title="No tickets yet"
               message="Every order a strategy you follow with Approve each trade decides is kept here, with what became of it."
             />
@@ -353,33 +335,6 @@ interface Group {
         }
       }
     </div>
-    @if (view() === 'waiting' && pickedTickets().length) {
-      <div class="action-bar" role="region" aria-label="Selected orders">
-        <p class="picked-count">
-          <span class="count-badge">{{ pickedTickets().length }}</span>
-          selected, about <span class="num">{{ pickedNotional() }}</span>
-        </p>
-        <button type="button" class="btn btn-ghost" (click)="picked.set(emptySet)">Clear</button>
-        <button
-          type="button"
-          class="btn btn-danger"
-          [disabled]="!canReject() || bulkBusy()"
-          (click)="rejectPicked()"
-        >
-          Reject {{ pickedTickets().length }}
-        </button>
-        <button
-          type="button"
-          class="btn"
-          [class.btn-live]="pickedLive()"
-          [class.btn-primary]="!pickedLive()"
-          [disabled]="!canApprove() || bulkBusy()"
-          (click)="approvePicked()"
-        >
-          Approve {{ pickedTickets().length }}
-        </button>
-      </div>
-    }
     <app-reject-sheet />
   `,
   styles: `
@@ -419,7 +374,7 @@ interface Group {
     }
     .run-head {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
       gap: var(--space-2) var(--space-3);
       padding: var(--space-4) 0 var(--space-3);
@@ -443,14 +398,11 @@ interface Group {
     .run-title .meta {
       margin-top: 2px;
     }
-    .check {
-      min-height: 0;
-    }
     /* The inbox: a header row, then one row per ticket with 1px rules. */
     .inbox-head,
     .ticket {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) 9rem 8rem auto;
+      grid-template-columns: minmax(0, 1fr) 9rem 8rem auto;
       gap: var(--space-3);
       align-items: start;
     }
@@ -482,12 +434,6 @@ interface Group {
     }
     .tickets .ticket:hover {
       background: var(--sunk);
-    }
-    .tickets .ticket.picked {
-      background: var(--accent-soft);
-    }
-    .pick {
-      padding-top: 1px;
     }
     .order {
       display: grid;
@@ -559,54 +505,6 @@ interface Group {
       gap: var(--space-1);
       justify-content: flex-end;
     }
-    /* The bar for ticked rows: fixed at the foot, above the bottom nav. */
-    .action-bar {
-      position: sticky;
-      bottom: var(--space-4);
-      z-index: var(--z-sticky);
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-2);
-      margin-top: var(--space-6);
-      padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
-      border-radius: var(--r-sheet);
-      background: var(--chrome);
-      color: var(--chrome-ink);
-      box-shadow: var(--shadow-overlay);
-      animation: menu-in var(--dur-menu) var(--ease-out);
-    }
-    .picked-count {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      margin-right: auto;
-      font-size: var(--text-md);
-    }
-    .picked-count .count-badge {
-      background: var(--chrome-ink);
-      color: var(--chrome);
-    }
-    .action-bar .btn-ghost {
-      color: var(--chrome-muted);
-    }
-    .action-bar .btn-ghost:hover:not(:disabled) {
-      background: var(--chrome-2);
-      color: var(--chrome-ink);
-    }
-    .action-bar .btn-danger {
-      border-color: var(--chrome-stop-line);
-      background: transparent;
-      color: var(--chrome-stop);
-    }
-    .action-bar .btn-danger:hover:not(:disabled) {
-      background: var(--chrome-2);
-    }
-    .action-bar .btn-primary {
-      border-color: var(--chrome-accent);
-      background: var(--chrome-accent);
-      color: var(--chrome);
-    }
     .order-cell {
       display: inline-flex;
       align-items: center;
@@ -616,24 +514,24 @@ interface Group {
     @media (max-width: 1099.98px) {
       .inbox-head,
       .ticket {
-        grid-template-columns: 28px minmax(0, 1fr) 8rem auto;
+        grid-template-columns: minmax(0, 1fr) 8rem auto;
       }
-      .inbox-head > :nth-child(3) {
+      .inbox-head > :nth-child(2) {
         display: none;
       }
       .price {
-        grid-column: 3;
+        grid-column: 2;
         grid-row: 2;
         padding-top: 0;
         color: var(--muted);
         font-size: var(--text-sm);
       }
       .about {
-        grid-column: 3;
+        grid-column: 2;
         grid-row: 1;
       }
       .actions {
-        grid-column: 4;
+        grid-column: 3;
         grid-row: 1;
       }
     }
@@ -644,56 +542,41 @@ interface Group {
         display: none;
       }
       .run-head {
-        grid-template-columns: 44px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
       }
       .run-head .btn {
         grid-column: 1 / -1;
         width: 100%;
       }
       .tickets .ticket {
-        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         row-gap: var(--space-2);
       }
-      .check {
-        min-height: var(--touch-min);
-        min-width: var(--touch-min);
-        align-items: flex-start;
-        padding-top: 2px;
-      }
       .order {
-        grid-column: 2 / -1;
+        grid-column: 1 / -1;
         grid-row: 1;
       }
       .row-stamp {
         display: none;
       }
       .about {
-        grid-column: 3;
+        grid-column: 2;
         grid-row: 2;
         font-size: var(--text-lead);
       }
       .price {
-        grid-column: 2;
+        grid-column: 1;
         grid-row: 2;
         text-align: left;
       }
       .actions {
-        grid-column: 2 / -1;
+        grid-column: 1 / -1;
         grid-row: 3;
         display: grid;
         grid-template-columns: 1fr 1fr;
       }
       .actions .btn {
         min-height: var(--touch-min);
-      }
-      .action-bar {
-        bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + var(--space-2));
-      }
-      .action-bar .picked-count {
-        flex-basis: 100%;
-      }
-      .action-bar .btn {
-        flex: 1;
       }
     }
   `,
@@ -786,105 +669,6 @@ export class TicketsPage {
     }
     return [...byKey.values()];
   });
-
-  /** Tickets ticked in the inbox, for the action bar at the foot. */
-  protected readonly emptySet: ReadonlySet<string> = new Set();
-  protected readonly picked = signal<ReadonlySet<string>>(this.emptySet);
-  protected readonly bulkBusy = signal(false);
-  protected readonly pickedTickets = computed(() =>
-    this.waiting().filter((t) => this.picked().has(t.id)),
-  );
-  protected readonly pickedLive = computed(() =>
-    this.pickedTickets().some((t) => this.isLive(t.portfolio_id)),
-  );
-  protected readonly pickedNotional = computed(() => {
-    const ts = this.pickedTickets();
-    const total = ts.reduce((sum, t) => sum + (t.notional ?? 0), 0);
-    return this.money(total, ts[0]);
-  });
-
-  protected pick(t: TicketView, on: boolean): void {
-    this.picked.update((current) => {
-      const next = new Set(current);
-      if (on) next.add(t.id);
-      else next.delete(t.id);
-      return next;
-    });
-  }
-
-  protected pickGroup(group: Group, on: boolean): void {
-    for (const t of group.tickets) this.pick(t, on);
-  }
-
-  protected allPicked(group: Group): boolean {
-    return group.tickets.every((t) => this.picked().has(t.id));
-  }
-
-  protected somePicked(group: Group): boolean {
-    return group.tickets.some((t) => this.picked().has(t.id));
-  }
-
-  /** Approve the ticked tickets: one ticket to confirm, then each run's approval. */
-  protected async approvePicked(): Promise<void> {
-    const picked = this.pickedTickets();
-    if (!picked.length) return;
-    const groups = this.groups()
-      .map((g) => ({ group: g, tickets: g.tickets.filter((t) => this.picked().has(t.id)) }))
-      .filter((g) => g.tickets.length);
-    if (picked.length > 1) {
-      const ok = await this.confirm.confirm({
-        title: `Approve ${picked.length} orders?`,
-        message:
-          'Each order goes to your broker in the window before the next open. ' +
-          'You can still stop trading from any page until then.',
-        confirmLabel: `Approve ${picked.length}`,
-        ticket: {
-          kind: 'Approve the selected orders',
-          live: this.pickedLive(),
-          lines: [
-            { label: 'Orders', value: String(picked.length) },
-            { label: 'About', value: this.pickedNotional() },
-          ],
-        },
-      });
-      if (!ok) return;
-    }
-    this.bulkBusy.set(true);
-    try {
-      for (const g of groups) await this.approve(g.group, g.tickets);
-      this.picked.set(this.emptySet);
-    } finally {
-      this.bulkBusy.set(false);
-    }
-  }
-
-  /** Reject the ticked tickets with one reason. */
-  protected async rejectPicked(): Promise<void> {
-    const picked = this.pickedTickets();
-    if (!picked.length) return;
-    const what = picked.length === 1 ? this.orderWords(picked[0]) : `${picked.length} orders`;
-    const reason = await this.rejectSheet().open(what, this.pickedLive());
-    if (reason === null) return;
-    this.bulkBusy.set(true);
-    const ids = picked.map((t) => t.id);
-    this.mark(ids, true);
-    try {
-      const done = [];
-      for (const t of picked) done.push(await this.api.reject(t.id, reason));
-      this.replace(done);
-      this.picked.set(this.emptySet);
-      this.toasts.success(`${what} rejected. Nothing goes to your broker for them.`);
-    } catch {
-      this.list.reload();
-    } finally {
-      this.mark(ids, false);
-      this.bulkBusy.set(false);
-    }
-  }
-
-  private orderWords(t: TicketView): string {
-    return `${t.side === 'buy' ? 'Buy' : 'Sell'} ${t.ticker}`;
-  }
 
   protected readonly columns: readonly TableColumn<TicketView>[] = [
     { key: 'ticker', label: 'Order', mobile: 'title', sortable: false },

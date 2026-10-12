@@ -224,33 +224,6 @@ describe('TicketsPage', () => {
     expect(el.textContent).toContain('Nothing waits for you');
   });
 
-  it('approves the ticked rows from the action bar with one ticket', async () => {
-    vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
-    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
-    const el = await render([ticket(), MSFT]);
-    expect(el.querySelector('.action-bar')).toBeNull();
-    const boxes = el.querySelectorAll<HTMLInputElement>('article.ticket input[type="checkbox"]');
-    boxes[0].click();
-    boxes[1].click();
-    fixture.detectChanges();
-    const bar = el.querySelector('.action-bar')!;
-    expect(bar.textContent).toContain('2');
-    [...bar.querySelectorAll<HTMLButtonElement>('button')]
-      .find((b) => b.textContent!.trim() === 'Approve 2')!
-      .click();
-    const req = await nextRequest(controller, '/api/tickets/approve', 'POST');
-    expect(confirm.mock.calls[0][0].ticket?.lines.find((l) => l.label === 'Orders')?.value).toBe(
-      '2',
-    );
-    expect(req.request.body).toEqual({
-      ticket_ids: ['tkt_0000000000000001', 'tkt_0000000000000002'],
-    });
-    req.flush({ items: [ticket({ status: 'approved' }), { ...MSFT, status: 'approved' }] });
-    await tick();
-    fixture.detectChanges();
-    expect(el.querySelector('.action-bar')).toBeNull();
-  });
-
   it('rejects with a reason', async () => {
     const el = await render([ticket()]);
     button(el, 'Reject').click();

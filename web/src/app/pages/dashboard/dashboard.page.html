@@ -155,11 +155,7 @@
           </p>
           <app-status-pill
             [status]="health.value().healthy ? 'pass' : 'unhealthy'"
-            [label]="
-              health.value().healthy
-                ? 'All ' + checkCount() + ' checks passed'
-                : failingChecks() + ' of ' + checkCount() + ' checks failed'
-            "
+            [label]="health.value().healthy ? 'All good' : 'Needs a look'"
           />
           @if (version.hasValue()) {
             <span class="muted"

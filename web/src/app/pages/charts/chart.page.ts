@@ -238,6 +238,10 @@ export class ChartPage {
 
   /** Tickers of the picked watchlist, to jump between charts. */
   protected readonly listTickers = computed(() => this.watch.selected()?.tickers ?? []);
+  /** For the empty page: the tickers on your watchlists, at most twelve, as links. */
+  protected readonly quickTickers = computed(() =>
+    [...new Set(this.watch.lists().flatMap((l) => l.tickers))].slice(0, 12),
+  );
 
   // ---- ticker search ------------------------------------------------------------
   protected readonly query = linkedSignal(() => this.symbol());

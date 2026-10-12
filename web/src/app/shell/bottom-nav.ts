@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   type ElementRef,
   computed,
   inject,
@@ -267,7 +268,7 @@ const THEMES: readonly { value: ThemeMode; label: string }[] = [
       background: var(--sunk);
     }
     .theme button {
-      min-height: 38px;
+      min-height: var(--touch-min);
       border: 1px solid transparent;
       border-radius: var(--r-tag);
       background: none;
@@ -304,6 +305,18 @@ export class BottomNav {
     );
     return hit?.path ?? null;
   });
+
+  constructor() {
+    // The sheet is phone only: if the screen grows past it (a large phone
+    // turned to landscape), close the modal so the page behind is not left
+    // inert under an invisible dialog.
+    const wide = globalThis.matchMedia?.('(min-width: 768px)');
+    const onWide = (e: MediaQueryListEvent) => {
+      if (e.matches) this.hide();
+    };
+    wide?.addEventListener?.('change', onWide);
+    inject(DestroyRef).onDestroy(() => wide?.removeEventListener?.('change', onWide));
+  }
 
   show(): void {
     const el = this.sheet().nativeElement;

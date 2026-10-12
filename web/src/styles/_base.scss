@@ -279,14 +279,8 @@ kbd,
 
 // Keep the focused element clear of the sticky chrome (WCAG 2.4.11).
 html {
-  scroll-padding-top: calc(var(--chrome-h) + var(--rail-h) + 16px);
+  scroll-padding-top: calc(var(--header-h) + 16px);
   scroll-padding-bottom: calc(var(--bottom-nav-h) + 16px);
-}
-
-@include bp.phone {
-  html {
-    scroll-padding-top: calc(52px + 100px + env(safe-area-inset-top));
-  }
 }
 
 // Reduced motion: stop every animation and transition, including ones a

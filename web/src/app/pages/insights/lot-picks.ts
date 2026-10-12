@@ -70,6 +70,7 @@ export function picksError(
       <app-loading-state label="Loading your sales" [rows]="3" />
     } @else if (sales().length === 0) {
       <app-empty-state
+        icon="orders"
         title="No sales yet"
         message="Once this portfolio sells, pick here which buys each sale closes."
       />

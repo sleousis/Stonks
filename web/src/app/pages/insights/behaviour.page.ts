@@ -81,6 +81,7 @@ export function findings(r: BehaviourView, currency = 'USD'): string[] {
       <app-loading-state label="Loading the behaviour report" [rows]="4" />
     } @else if (report.value().trades === 0) {
       <app-empty-state
+        icon="orders"
         title="No closed trades yet"
         message="Once you buy and sell by hand, or a broker sync brings trades in, your habits show here."
       />

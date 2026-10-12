@@ -161,6 +161,7 @@ const PAGE_SIZE = 50;
         } @else if (p.items.length === 0) {
           @if (hasFilters()) {
             <app-empty-state
+              icon="orders"
               title="No orders match these filters"
               message="Clear a filter or widen the search."
             >
@@ -168,6 +169,7 @@ const PAGE_SIZE = 50;
             </app-empty-state>
           } @else {
             <app-empty-state
+              icon="orders"
               title="No orders yet"
               message="Orders appear here after a trading run, or when you place one by hand."
             >

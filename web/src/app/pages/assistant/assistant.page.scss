@@ -104,7 +104,7 @@
 
   @include bp.from-tablet {
     position: sticky;
-    top: calc(var(--chrome-h) + var(--rail-h) + var(--space-6));
+    top: calc(var(--header-h) + var(--space-6));
   }
 
   .muted {
@@ -344,7 +344,8 @@
   }
 }
 
-// The composer: a sheet pinned to the foot of the screen.
+// The composer: a flat sheet with a 1px rule, pinned to the foot of the
+// screen. No shadow: shadows are for overlays only.
 .composer {
   position: sticky;
   bottom: var(--space-4);
@@ -352,7 +353,9 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4) var(--space-4);
-  box-shadow: var(--shadow-overlay);
+  border: 1px solid var(--rule);
+  background: var(--raise);
+  box-shadow: none;
 
   textarea {
     width: 100%;

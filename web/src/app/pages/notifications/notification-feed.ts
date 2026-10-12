@@ -105,6 +105,8 @@ export function categoryLabel(category: string | null): string {
         <div class="section-body">
           @if (unreadOnly()) {
             <app-empty-state
+              icon="check"
+              tone="good"
               title="Nothing unread"
               message="You are all caught up. Choose All to see older notifications."
             >
@@ -112,6 +114,7 @@ export function categoryLabel(category: string | null): string {
             </app-empty-state>
           } @else {
             <app-empty-state
+              icon="inbox"
               title="No notifications yet"
               message="Signals from the strategies you follow, order fills, risk alerts and system news land here. They stay here even when push is off or you missed one on your phone."
             >

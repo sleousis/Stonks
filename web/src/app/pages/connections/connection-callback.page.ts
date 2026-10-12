@@ -91,6 +91,7 @@ class IncompleteReturn extends Error {
             </p>
           } @else if (r.accounts.length === 0) {
             <app-empty-state
+              icon="plug"
               title="No accounts found yet"
               message="Accounts appear after the broker confirms the connection."
             />

@@ -87,6 +87,7 @@ export function isThisBrowser(
         <app-loading-state label="Loading devices" [rows]="2" />
       } @else if (devices.value().length === 0) {
         <app-empty-state
+          icon="plug"
           title="No devices yet"
           message="Turn on push above, on each phone or computer you use. Each one shows here once it is set up."
         />

@@ -166,7 +166,7 @@
 
   @include bp.from-desktop {
     position: sticky;
-    top: calc(var(--chrome-h) + var(--rail-h) + var(--space-6));
+    top: calc(var(--header-h) + var(--space-6));
   }
 }
 

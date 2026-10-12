@@ -148,6 +148,7 @@
               <app-loading-state label="Loading data sources" [rows]="3" />
             } @else if (sources.value().length === 0) {
               <app-empty-state
+                icon="plug"
                 compact
                 title="No data sources"
                 message="The server has no data sources set up."
@@ -196,6 +197,7 @@
             <app-loading-state label="Loading cost models" [rows]="4" />
           } @else if (costModels.value().length === 0) {
             <app-empty-state
+              icon="doc"
               compact
               title="No presets"
               message="The server has no cost-model presets."

@@ -101,7 +101,10 @@ describe('StrategiesCard', () => {
     req.flush(sub({ mode: 'paper', paper_days_completed: 0 }));
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain(MODES[1].help);
+    expect(modeValue(el)).toBe('paper');
+    // Rows stay compact: the mode's line is not repeated on each row.
+    expect(el.textContent).not.toContain(MODES[1].help);
+    expect(el.textContent).toContain('Paper day 0 of 20');
   });
 
   it('turns a strategy off', async () => {
@@ -188,7 +191,6 @@ describe('StrategiesCard', () => {
     await tick();
     fixture.detectChanges();
     expect(modeValue(el)).toBe('approve');
-    expect(el.textContent).toContain('Each trade waits for your approval');
   });
 
   it('from approve, auto is open once the gate passed', async () => {

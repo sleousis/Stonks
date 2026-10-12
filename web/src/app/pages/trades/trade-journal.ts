@@ -53,6 +53,7 @@ export const JOURNAL_PAGE_SIZE = 25;
           <app-loading-state label="Loading the journal" [rows]="6" />
         } @else if (page.items.length === 0) {
           <app-empty-state
+            icon="orders"
             title="No trades yet"
             message="Costs appear after the first filled order."
           >

@@ -63,7 +63,11 @@ const GROUPINGS: readonly SegmentOption<ResultsBy>[] = [
       } @else if (!results.hasValue()) {
         <app-loading-state label="Loading your results" [rows]="4" />
       } @else if (results.value().groups.length === 0) {
-        <app-empty-state title="No trades yet" message="Results show once a trade closes." />
+        <app-empty-state
+          icon="orders"
+          title="No trades yet"
+          message="Results show once a trade closes."
+        />
       } @else {
         <app-data-table
           [caption]="'Results by ' + byLabel().toLowerCase()"

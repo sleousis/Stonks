@@ -71,6 +71,7 @@ export function alertBody(when: string): ScreenAlertSet {
           <app-loading-state label="Loading your alerts" [rows]="2" />
         } @else if (screens().length === 0) {
           <app-empty-state
+            icon="doc"
             title="Save a screen first"
             message="Then it can alert you when new names match."
           />

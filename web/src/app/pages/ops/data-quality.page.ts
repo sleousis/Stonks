@@ -98,9 +98,15 @@ type SeverityFilter = '' | StatementFlagView['severity'];
         <app-loading-state label="Loading statement flags" [rows]="5" />
       } @else if (page.items.length === 0) {
         @if (filtered()) {
-          <app-empty-state title="No flags match" message="Try another ticker or severity." />
+          <app-empty-state
+            icon="search"
+            title="No flags match"
+            message="Try another ticker or severity."
+          />
         } @else {
           <app-empty-state
+            icon="check"
+            tone="good"
             title="No statement flags"
             message="Company reports are checked each time their figures are updated, and periods that do not add up show here. To check a ticker, update its Fundamentals on the Data page. That needs a data plan with company reports."
           >

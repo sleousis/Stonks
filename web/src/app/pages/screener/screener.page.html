@@ -305,10 +305,7 @@
           />
         </div>
 
-        <div class="actions">
-          <button type="submit" class="btn btn-primary run" [disabled]="running()">
-            {{ running() ? 'Running…' : 'Run screen' }}
-          </button>
+        <div class="secondary-actions">
           @if (open()) {
             <button
               type="button"
@@ -335,6 +332,12 @@
             Save as a universe
           </button>
           <button type="button" class="btn btn-ghost" (click)="startOver()">Start over</button>
+        </div>
+        <!-- Run screen stays in reach at the foot of the column while the form scrolls. -->
+        <div class="actions">
+          <button type="submit" class="btn btn-primary run" [disabled]="running()">
+            {{ running() ? 'Running…' : 'Run screen' }}
+          </button>
         </div>
         <app-permission-note permission="portfolio.manage" />
         <app-permission-note permission="lab.run" />
@@ -409,6 +412,7 @@
         }
         @if (r.rows.length === 0) {
           <app-empty-state
+            icon="search"
             title="Nothing passes this screen"
             message="Loosen a filter, or start from more instruments."
           />
@@ -428,6 +432,7 @@
         }
       } @else if (!capMessage() && job()?.status() !== 'running' && job()?.status() !== 'queued') {
         <app-empty-state
+          icon="search"
           title="Run a screen to see matches"
           message="Pick where to look, add filters, then Run screen."
         />

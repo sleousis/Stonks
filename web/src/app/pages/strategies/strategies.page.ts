@@ -13,7 +13,8 @@ import type { ShadowPnlSummary, StrategyStatus, StrategySummary } from '../../ap
 import { ShadowService } from '../../api/shadow.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { SubscriptionsService, type SubscriptionView } from '../../api/subscriptions.service';
-import { formatPercent } from '../../core/format/format';
+import { formatPercent, isoDay } from '../../core/format/format';
+import { mapSettledLimit } from '../../core/http/map-limit';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { STATUS_WORDS, modeLabel } from '../../shared/governance-labels';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
@@ -32,6 +33,10 @@ const FETCH_LIMIT = 500;
 export const SPARK_MAX = 40;
 /** Days the trend line covers. */
 export const SPARK_DAYS = 60;
+/** Calendar days to ask for, enough for SPARK_DAYS trading days. */
+const SPARK_SINCE_DAYS = 92;
+/** History reads in flight at once. */
+const SPARK_CONCURRENCY = 6;
 
 /** How you follow a strategy, for the Following column. */
 export interface Following {
@@ -225,7 +230,11 @@ export class StrategiesPage {
   protected readonly curves = resource({
     params: () => (this.sparkIds()?.length ? { ids: this.sparkIds()! } : undefined),
     loader: async ({ params }) => {
-      const settled = await Promise.allSettled(params.ids.map((id) => this.shadowApi.pnl(id)));
+      // About 60 trading days back, six reads at a time.
+      const since = isoDay(new Date(Date.now() - SPARK_SINCE_DAYS * 86_400_000));
+      const settled = await mapSettledLimit(params.ids, SPARK_CONCURRENCY, (id) =>
+        this.shadowApi.pnl(id, { since }),
+      );
       const out = new Map<string, number[]>();
       settled.forEach((r, i) => {
         if (r.status === 'fulfilled') {

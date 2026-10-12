@@ -81,6 +81,8 @@
   --row-h-2: 60px;
   --chrome-h: 56px;
   --rail-h: 48px;
+  // The pinned header's height; the shell publishes the measured value.
+  --header-h: calc(var(--chrome-h) + var(--rail-h));
   --bottom-nav-h: 64px;
   --content-max: 1440px;
 
@@ -190,14 +192,15 @@
 
 @mixin dark-palette {
   color-scheme: dark;
-  // Contrast: muted #9aa3b1 on bg 7.6, on sunk 7.24, on raise 6.91; accent
-  // #8d9bff on sunk 7.26, #0a0e1f on accent 7.54; rule-control #646d7c on
-  // raise 3.37.
-  --bg: #0b0d11;
-  --sunk: #11141a;
-  --raise: #151922;
-  --rule: #232833;
-  --rule-strong: #c9ced8;
+  // Contrast: muted #9aa3b1 on bg 7.36, on sunk 6.98, on raise 6.56; accent
+  // #8d9bff on raise 6.57, #0a0e1f on accent 7.54; rule-control #646d7c on
+  // raise 3.20; rule-strong #6b7482 on raise 3.53. The page sits a step above
+  // the chrome (#07080b) so the ink bar reads as its own band.
+  --bg: #0f1218;
+  --sunk: #141821;
+  --raise: #191e28;
+  --rule: #272d39;
+  --rule-strong: #6b7482;
   --rule-control: #646d7c;
   --ink: #e8ebf0;
   --ink-2: #c3c9d3;

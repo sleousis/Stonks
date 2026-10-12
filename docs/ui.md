@@ -683,7 +683,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 
 | Page | Route | What it does |
 |---|---|---|
-| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one inbox row each (side tag, order, price, about, stamp), grouped by portfolio and run, with Approve, Reject and Approve all. Tick rows, or a whole run, and an action bar at the foot approves or rejects them together (one ticket to confirm, one reason to reject). **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
+| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one inbox row each (side tag, order, price, about, stamp), grouped by portfolio and run, with Approve, Reject and Approve all. **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
 
 - **Approve each trade** is the optional mode between Paper and
   Automatic in the follow control (Today and the strategy page). Turning it
@@ -1711,14 +1711,14 @@ flowchart TB
 4. **B and S side tags** (`<app-side-tag>`): a green B, a red S.
 5. **The session state is always in the rail.** While trading is halted the
    rail turns red, a halt band says why with Resume, and the session chip
-   reads Halted.
+   reads Halted beside the market's own state (Market open).
 
 ### The shell
 
 - **Chrome bar** (56px, ink in both themes, sticky): the brand, the
   workspace switcher, the workspace's page tabs (the current one with a 3px
   accent underline that slides), "Search or jump to" (Ctrl K, an icon below
-  1280px), the bell, the theme button and the avatar.
+  1440px), the bell, the theme button and the avatar.
 - **Workspaces** (`workspace` on each `NavItem` in `shell/nav-items.ts`):
   Trade (your day, orders and positions), Research (find, build and test
   strategies), Portfolio (your money, risk and the road to live), System
@@ -1736,8 +1736,11 @@ flowchart TB
   Broker connections, Get set up, Help, the theme (System, Light, Dark),
   Hide money amounts and Sign out.
 - **Phones** (under 768px): the chrome bar keeps the brand mark, the
-  workspace button, search, the bell, the theme and the avatar. The rail
-  wraps: the portfolio and a red Stop, then the session and run chips. A
+  workspace button, search, the bell, the theme and the avatar. Only the bar
+  stays pinned: the rail scrolls away with the page, and while trading is
+  halted the bar keeps a red edge. The rail wraps: the portfolio and a red
+  Stop, then the session and run chips. Halted, the session chip still says
+  the market's state beside the red Halted. A
   bottom nav (`app-bottom-nav`: Today, Strategies, Orders, Charts, More)
   replaces the tabs, and More opens a full-height sheet with every page, the
   account pages, the theme and Sign out.
@@ -1778,8 +1781,10 @@ Some pages put it together like this. Insights has a summary strip, the money as
   warning or error band with a 3px edge. Never nest boxes.
 - **Tables** (`app-data-table`): a 36px header in 12px muted text, 52px
   rows, hover in `--sunk`, figures right-aligned in mono. On phones each row
-  is a list item: `mobile: 'title'` for the name, `'figure'` for the key
-  figure on the right, `'inline'` for meta under the name, `'hide'` to drop.
+  is a list item of at most three lines: `mobile: 'title'` for the name,
+  `'figure'` for the key figure on the right (a second one muted under it),
+  `'inline'` for meta under the name, `'hide'` to drop. Every other column
+  joins one muted meta line, its label inline before the value.
   `.table` styles a plain table the same way, `.row-list` a list of rows and
   `dl.fact-list` label and value pairs.
 - **Controls:** `.btn` (secondary), `.btn-primary`, `.btn-ghost`
@@ -1842,8 +1847,19 @@ their own:
 
 **Motion.** Short and purposeful: hover and press 150ms, menus 160ms (scale
 and fade), a page enters in 320ms (fade and a 6px rise), the tab underline
-slides, the headline figure counts up, countdowns tick. Everything stops
-under `prefers-reduced-motion`.
+slides (transform only), the headline figure counts up, countdowns tick.
+Everything stops under `prefers-reduced-motion`.
+
+**Empty states.** `<app-empty-state>` takes an `icon` (`chart`, `orders`,
+`inbox`, `check`, `search`, `plug`, `pause`, `doc`) for what would fill the
+space, and `tone="good"` for all-clear news ("Trading is not halted", "No
+failed trading runs"), which tints the glyph green.
+
+**Tab rows.** The workspace tabs and `<app-page-tabs>` fade an edge only
+while tabs hide past it. The workspace row also shows a small arrow on that
+edge to scroll it, and centres the current tab. On an account page
+(Profile, Settings, Notifications, Get set up, Help) the row shows those
+pages and the switcher reads Account.
 
 ### Tokens
 
@@ -1885,11 +1901,11 @@ The console must work on phones (360–430px) as well as tablets and desktops.
 |---|---|---|
 | phone | < 768px | Chrome bar without tabs, the wrapped session rail and a bottom nav with a More sheet; one column; 16px gutter; table rows become list items; dialogs are full-screen sheets |
 | tablet | 768–1099px | Chrome bar with tabs and a search icon; no day spine; one-column bodies |
-| desktop | ≥ 1100px | The day spine; two-column bodies (`.cols`) and the 12-column `.page-grid`. From 1280px the full search field |
+| desktop | ≥ 1100px | The day spine; two-column bodies (`.cols`) and the 12-column `.page-grid`. From 1440px the full search field |
 
 Use the mixins (`@use 'breakpoints' as bp;` then `@include bp.phone { … }`,
 `bp.from-tablet`, `bp.below-desktop`, `bp.from-desktop`, `bp.below-wide`,
-`bp.from-wide`, `bp.coarse`) and write phone styles first.
+`bp.below-xwide`, `bp.from-wide`, `bp.coarse`) and write phone styles first.
 
 - **No horizontal page scroll.** Wide content scrolls inside its own box
   (the data table does this on tablets). Use `min-width: 0` on grid and flex
@@ -1956,7 +1972,9 @@ automate it.
 - Targets: 44px on phones and coarse pointers, at least 24px elsewhere (WCAG
   2.2, 2.5.8), including the help tip, whose button itself grows to 44px
   there (negative margins keep the line height). The sticky chrome bar and rail never
-  hide the focused element (`scroll-padding-top`, 2.4.11), and fields use
+  hide the focused element (`scroll-padding-top`, 2.4.11): the shell measures
+  the pinned header (the halt band included) into `--header-h`, which
+  `scroll-padding-top` and every sticky `top` use. Fields use
   16px text so iOS does not zoom.
 - Motion is limited to hover and press, menus and sheets opening, the page
   rise, the tab underline, toast rise, the loading shimmer, the

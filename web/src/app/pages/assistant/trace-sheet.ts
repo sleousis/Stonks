@@ -88,6 +88,7 @@ export function traceRow(entry: Record<string, unknown>): TraceRow {
           <app-loading-state label="Loading the trace" [rows]="3" />
         } @else if (rows().length === 0) {
           <app-empty-state
+            icon="inbox"
             title="No turns yet"
             message="Each answer you get is recorded here, with every tool it used."
           />

@@ -25,6 +25,7 @@ const W = 1000;
 const H = 220;
 const PAD = 12;
 const TICKS = 5;
+let nextFillId = 0;
 
 /** "11 Sep" in the reader's locale, for the axis under the curve. */
 export function axisDay(day: string): string {
@@ -57,11 +58,21 @@ export function tickIndexes(n: number, count = TICKS): number[] {
     <figure>
       <div class="plot" role="img" [attr.aria-label]="summary()">
         <svg [attr.viewBox]="'0 0 ' + w + ' ' + h" preserveAspectRatio="none" focusable="false">
+          <defs>
+            <linearGradient [attr.id]="fillId" x1="0" y1="0" x2="0" y2="1">
+              <stop class="stop-top" offset="0" />
+              <stop class="stop-end" offset="1" />
+            </linearGradient>
+          </defs>
           @for (y of grid; track y) {
             <line class="grid" x1="0" [attr.y1]="y" [attr.x2]="w" [attr.y2]="y" />
           }
           @if (path(); as d) {
-            <path class="fill" [attr.d]="d + ' L' + w + ' ' + h + ' L0 ' + h + ' Z'" />
+            <path
+              class="fill"
+              [attr.d]="d + ' L' + w + ' ' + h + ' L0 ' + h + ' Z'"
+              [attr.fill]="'url(#' + fillId + ')'"
+            />
             <path class="line" [attr.d]="d" vector-effect="non-scaling-stroke" />
           }
         </svg>
@@ -81,11 +92,9 @@ export function tickIndexes(n: number, count = TICKS): number[] {
       display: block;
       min-width: 0;
       --curve: var(--accent);
-      --curve-fill: var(--chart-fill);
     }
     :host(.live) {
       --curve: var(--brass-fill);
-      --curve-fill: color-mix(in srgb, var(--brass-fill) 16%, transparent);
     }
     figure {
       margin: 0;
@@ -106,8 +115,14 @@ export function tickIndexes(n: number, count = TICKS): number[] {
       stroke-dasharray: 2 4;
       vector-effect: non-scaling-stroke;
     }
-    .fill {
-      fill: var(--curve-fill);
+    /* The area fades from 16% of the curve's colour at the top to nothing. */
+    .stop-top {
+      stop-color: var(--curve);
+      stop-opacity: 0.16;
+    }
+    .stop-end {
+      stop-color: var(--curve);
+      stop-opacity: 0;
     }
     .line {
       fill: none;
@@ -160,6 +175,8 @@ export class EquityArea {
   /** What the curve shows, in one sentence, for screen readers. */
   readonly summary = input.required<string>();
 
+  /** The gradient's id, unique per chart so two on one page do not clash. */
+  protected readonly fillId = `eqfill-${nextFillId++}`;
   protected readonly w = W;
   protected readonly h = H;
   protected readonly grid = [PAD, H / 2, H - PAD];

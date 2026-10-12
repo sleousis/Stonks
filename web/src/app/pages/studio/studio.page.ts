@@ -170,6 +170,19 @@ export class StudioPage {
     this.nameTouched() && !this.newName().trim() ? 'Give the draft a name.' : null,
   );
 
+  /** Up to five starting points for the empty page: blank rules, then templates. */
+  protected readonly starters = computed(() =>
+    this.options()
+      .filter((o) => o.id !== CODE)
+      .slice(0, 5),
+  );
+
+  /** Opens the new draft form with this starting point picked. */
+  protected startFrom(option: StartOption): void {
+    this.openCreate();
+    this.pick(option);
+  }
+
   protected openCreate(): void {
     if (!this.canLab()) return;
     this.creating.set(true);

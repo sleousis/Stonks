@@ -1,5 +1,4 @@
 <app-page-header title="Health" [description]="checkedAt()">
-  <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
@@ -41,10 +40,7 @@
   >
     <span class="glyph" aria-hidden="true"></span>
     <div class="overall-text">
-      <h2 id="overall-title">
-        <span class="visually-hidden">Overall: </span>{{ headline() }}
-        <span class="overall-count">{{ levelUrgency[level()] }}</span>
-      </h2>
+      <h2 id="overall-title"><span class="visually-hidden">Overall: </span>{{ headline() }}</h2>
       <p>{{ advice() }}</p>
     </div>
     @if (version.hasValue()) {
@@ -94,6 +90,7 @@
       <app-loading-state label="Loading system checks" [rows]="3" />
     } @else if (runChecks().length === 0) {
       <app-empty-state
+        icon="check"
         compact
         title="No system checks"
         message="The server sent no checks besides data freshness. Run the checks again, or look at the server's log."
@@ -103,20 +100,22 @@
         @for (c of runChecks(); track c.name) {
           @let pill = checkPill(c);
           <li [attr.data-level]="c.level">
-            <div class="check-head">
+            <div class="check-main">
               <p class="check-name">{{ checkTitle(c.name) }}</p>
-              <app-status-pill [status]="c.level" [tone]="pill.tone" [label]="pill.label" />
+              @if (checkMeaning(c.name); as meaning) {
+                <p class="check-meaning">{{ meaning }}</p>
+              }
+              <p class="check-detail">{{ plainDetail(c) }}</p>
+              @if (!c.ok && canRunChecks() && checkAction(c.name); as action) {
+                <a class="check-action" [routerLink]="action.link">{{ action.label }}</a>
+              }
             </div>
-            @if (checkMeaning(c.name); as meaning) {
-              <p class="check-meaning">{{ meaning }}</p>
-            }
-            <p class="check-detail">{{ plainDetail(c) }}</p>
-            @if (threshold(c.name); as limit) {
-              <p class="check-limit"><span class="visually-hidden">Limit: </span>{{ limit }}</p>
-            }
-            @if (!c.ok && canRunChecks() && checkAction(c.name); as action) {
-              <a class="check-action" [routerLink]="action.link">{{ action.label }}</a>
-            }
+            <div class="check-state">
+              <app-status-pill [status]="c.level" [tone]="pill.tone" [label]="pill.label" />
+              @if (threshold(c.name); as limit) {
+                <p class="check-limit"><span class="visually-hidden">Limit: </span>{{ limit }}</p>
+              }
+            </div>
           </li>
         }
       </ul>
@@ -175,6 +174,7 @@
     } @else if (freshness().length === 0) {
       @if (canRunChecks()) {
         <app-empty-state
+          icon="check"
           title="No tickers checked"
           message="No universe is set for trading yet, so there is nothing to check. Make a universe of the tickers to trade, then choose it as the trading universe in Settings. Or enter tickers above to check them now."
         >
@@ -183,6 +183,7 @@
         </app-empty-state>
       } @else {
         <app-empty-state
+          icon="check"
           title="No tickers checked"
           message="No universe is set for trading yet. An admin chooses which tickers are traded. Enter tickers above to check them now."
         />
@@ -241,6 +242,8 @@
         <app-loading-state label="Loading data update failures" [rows]="4" />
       } @else if (failedIngest.value().items.length === 0) {
         <app-empty-state
+          icon="check"
+          tone="good"
           compact
           title="No failed data updates"
           message="Updates that end in error show here with the data provider's message."
@@ -278,6 +281,8 @@
         <app-loading-state label="Loading trading run failures" [rows]="4" />
       } @else if (failedTicks.value().items.length === 0) {
         <app-empty-state
+          icon="check"
+          tone="good"
           compact
           title="No failed trading runs"
           message="Trading runs that fail show here with the reason."

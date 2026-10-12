@@ -224,6 +224,7 @@
               <app-golive-check-list [report]="g" />
             } @else {
               <app-empty-state
+                icon="check"
                 title="Not checked"
                 message="A retired strategy is not checked. Put it on trial to check it again."
               />
@@ -280,6 +281,7 @@
                 <app-loading-state label="Loading status history" [rows]="4" />
               } @else if (timeline().length === 0) {
                 <app-empty-state
+                  icon="inbox"
                   title="No status changes yet"
                   message="Every move on trial, to approved and to retired is recorded here with who did it and why."
                 />
@@ -378,6 +380,7 @@
               </header>
               @if (params().length === 0) {
                 <app-empty-state
+                  icon="doc"
                   title="No parameters"
                   message="It runs with its defaults. A Lab run records tuned values here."
                 />
@@ -410,6 +413,7 @@
             </header>
             @if (s.survival_reports.length === 0) {
               <app-empty-state
+                icon="check"
                 title="No robustness tests yet"
                 message="Results are saved when a Lab run tests this strategy (out of sample, period stability, perturbation, drift). Test it again in Lab to add them."
               >
@@ -557,6 +561,7 @@
                     <app-loading-state label="Loading orders" [rows]="4" />
                   } @else if (orders.value().items.length === 0) {
                     <app-empty-state
+                      icon="orders"
                       title="No orders yet"
                       [message]="
                         s.status === 'active'

@@ -1,7 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
+import {
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  splitMoney,
+  toneClass,
+} from '../../core/format/format';
 import {
   dayChangeFrom,
   dayChangeMoney,
@@ -52,15 +58,7 @@ export function inRange<T extends { day: string }>(rows: readonly T[], range: Ra
   return rows.filter((r) => Date.parse(r.day) >= from);
 }
 
-/**
- * A money figure split for the headline: the whole part, then the cents and
- * any currency after them, which the headline sets in the muted ink.
- * "$10,412.37" gives ["$10,412", ".37"]. A masked or odd figure stays whole.
- */
-export function splitMoney(text: string): [string, string] {
-  const m = /^(.*\d)([.,]\d{1,2})(\D*)$/.exec(text);
-  return m ? [m[1], m[2] + m[3]] : [text, ''];
-}
+export { splitMoney } from '../../core/format/format';
 
 /**
  * My portfolio, the overview at the top of Today: the value as the one big

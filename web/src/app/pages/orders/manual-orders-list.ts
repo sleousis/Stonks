@@ -70,6 +70,7 @@ export function isWorking(order: Pick<OrderView, 'status'>): boolean {
         <app-loading-state label="Loading your orders" [rows]="3" />
       } @else if (orders.value().items.length === 0) {
         <app-empty-state
+          icon="orders"
           title="No orders by hand yet"
           message="Orders you place on this page show here, and a working one can be changed or cancelled."
         />

@@ -67,6 +67,7 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
           <app-loading-state label="Loading alerts" [rows]="3" />
         } @else if (alerts.value().length === 0) {
           <app-empty-state
+            icon="inbox"
             title="No price alerts yet"
             message="Make one with the form. It fires into your feed and on the channels you turned on in Settings."
           />

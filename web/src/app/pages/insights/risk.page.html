@@ -142,11 +142,15 @@
             <dl class="figures bad-day">
               <div>
                 <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
-                <dd class="num">Could lose {{ loss(b.var_95) }}</dd>
+                <dd>
+                  Could lose <span class="num">{{ loss(b.var_95) }}</span>
+                </dd>
               </div>
               <div>
                 <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
-                <dd class="num">Could lose {{ loss(b.es_95) }}</dd>
+                <dd>
+                  Could lose <span class="num">{{ loss(b.es_95) }}</span>
+                </dd>
               </div>
             </dl>
             <p class="hint">

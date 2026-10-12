@@ -191,6 +191,10 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     page.get_by_role("tab", name="Lab run").click()
     form = page.locator("#lab-panel-lab_run")
     expect(form).to_be_visible()
+    # The picker shows six strategies first; open the rest when it offers to.
+    more = form.get_by_role("button", name=re.compile(r"^Show all \d+ strategies"))
+    if more.count():
+        more.click()
     form.get_by_role("radio", name=re.compile(r"^Momentum\b")).check()
     page.locator("#lr-tickers").fill("AAA.US,BBB.US,CCC.US")
     start = stack.market_end.replace(year=stack.market_end.year - 1)

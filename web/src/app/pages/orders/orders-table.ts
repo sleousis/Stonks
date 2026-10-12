@@ -95,11 +95,11 @@ export class OrdersTable {
 
   private readonly allColumns: TableColumn<OrderView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'side', label: 'Side' },
-    { key: 'quantity', label: 'Qty', format: 'number' },
+    { key: 'side', label: 'Side', mobile: 'inline' },
+    { key: 'quantity', label: 'Qty', format: 'number', mobile: 'figure' },
     { key: 'limit_price', label: 'Limit or stop', mobile: 'hide', help: false },
     // Wraps: a Working or refused order explains itself on a second line.
-    { key: 'status', label: 'Status', wrap: true },
+    { key: 'status', label: 'Status', wrap: true, mobile: 'inline' },
     {
       key: 'strategy_id',
       label: 'Strategy',

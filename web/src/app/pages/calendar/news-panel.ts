@@ -33,6 +33,7 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
       <app-data-plan-note class="plan" kind="news" />
       @if (!query()) {
         <app-empty-state
+          icon="inbox"
           title="Pick whose news to show"
           message="News follows your holdings, a watchlist or the tickers you name. Everything is too much to read."
         />
@@ -42,6 +43,7 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
         <app-loading-state label="Loading news" [rows]="5" />
       } @else if (news.value().items.length === 0 && news.value().sentiment.length === 0) {
         <app-empty-state
+          icon="inbox"
           title="No news yet"
           message="Articles and sentiment arrive with each data update for these tickers. Not every ticker has news every day."
         />

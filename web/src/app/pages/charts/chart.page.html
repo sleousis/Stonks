@@ -117,11 +117,37 @@
 
 @if (!symbol()) {
   <app-empty-state
+    icon="search"
     title="Pick a ticker"
     message="Type a ticker above, or pick a watchlist to jump between its tickers."
   >
     <a routerLink="/watchlists" class="btn">Your watchlists</a>
   </app-empty-state>
+  @if (quickTickers().length) {
+    <section class="page-section quick" aria-labelledby="quick-title">
+      <header class="section-head">
+        <h2 id="quick-title">From your watchlists</h2>
+      </header>
+      <ul class="quick-list">
+        @for (t of quickTickers(); track t) {
+          <li>
+            <a class="quick-row" [routerLink]="['/charts', t]" [attr.aria-label]="'Chart of ' + t">
+              <span class="num">{{ t }}</span>
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="m6 3.5 4.5 4.5L6 12.5" />
+              </svg>
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
+  }
 } @else {
   <section class="chart-area" aria-labelledby="chart-title">
     <h2 id="chart-title" class="visually-hidden">Price chart of {{ symbol() }}</h2>

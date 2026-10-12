@@ -5,6 +5,7 @@ import {
   type ElementRef,
   Injector,
   afterNextRender,
+  afterRenderEffect,
   inject,
   signal,
   viewChild,
@@ -92,6 +93,8 @@ export class Shell {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   private readonly main = viewChild<ElementRef<HTMLElement>>('main');
+  private readonly chrome = viewChild<ElementRef<HTMLElement>>('chrome');
+  private readonly chromeBar = viewChild<ElementRef<HTMLElement>>('bar');
 
   /** Pages with `data: { bare: true }` (sign-in) render without the app frame. */
   protected readonly bare = signal(false);
@@ -101,6 +104,7 @@ export class Shell {
 
   constructor() {
     registerShellCommands();
+    this.publishHeaderHeight();
     // ops: keep the halt state in the session rail current
     this.halts.watch(inject(DestroyRef));
     // The deepest route's data decides, before its component is created.
@@ -132,6 +136,48 @@ export class Shell {
   protected async signOut(): Promise<void> {
     // logout() loads /login afresh, so no user's state outlives the session (UX-07).
     await this.session.logout();
+  }
+
+  /**
+   * Publishes the pinned header's real height as --header-h on the root, for
+   * scroll-padding-top and every sticky top: the bar and rail on wider
+   * screens, the bar alone on phones (where the rail scrolls away), and the
+   * halt band too while it shows (WCAG 2.4.11).
+   */
+  private publishHeaderHeight(): void {
+    const root = globalThis.document?.documentElement;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+    const phone = globalThis.matchMedia?.('(max-width: 767.98px)');
+    const publish = () => {
+      const header = this.chrome()?.nativeElement;
+      const bar = this.chromeBar()?.nativeElement;
+      const pinned = phone?.matches ? bar : header;
+      if (!pinned) {
+        root.style.removeProperty('--header-h');
+        return;
+      }
+      root.style.setProperty(
+        '--header-h',
+        `${Math.round(pinned.getBoundingClientRect().height)}px`,
+      );
+    };
+    const resize = new ResizeObserver(publish);
+    phone?.addEventListener?.('change', publish);
+    let watched: HTMLElement[] = [];
+    inject(DestroyRef).onDestroy(() => {
+      resize.disconnect();
+      phone?.removeEventListener?.('change', publish);
+    });
+    afterRenderEffect(() => {
+      const next = [this.chrome()?.nativeElement, this.chromeBar()?.nativeElement].filter(
+        (el): el is HTMLElement => !!el,
+      );
+      if (next.length === watched.length && next.every((el, i) => el === watched[i])) return;
+      resize.disconnect();
+      next.forEach((el) => resize.observe(el));
+      watched = next;
+      publish();
+    });
   }
 
   private focusPage(): void {

@@ -227,7 +227,8 @@ describe('DashboardPage', () => {
     expect(tickSection?.textContent).toContain('2026-09-25');
 
     const health = el.querySelector('section[aria-labelledby="health-title"]');
-    expect(health?.textContent).toContain('1 of 4 checks failed');
+    expect(health?.textContent).toMatch(/3\s*of 4\s*checks passed/);
+    expect(health?.textContent).toContain('Needs a look');
     expect(health?.textContent).toContain('Price data is up to date');
     expect(health?.textContent).toContain('1 of 2 tickers have a recent price.');
     expect(health?.textContent).toContain('Lab workers');

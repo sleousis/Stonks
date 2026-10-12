@@ -8,7 +8,8 @@ import { ErrorState } from '../../shared/ui/states';
 /**
  * Admins: totals across every trader, under their own portfolio on Today.
  * Never anyone's holdings. Too few traders with real money to sum without
- * showing someone's: one quiet line, not an empty panel (M3).
+ * showing someone's: nothing at all here, not an empty panel (M3). Insights
+ * says once why the totals are held back.
  */
 @Component({
   selector: 'app-totals-card',
@@ -16,10 +17,7 @@ import { ErrorState } from '../../shared/ui/states';
   imports: [StatTile, ErrorState],
   template: `
     @if (suppressed()) {
-      <p class="line">
-        All traders: totals appear once three or more traders have real money. Paper accounts are
-        left out, and sums of fewer people would show theirs.
-      </p>
+      <!-- Held back: Today stays quiet, Insights explains. -->
     } @else if (totals.error(); as err) {
       <section class="panel" aria-labelledby="home-totals">
         <div class="panel-head">
@@ -56,16 +54,13 @@ import { ErrorState } from '../../shared/ui/states';
       display: block;
       min-width: 0;
     }
+    :host:empty {
+      display: none;
+    }
     /* Sums in one divided strip: the page's one headline figure stays in My portfolio. */
     .tiles {
       grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
       border-bottom: 1px solid var(--rule);
-    }
-    .line {
-      margin: 0;
-      padding: 0 var(--space-1);
-      font-size: var(--text-xs);
-      color: var(--muted);
     }
     .hint {
       font-size: var(--text-xs);

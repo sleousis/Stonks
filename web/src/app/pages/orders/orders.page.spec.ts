@@ -64,17 +64,19 @@ describe('OrdersPage', () => {
     );
   });
 
-  it('puts New order first in the header, with Rebalance next to it', async () => {
+  it('keeps New order as a tab only, with Rebalance in the header', async () => {
     const el = await at('/orders');
     expect(headerLinks(el)).toEqual([
-      { text: 'New order', href: '/orders/new', primary: true },
       { text: 'Rebalance', href: '/orders/rebalance', primary: false },
     ]);
     expect(el.textContent).not.toContain('Run tick');
   });
 
-  it('drops the New order button on the ticket itself', async () => {
-    const el = await at('/orders/new');
-    expect(headerLinks(el).map((l) => l.text)).toEqual(['Rebalance']);
+  it('offers the CSV of the list on screen only', async () => {
+    let el = await at('/orders');
+    expect(el.textContent).toContain('Orders CSV');
+    expect(el.textContent).not.toContain('Fills CSV');
+    el = await at('/orders/new');
+    expect(el.textContent).not.toContain('CSV');
   });
 });

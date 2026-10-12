@@ -127,6 +127,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
         <div class="panel-body">
           @if (proposals().length === 0) {
             <app-empty-state
+              icon="doc"
               title="No proposals yet"
               message="The assistant's proposals show here as it makes them, each with its hypothesis."
             />

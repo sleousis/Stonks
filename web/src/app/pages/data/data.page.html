@@ -1,7 +1,7 @@
 <app-page-header title="Data" [description]="standfirst()">
-  <button actions type="button" class="btn" (click)="goToUpdate()">Update data</button>
-  <button actions type="button" class="btn" (click)="refresh()">Refresh</button>
   <a actions class="btn btn-ghost" routerLink="/universes">Universes</a>
+  <button actions type="button" class="btn" (click)="refresh()">Refresh</button>
+  <button actions type="button" class="btn" (click)="goToUpdate()">Update data</button>
 </app-page-header>
 
 @if (troubled(); as n) {

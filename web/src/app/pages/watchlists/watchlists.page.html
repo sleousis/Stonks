@@ -20,6 +20,7 @@
       <app-loading-state label="Loading watchlists" [rows]="4" />
     } @else if (lists.value().length === 0) {
       <app-empty-state
+        icon="doc"
         title="No watchlists yet"
         message="Save the tickers you follow. Today and the charts can then show only them."
       />
@@ -114,8 +115,9 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @for (t of w.tickers; track t) {
+                    @for (t of w.tickers; track t; let i = $index) {
                       @let q = quote(t);
+                      @let asked = i < quoteLimit();
                       <tr>
                         <th scope="row" class="ticker-cell">
                           <a
@@ -128,6 +130,8 @@
                         <td class="num">
                           @if ((q?.last ?? null) !== null) {
                             {{ q!.last | num: { digits: 2 } }}
+                          } @else if (!asked) {
+                            <span class="muted">Not loaded</span>
                           } @else if (quotes.isLoading()) {
                             <span class="skeleton-line" aria-hidden="true"></span>
                           } @else {
@@ -162,8 +166,16 @@
                     }
                   </tbody>
                 </table>
+                @if (w.tickers.length > quoteLimit()) {
+                  <p class="more-quotes">
+                    <button type="button" class="btn btn-secondary" (click)="showAllQuotes()">
+                      Show quotes for all {{ w.tickers.length }}
+                    </button>
+                  </p>
+                }
               } @else {
                 <app-empty-state
+                  icon="doc"
                   compact
                   title="No tickers in this list"
                   message="Edit the list to add the tickers you follow."

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 import type { MonthlyReturn } from '../../api/models';
-import { formatPercent } from '../../core/format/format';
+import { MISSING, formatPercent } from '../../core/format/format';
 
 export const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -120,8 +120,17 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
             <tr>
               <th scope="row" class="num">{{ y.year }}</th>
               @for (c of y.cells; track c.month) {
-                <td class="num cell" [attr.data-tone]="c.tone" [attr.data-strength]="c.strength">
-                  {{ c.text }}
+                <td
+                  class="num cell"
+                  [class.none]="c.value === null"
+                  [attr.data-tone]="c.tone"
+                  [attr.data-strength]="c.strength"
+                >
+                  @if (c.value === null) {
+                    <span aria-hidden="true">{{ missing }}</span>
+                  } @else {
+                    {{ c.text }}
+                  }
                 </td>
               }
               <td class="num total" [attr.data-tone]="y.totalTone">{{ y.total }}</td>
@@ -222,7 +231,8 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
     .months {
       width: 100%;
       min-width: 44rem;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 2px 0;
       font-size: var(--text-sm);
     }
     th {
@@ -235,11 +245,17 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
       text-align: left;
       color: var(--ink);
     }
+    /* No boxes: only months with a return are tinted, a hairline between years. */
     td {
       padding: var(--space-1) var(--space-2);
-      border: 1px solid var(--raise);
       text-align: right;
       white-space: nowrap;
+    }
+    tbody tr + tr > * {
+      border-top: 1px solid var(--rule);
+    }
+    td.none {
+      color: var(--muted);
     }
     .cell[data-tone='gain'],
     .total[data-tone='gain'] {
@@ -289,5 +305,6 @@ export class MonthlyReturns {
   readonly caption = input.required<string>();
 
   protected readonly monthNames = MONTHS;
+  protected readonly missing = MISSING;
   protected readonly rows = computed(() => yearRows(this.months()));
 }

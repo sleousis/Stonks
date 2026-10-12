@@ -151,6 +151,7 @@
         <app-loading-state label="Loading accounts" [rows]="2" />
       } @else if (accounts.value().length === 0) {
         <app-empty-state
+          icon="plug"
           title="No accounts found yet"
           message="Accounts appear here after the broker confirms the connection. Try Sync now."
         />

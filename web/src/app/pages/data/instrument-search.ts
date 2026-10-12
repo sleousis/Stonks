@@ -77,6 +77,7 @@ const DEBOUNCE_MS = 250;
         <app-loading-state label="Searching instruments" [rows]="5" />
       } @else if (p.items.length === 0) {
         <app-empty-state
+          icon="search"
           title="No instruments match"
           [message]="
             q() || assetClass()

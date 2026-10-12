@@ -403,3 +403,34 @@ a.chip:hover:not([aria-current='page']) {
     display: none;
   }
 }
+
+// The empty page: watchlist tickers as rows that open their chart.
+.quick-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  column-gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--touch-min);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+  }
+
+  &:hover {
+    color: var(--accent);
+  }
+}

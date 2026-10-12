@@ -11,6 +11,7 @@ import { RouterLink } from '@angular/router';
 
 import type { WatchlistView } from '../../api/models';
 import { MarketService } from '../../api/market.service';
+import { mapSettledLimit } from '../../core/http/map-limit';
 import { WatchlistsService } from '../../api/watchlists.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -57,6 +58,11 @@ export function labLink(w: Pick<WatchlistView, 'tickers'>): { tickers: string } 
  * universe, each ticker opens its chart, and Today and the charts can show
  * only one list.
  */
+/** Quotes loaded at first; a longer list offers the rest on a tap. */
+export const QUOTE_MAX = 40;
+/** Price reads in flight at once. */
+const QUOTE_CONCURRENCY = 6;
+
 @Component({
   selector: 'app-watchlists-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -106,22 +112,31 @@ export class WatchlistsPage {
   );
 
   /** The picked list's tickers with their last close, day change and 60 closes. */
+  /** How many of the list's tickers get a quote; a long list asks first. */
+  protected readonly quoteLimit = linkedSignal({
+    source: this.selectedId,
+    computation: () => QUOTE_MAX,
+  });
+
   protected readonly quotes = resource({
-    params: () => this.selected()?.tickers,
+    params: () => this.selected()?.tickers.slice(0, this.quoteLimit()),
     loader: async ({ params: tickers }) => {
-      const rows = await Promise.all(
-        tickers.map(async (t) => {
-          try {
-            const series = await this.market.bars({ ticker: t, interval: '1d', limit: 60 });
-            return quoteFrom(t, series.bars);
-          } catch {
-            return quoteFrom(t, []);
-          }
-        }),
+      // Six reads at a time: a list may hold hundreds of tickers.
+      const settled = await mapSettledLimit(tickers, QUOTE_CONCURRENCY, async (t) => {
+        const series = await this.market.bars({ ticker: t, interval: '1d', limit: 60 });
+        return quoteFrom(t, series.bars);
+      });
+      const rows = settled.map((r, i) =>
+        r.status === 'fulfilled' ? r.value : quoteFrom(tickers[i], []),
       );
       return new Map(rows.map((r) => [r.ticker, r]));
     },
   });
+
+  /** Loads quotes for every ticker in the picked list. */
+  protected showAllQuotes(): void {
+    this.quoteLimit.set(this.selected()?.tickers.length ?? QUOTE_MAX);
+  }
 
   protected quote(ticker: string): TickerQuote | null {
     return this.quotes.hasValue() ? (this.quotes.value().get(ticker) ?? null) : null;

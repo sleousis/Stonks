@@ -24,7 +24,8 @@ app-status-pill {
   vertical-align: middle;
 }
 
-// A ticker that selects itself when pressed: looks like a link, is a button.
+// A ticker that selects itself when pressed: a button with the shared
+// table link look (ink, semibold, underlined on hover or focus).
 .pick {
   display: inline-flex;
   align-items: center;
@@ -33,15 +34,15 @@ app-status-pill {
   border: 0;
   background: none;
   color: var(--ink);
-  font-weight: 650;
+  font-weight: var(--weight-semibold);
   text-align: start;
   cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-decoration: none;
   text-underline-offset: 3px;
 
-  &:hover {
-    text-decoration-color: currentColor;
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
   }
 
   &[aria-pressed='true'] {

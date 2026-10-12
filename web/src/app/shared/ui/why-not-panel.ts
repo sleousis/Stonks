@@ -105,6 +105,7 @@ export function groupDecisions(items: TradeDecisionView[], showAll: boolean): De
           <app-loading-state label="Loading the decisions" [rows]="3" />
         } @else if (rows.value().items.length === 0) {
           <app-empty-state
+            icon="inbox"
             title="Nothing recorded yet"
             message="Each trading run records why a ticker did or did not trade."
           />

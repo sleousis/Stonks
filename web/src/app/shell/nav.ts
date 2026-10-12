@@ -22,6 +22,7 @@ import {
   type NavItem,
   type TabWorkspace,
   WORKSPACES,
+  type Workspace,
   itemForUrl,
   navItemVisible,
   navViewer,
@@ -29,10 +30,19 @@ import {
 } from './nav-items';
 
 const TICKETS = '/tickets';
+/** The account pages in tab order. */
+const ACCOUNT_ORDER = ['/profile', '/settings', '/notifications', '/welcome', '/help/glossary'];
 
 /** A workspace with the pages this person may see in it. */
 export interface WorkspaceView {
   name: TabWorkspace;
+  blurb: string;
+  items: readonly NavItem[];
+}
+
+/** A row of tabs: a workspace's pages, or the account pages. */
+export interface TabView {
+  name: Workspace;
   blurb: string;
   items: readonly NavItem[];
 }
@@ -42,7 +52,8 @@ export interface WorkspaceView {
  * phone bottom nav and the More sheet: which pages this person sees, the
  * page on screen and its workspace. The active workspace is the one that
  * holds the current route. On an account page (Profile, Settings) the last
- * workspace stays, so the tabs do not jump.
+ * workspace stays for the switcher's grid, while the tab row shows the
+ * account pages and the switcher reads "Account".
  */
 @Injectable({ providedIn: 'root' })
 export class NavState {
@@ -82,10 +93,27 @@ export class NavState {
     return names.includes(last) ? last : (names[0] ?? 'Trade');
   });
 
-  /** The current workspace with its pages: the tabs in the chrome bar. */
+  /** The current workspace with its pages. */
   readonly currentView = computed(
     () => this.workspaces().find((w) => w.name === this.current()) ?? null,
   );
+
+  /** Is the page on screen an account page (Profile, Settings, Help)? */
+  readonly onAccount = computed(() => this.activeItem()?.workspace === 'Account');
+
+  /** The switcher's label: the workspace on screen, or Account. */
+  readonly label = computed<Workspace>(() => (this.onAccount() ? 'Account' : this.current()));
+
+  /** The tabs in the chrome bar: the current workspace, or the account pages. */
+  readonly tabView = computed<TabView | null>(() => {
+    if (!this.onAccount()) return this.currentView();
+    const rank = (i: NavItem) => {
+      const at = ACCOUNT_ORDER.indexOf(i.path);
+      return at < 0 ? ACCOUNT_ORDER.length : at;
+    };
+    const items = [...this.accountItems()].sort((a, b) => rank(a) - rank(b));
+    return { name: 'Account', blurb: 'Your profile, settings and help', items };
+  });
 
   constructor() {
     this.router.events

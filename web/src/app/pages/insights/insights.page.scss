@@ -43,13 +43,27 @@
   display: flex;
   gap: 4px;
   height: 8px;
-  margin-bottom: var(--space-4);
 
   .split-part {
     flex: 1 1 0;
     min-width: 2px;
     border-radius: 2px;
     background: var(--accent);
+  }
+}
+
+.split-labels {
+  display: flex;
+  gap: 4px;
+  margin: var(--space-1) 0 var(--space-4);
+  color: var(--muted);
+  font-size: var(--text-xs);
+
+  span {
+    flex: 1 1 0;
+    min-width: 2px;
+    overflow: hidden;
+    white-space: nowrap;
   }
 }
 

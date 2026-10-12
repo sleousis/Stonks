@@ -6,6 +6,7 @@ import {
   input,
 } from '@angular/core';
 
+import { splitMoney } from '../../core/format/format';
 import { countUp } from './count-up';
 import { HelpTip } from './help-tip';
 
@@ -59,10 +60,16 @@ export type StatTone = 'gain' | 'loss' | '';
     } @else {
       <div class="figure-line">
         @if (counting()) {
-          <p class="value" aria-hidden="true">{{ shown() }}</p>
+          @let parts = split(shown());
+          <p class="value" aria-hidden="true">
+            {{ parts[0] }}<span class="minor">{{ parts[1] }}</span>
+          </p>
           <span class="visually-hidden">{{ finalText() }}</span>
         } @else {
-          <p class="value">{{ finalText() }}</p>
+          @let parts = split(finalText());
+          <p class="value">
+            {{ parts[0] }}<span class="minor">{{ parts[1] }}</span>
+          </p>
         }
         @if (detail()) {
           <p class="detail" [class]="detailTone()">{{ detail() }}</p>
@@ -120,6 +127,14 @@ export type StatTone = 'gain' | 'loss' | '';
       font-size: clamp(var(--text-stat), 14cqi, var(--text-figure));
       letter-spacing: var(--tracking-figure);
       line-height: 1.08;
+    }
+    /* The headline figure sets its cents in the muted ink, like Today. */
+    .minor {
+      color: var(--muted);
+      font-weight: var(--weight-medium);
+    }
+    .minor:empty {
+      display: none;
     }
     /* Real money: the figure turns brass. */
     :host(.live) .value {
@@ -186,11 +201,20 @@ export class StatTile {
   });
 
   /** Words, not a figure: two letters in a row ("Momentum 3fa9", "Sep 2").
-   *  A leading currency code ("US$10,000", "CHF 3,400") is part of a figure. */
+   *  A leading currency code ("US$10,000", "CHF 3,400") is part of a figure,
+   *  and so is anything that starts with a digit ("5 of 5", "2h ago"). */
   protected readonly isText = computed(() => {
+    if (/^[+\-−]?\d/u.test((this.finalText() ?? '').trim())) return false;
     const text = (this.finalText() ?? '').replace(/^[+\-−]?\s*[A-Z]{1,3}(?:\$|\s)(?=[\d.,])/u, '');
     return /\p{L}{2}/u.test(text);
   });
+
+  /** A featured money figure splits off its cents; anything else stays whole. */
+  protected split(text: string | null): [string, string] {
+    const t = text ?? '';
+    const money = /[^\d\s.,+\-−%]/u.test(t) && !t.endsWith('%');
+    return this.featured() && !this.isText() && money ? splitMoney(t) : [t, ''];
+  }
 
   protected readonly helpTerm = computed(() => {
     const help = this.help();

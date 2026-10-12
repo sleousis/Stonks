@@ -144,7 +144,7 @@ export class CoveragePanel {
 
   protected readonly columns: TableColumn<CoverageView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'interval', label: 'Interval' },
+    { key: 'interval', label: 'Interval', mobile: 'inline' },
     {
       key: 'first_bar',
       label: 'First price',
@@ -161,8 +161,8 @@ export class CoveragePanel {
       value: (r) => barTime(r.last_bar, r.interval),
       display: (r) => barTime(r.last_bar, r.interval),
     },
-    { key: 'rows', label: 'Prices', format: 'number' },
-    { key: 'freshness', label: 'Freshness', value: (r) => RANK[r.freshness] },
+    { key: 'rows', label: 'Prices', format: 'number', mobile: 'hide' },
+    { key: 'freshness', label: 'Freshness', mobile: 'inline', value: (r) => RANK[r.freshness] },
   ];
   protected readonly key = (r: CoverageView) => `${r.ticker}|${r.interval}`;
 }

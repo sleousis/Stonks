@@ -129,8 +129,15 @@
                 <span
                   class="split-part"
                   [style.flex-grow]="share(s)"
-                  [style.opacity]="shade(s)"
+                  [style.background]="shade(s)"
                 ></span>
+              }
+            </div>
+            <div class="split-labels num" aria-hidden="true">
+              @for (s of splitSlices(); track sliceKey(s)) {
+                <span [style.flex-grow]="share(s)">{{
+                  share(s) >= 0.08 ? pct(s.weight) : ''
+                }}</span>
               }
             </div>
             <table class="table slices" aria-label="Allocation">
@@ -148,7 +155,7 @@
                 @for (s of slices(); track sliceKey(s)) {
                   <tr>
                     <th scope="row" class="slice-key">
-                      <span class="swatch" aria-hidden="true" [style.opacity]="shade(s)"></span>
+                      <span class="swatch" aria-hidden="true" [style.background]="shade(s)"></span>
                       {{ sliceLabel(s) }}
                     </th>
                     <td class="num slice-value">{{ money(s.value) }}</td>
@@ -332,11 +339,15 @@
                 </div>
                 <div>
                   <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
-                  <dd class="num">Could lose {{ loss(stats.var_95) }}</dd>
+                  <dd>
+                    Could lose <span class="num">{{ loss(stats.var_95) }}</span>
+                  </dd>
                 </div>
                 <div>
                   <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
-                  <dd class="num">Could lose {{ loss(stats.expected_shortfall_95) }}</dd>
+                  <dd>
+                    Could lose <span class="num">{{ loss(stats.expected_shortfall_95) }}</span>
+                  </dd>
                 </div>
                 <div>
                   <dt>Max drawdown <app-help-tip term="max_drawdown" /></dt>

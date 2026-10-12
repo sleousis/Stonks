@@ -306,7 +306,11 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
           }
         </ul>
       } @else if (parents.hasValue()) {
-        <app-empty-state title="No sliced orders" message="Parent orders Stonks works show here." />
+        <app-empty-state
+          icon="orders"
+          title="No sliced orders"
+          message="Parent orders Stonks works show here."
+        />
       }
     </section>
   `,

@@ -40,7 +40,7 @@ import { WorkspaceIcon } from './workspace-icon';
       (click)="toggle()"
     >
       <span class="ws-glyph"><app-workspace-icon /></span>
-      <span class="ws-name">{{ state.current() }}</span>
+      <span class="ws-name">{{ state.label() }}</span>
       <span class="visually-hidden">, switch workspace</span>
       <svg class="caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6">
         <path d="m3 4.5 3 3 3-3" />

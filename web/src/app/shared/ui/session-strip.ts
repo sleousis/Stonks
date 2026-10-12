@@ -174,7 +174,12 @@ function runTime(iso: string, now: number): string {
                 [attr.data-day]="day.phase"
               >
                 <span class="glyph" aria-hidden="true"></span>
-                <span class="phase-label">{{ halt ? 'Halted' : day.label }}</span>
+                @if (halt) {
+                  <span class="phase-label">Halted</span>
+                  <span class="meta phase-day">{{ day.label }}</span>
+                } @else {
+                  <span class="phase-label">{{ day.label }}</span>
+                }
                 <span class="meta phase-event">
                   {{ day.event }} <span class="num">{{ day.at }}</span>
                 </span>
@@ -335,6 +340,12 @@ function runTime(iso: string, now: number): string {
     }
     .strip:not([data-tone='calm']) .meta {
       color: var(--on-halt-muted);
+    }
+    /* Halted: the market's own state stays beside the red word. */
+    .phase-day {
+      padding-left: var(--space-2);
+      border-left: 1px solid var(--halt-rule);
+      white-space: nowrap;
     }
     .gap {
       flex: 1 1 auto;

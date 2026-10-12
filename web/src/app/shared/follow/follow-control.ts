@@ -102,7 +102,7 @@ let nextId = 0;
       </p>
     }
     @if (detail(); as d) {
-      <p class="why">{{ d }}</p>
+      <p class="why" [class.visually-hidden]="compact()">{{ d }}</p>
     }
   `,
   styles: `
@@ -249,8 +249,9 @@ export class FollowControl {
   /** One line on what the current mode does, with its glossary tip. */
   readonly showHelp = input(true);
   /**
-   * In a list that says the unlock line once above it (Today): each row
-   * keeps it for screen readers only and shows how far it has come.
+   * In a list that says the unlock line once under it (Today): each row
+   * keeps the unlock line and the paper days for screen readers only, and
+   * the list shows the paper day in its own meta line.
    */
   readonly compact = input(false);
   /** Each change the server accepted, with the updated follow. */

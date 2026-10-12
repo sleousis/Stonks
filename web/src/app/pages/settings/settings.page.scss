@@ -17,7 +17,7 @@
   // A vertical list: the current section on --sunk in ink, the rest muted.
   :host ::ng-deep .section-list {
     position: sticky;
-    top: calc(var(--chrome-h) + var(--rail-h) + var(--space-6));
+    top: calc(var(--header-h) + var(--space-6));
     margin: 0;
 
     .tabs {

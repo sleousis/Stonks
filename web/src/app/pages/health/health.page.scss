@@ -58,13 +58,6 @@
   }
 }
 
-.overall-count {
-  color: var(--ink-2);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  letter-spacing: 0;
-}
-
 // A mark in the level's tone, in a 40px squircle. Circle = good,
 // triangle = warning, diamond = critical.
 .glyph {
@@ -141,22 +134,26 @@
   }
 }
 
-// System checks: a strip of cells, each with its state chip, hairlines
-// between them.
+// System checks: one row each under the section rule. The name, what it
+// means and the detail on the left, the state chip and its limit on the right.
 .checks {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
   margin: 0;
   padding: 0;
-  border-bottom: 1px solid var(--rule);
   list-style: none;
-  overflow: hidden;
 
   li {
-    margin: -1px 0 0 -1px;
-    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-4);
-    border-top: 1px solid var(--rule);
-    border-left: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-5);
+    align-items: start;
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  li[data-level='critical'],
+  li[data-level='warning'] {
+    padding-left: var(--space-3);
   }
 
   li[data-level='critical'] {
@@ -168,26 +165,27 @@
   }
 
   @include bp.phone {
-    grid-template-columns: minmax(0, 1fr);
-
     li {
-      padding-inline: 0 0;
-      border-left: 0;
-    }
-
-    li[data-level='critical'],
-    li[data-level='warning'] {
-      padding-left: var(--space-3);
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }
 
-.check-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+.check-main {
+  min-width: 0;
+}
+
+.check-state {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+  text-align: right;
+
+  @include bp.phone {
+    grid-row: 1;
+    justify-items: start;
+    text-align: left;
+  }
 }
 
 .check-name {
