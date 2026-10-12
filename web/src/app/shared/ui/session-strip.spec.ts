@@ -94,7 +94,7 @@ describe('sessionPhase', () => {
   it('pre-open, then open with the time to the close', () => {
     const pre = sessionPhase(MARKET, Date.parse('2026-09-28T09:00:00Z'));
     expect(pre.phase).toBe('pre');
-    expect(pre.label).toBe('Pre-open');
+    expect(pre.label).toBe('Pre-market');
     const open = sessionPhase(MARKET, Date.parse('2026-09-28T19:00:00Z'));
     expect(open.phase).toBe('open');
     expect(open.label).toBe('Market open');
@@ -104,8 +104,17 @@ describe('sessionPhase', () => {
     expect(open.track?.openAt).toBeCloseTo(5.5 / 12);
   });
 
+  it('after hours for four hours past the close, then closed', () => {
+    const post = sessionPhase(MARKET, Date.parse('2026-09-28T21:00:00Z'));
+    expect(post.phase).toBe('post');
+    expect(post.label).toBe('After hours');
+    expect(post.at).toBe('Tue 13:30');
+    const late = sessionPhase(MARKET, Date.parse('2026-09-29T00:30:00Z'));
+    expect(late.phase).toBe('closed');
+  });
+
   it('after the close or on a day off: the next open with its weekday', () => {
-    const after = sessionPhase(MARKET, Date.parse('2026-09-28T21:00:00Z'));
+    const after = sessionPhase(MARKET, Date.parse('2026-09-29T01:00:00Z'));
     expect(after.phase).toBe('closed');
     expect(after.at).toBe('Tue 13:30');
     const off = sessionPhase({ ...MARKET, today: null }, Date.parse('2026-09-27T12:00:00Z'));
@@ -277,12 +286,13 @@ describe('SessionStrip', () => {
     expect(el.querySelector('.clock')).toBeNull();
   });
 
-  it('shows the market phase and the day track when the schedule has sessions', async () => {
+  it('shows the market phase and the day spine when the schedule has sessions', async () => {
     overview.mockResolvedValue({ ...schedule(), market: { ...MARKET, today: null } });
     const el = await renderEl();
     expect(el.querySelector('.phase')!.textContent).toContain('Market closed');
     expect(el.querySelector('.phase')!.getAttribute('data-phase')).toBe('closed');
-    expect(el.querySelector('.track')).toBeNull();
+    // A day off draws the next session's hours.
+    expect(el.querySelector('app-day-spine .seg[data-kind="regular"]')).not.toBeNull();
   });
 
   it('turns red while a kill switch is on and links an admin to the halts page', async () => {

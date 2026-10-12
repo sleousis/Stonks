@@ -1,14 +1,16 @@
 // Breakpoints. Mobile-first: write the phone layout as the default and add
 // `@include bp.from-tablet { ... }` / `@include bp.from-desktop { ... }`.
 //
-//   phone    0 – 767px     one column, top bar + drawer nav, card tables
-//   tablet   768 – 1099px  sidebar nav, two-column grids
-//   desktop  1100px +      full grid
+//   phone    0 - 767px      one column, bottom nav, list-item tables
+//   tablet   768 - 1099px   chrome bar, one column bodies, no day spine
+//   desktop  1100px +       two column bodies, the day spine
+//   wide     1280px +       the full search field in the chrome bar
 //
 // Use in a component stylesheet: `@use 'breakpoints' as bp;`
 
 $tablet: 768px;
 $desktop: 1100px;
+$wide: 1280px;
 
 @mixin phone {
   @media (max-width: ($tablet - 0.02px)) {
@@ -22,8 +24,26 @@ $desktop: 1100px;
   }
 }
 
+@mixin below-desktop {
+  @media (max-width: ($desktop - 0.02px)) {
+    @content;
+  }
+}
+
 @mixin from-desktop {
   @media (min-width: $desktop) {
+    @content;
+  }
+}
+
+@mixin below-wide {
+  @media (max-width: ($wide - 0.02px)) {
+    @content;
+  }
+}
+
+@mixin from-wide {
+  @media (min-width: $wide) {
     @content;
   }
 }

@@ -47,7 +47,7 @@ import { StatusChangeDialog } from './status-change-dialog';
       }
     } @else if (breakers().length) {
       @if (clearable().length) {
-        <button type="button" class="btn clear" [disabled]="busy()" (click)="clear()">
+        <button type="button" class="clear" [disabled]="busy()" (click)="clear()">
           Clear halt
         </button>
       } @else {
@@ -67,20 +67,28 @@ import { StatusChangeDialog } from './status-change-dialog';
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
     }
-    .stop {
+    /* On the red halt band: white outlined buttons. */
+    .stop,
+    .clear {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: var(--space-2);
       min-height: 32px;
       padding: 0 var(--space-3);
-      border: 1.5px solid var(--color-loss);
-      border-radius: var(--radius-sm);
-      background: var(--color-loss);
-      color: var(--color-surface);
+      border: 1px solid var(--on-halt);
+      border-radius: var(--r-ctl);
+      background: none;
+      color: var(--on-halt);
       font: inherit;
-      font-weight: var(--weight-bold);
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
       white-space: nowrap;
       cursor: pointer;
+    }
+    .stop:hover,
+    .clear:hover {
+      background: rgb(255 255 255 / 12%);
     }
     .stop-mark {
       flex: none;
@@ -96,8 +104,13 @@ import { StatusChangeDialog } from './status-change-dialog';
       }
     }
     @include bp.phone {
+      :host {
+        display: flex;
+        width: 100%;
+      }
       .stop,
       .clear {
+        width: 100%;
         min-height: var(--touch-min);
       }
     }

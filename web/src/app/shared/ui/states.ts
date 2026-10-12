@@ -8,52 +8,49 @@ import {
 } from '@angular/core';
 
 import { errorMessage } from '../../core/http/api-error';
-import { BrandMark } from './brand-mark';
 
 /**
- * Loading: the brand mark draws itself beside the label, over faint rows
- * sized like the content they stand for.
+ * Loading: skeleton rows in the final shape, with a slow shimmer that stops
+ * under reduced motion. The label is for screen readers. No spinner: those
+ * live only inside a working button.
  *
  *   @if (portfolio.isLoading()) { <app-loading-state label="Loading positions" [rows]="5" /> }
  */
 @Component({
   selector: 'app-loading-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BrandMark],
   template: `
     <div class="loading" role="status" [attr.aria-label]="label()">
-      <p class="head" aria-hidden="true">
-        <app-brand-mark mode="loading" [size]="22" />
-        <span>{{ label() }}</span>
-      </p>
       @for (row of rowList(); track $index) {
-        <div class="bar" [style.width.%]="row"></div>
+        <div class="row" aria-hidden="true">
+          <span class="bar" [style.width.%]="row"></span>
+          <span class="bar short"></span>
+        </div>
       }
     </div>
   `,
   styles: `
-    /* Loading, empty and error all reserve 9.5rem (an error with a one-line
-       message and a 44px retry button), so swapping one for another does
-       not push the page around. Pass more rows when the content is taller. */
+    /* Loading, empty and error all reserve 9.5rem, so swapping one for
+       another does not push the page around. Skeleton rows in the final
+       shape: a line and a short figure, a hairline between. */
     .loading {
       display: grid;
       align-content: start;
-      gap: var(--space-2);
       min-height: 9.5rem;
-      padding: var(--space-4);
     }
-    .head {
+    .row {
       display: flex;
       align-items: center;
-      gap: var(--space-2);
-      margin-bottom: var(--space-1);
-      font-size: var(--text-sm);
-      color: var(--color-ink-3);
+      justify-content: space-between;
+      gap: var(--space-6);
+      height: var(--row-h);
+      border-bottom: 1px solid var(--rule);
     }
     /* A slow, subtle shimmer: stops under reduced motion. */
     .bar {
       height: 10px;
-      border-radius: var(--radius-xs);
+      max-width: 60%;
+      border-radius: var(--r-tag);
       background:
         linear-gradient(
             90deg,
@@ -64,9 +61,12 @@ import { BrandMark } from './brand-mark';
             transparent 100%
           )
           0 0 / 200% 100% no-repeat,
-        var(--color-surface-3);
-      opacity: 0.8;
-      animation: shimmer 1.6s var(--ease) infinite;
+        var(--sunk);
+      animation: shimmer 2s var(--ease-out) infinite;
+    }
+    .bar.short {
+      flex: none;
+      width: 4.5rem;
     }
     @keyframes shimmer {
       from {
@@ -96,18 +96,22 @@ export class LoadingState {
 }
 
 /**
- * Nothing to show yet: the still brand mark, what would fill this space, and
- * one clear action in the content slot (a button or a link). Pass `compact`
+ * Nothing to show yet: left-aligned, a 40px sunk squircle with an icon,
+ * what would fill this space, and one clear action in the content slot (a
+ * button or a link). Pass `compact`
  * when the empty state is a panel's only content: a lower floor.
  */
 @Component({
   selector: 'app-empty-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BrandMark],
   host: { '[class.compact]': 'compact()' },
   template: `
     <div class="empty">
-      <app-brand-mark class="mark" [size]="28" />
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M3 14.5 7.5 10l3 3L17 6.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
       <div class="body">
         <p class="title">{{ title() }}</p>
         @if (message()) {
@@ -125,18 +129,25 @@ export class LoadingState {
       gap: var(--space-3) var(--space-4);
       /* Same floor as the loading and error states. */
       min-height: 9.5rem;
-      padding: var(--space-5) var(--space-4);
+      padding: var(--space-6) 0;
     }
     :host(.compact) .empty {
       min-height: 7rem;
-      padding: var(--space-4);
+      padding: var(--space-4) 0;
     }
-    /* A quiet solid square, not a dashed frame that reads as a missing image. */
+    /* A 40px sunk squircle with a 20px icon. */
     .mark {
-      padding: var(--space-2);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
-      color: var(--color-ink-3);
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: var(--r-sheet);
+      background: var(--sunk);
+      color: var(--muted);
+    }
+    .mark svg {
+      width: 20px;
+      height: 20px;
     }
     .body {
       display: grid;
@@ -145,16 +156,13 @@ export class LoadingState {
       min-width: 0;
     }
     .title {
-      font-family: var(--font-display);
-      font-stretch: var(--display-stretch);
-      font-size: 1.125rem;
-      font-weight: var(--weight-bold);
-      letter-spacing: var(--tracking-display-sm);
+      font-size: var(--text-lead);
+      font-weight: var(--weight-semibold);
       line-height: var(--leading-tight);
     }
     .message {
-      color: var(--color-ink-2);
-      max-width: 70ch;
+      color: var(--ink-2);
+      max-width: 68ch;
     }
     .action {
       display: flex;
@@ -176,17 +184,15 @@ export class EmptyState {
 }
 
 /**
- * A failed load: the brand mark turning down, the API's message and a retry.
+ * A failed load: the error band with the API's plain message and a retry.
  *
  *   @if (res.error(); as err) { <app-error-state [error]="err" (retry)="res.reload()" /> }
  */
 @Component({
   selector: 'app-error-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BrandMark],
   template: `
     <div class="error" role="alert">
-      <app-brand-mark mode="broken" [size]="28" />
       <div class="body">
         <p class="title">{{ title() }}</p>
         <p class="message">{{ message() }}</p>
@@ -195,19 +201,16 @@ export class EmptyState {
     </div>
   `,
   styles: `
+    /* The error band: --down-soft with a 3px red left edge. */
     .error {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
       align-items: start;
-      gap: var(--space-3);
-      /* 9.5rem with its margins: the loading and empty states' floor. */
       min-height: calc(9.5rem - 2 * var(--space-3));
-      margin: var(--space-3);
-      /* The shared .callout look in the loss tone. */
-      padding: var(--space-3) var(--space-4);
-      border-left: 2px solid var(--color-loss);
-      background: var(--color-loss-soft);
-      border-radius: var(--radius-sm);
+      margin: var(--space-3) 0;
+      padding: var(--space-4);
+      border-left: 3px solid var(--down);
+      border-radius: var(--r-sheet);
+      background: var(--down-soft);
     }
     .body {
       display: grid;
@@ -216,12 +219,12 @@ export class EmptyState {
       min-width: 0;
     }
     .title {
+      color: var(--ink);
       font-weight: var(--weight-semibold);
-      color: var(--color-loss);
     }
     .message {
-      max-width: 70ch;
-      color: var(--color-ink);
+      max-width: 68ch;
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
   `,

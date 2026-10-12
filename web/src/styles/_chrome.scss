@@ -1,0 +1,317 @@
+// The chrome: the ink bar across the top (brand, workspaces, tabs, search,
+// bell, theme, avatar), the session rail under it and the phone bottom nav.
+// Ink in both themes. Pieces style themselves with the --chrome-* tokens and
+// never remap the page tokens, so sheets and dialogs that open from the
+// chrome keep the page look.
+@use 'breakpoints' as bp;
+
+.chrome {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--chrome);
+  color: var(--chrome-ink);
+  padding-top: env(safe-area-inset-top);
+}
+
+.chrome-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: var(--content-max);
+  height: var(--chrome-h);
+  margin: 0 auto;
+  padding: 0 calc(var(--gutter) - 8px) 0 var(--gutter);
+  padding-left: calc(var(--gutter) + env(safe-area-inset-left));
+  padding-right: calc(var(--gutter) - 8px + env(safe-area-inset-right));
+
+  @include bp.phone {
+    height: 52px;
+    gap: 2px;
+    padding-left: calc(var(--space-3) + env(safe-area-inset-left));
+    padding-right: calc(var(--space-1) + env(safe-area-inset-right));
+  }
+}
+
+.chrome-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+// The brand: a 28px cobalt squircle with the rising line, and the word.
+.chrome-brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch-min);
+  margin-right: var(--space-1);
+  color: var(--chrome-ink);
+  text-decoration: none;
+
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #4f61ff;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    path {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  }
+
+  .wordmark {
+    font-size: 0.9375rem;
+    font-weight: var(--weight-bold);
+    letter-spacing: -0.02em;
+  }
+
+  @include bp.phone {
+    .wordmark {
+      display: none;
+    }
+  }
+}
+
+// A control on the chrome: the workspace switcher and the search field.
+.chrome-control {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 10px 0 var(--space-2);
+  border: 1px solid var(--chrome-rule);
+  border-radius: var(--r-ctl);
+  background: var(--chrome-2);
+  color: var(--chrome-ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--chrome-rule) 50%, var(--chrome-muted));
+  }
+
+  &:focus-visible {
+    outline-color: var(--chrome-accent);
+  }
+
+  .caret {
+    width: 12px;
+    height: 12px;
+    color: var(--chrome-muted);
+  }
+
+  @include bp.phone {
+    height: 40px;
+  }
+}
+
+// The search field: a button that opens the palette. Below 1280px only
+// the glass shows.
+.chrome-search {
+  width: 260px;
+  padding: 0 var(--space-2) 0 10px;
+  color: var(--chrome-muted);
+  font-weight: var(--weight-regular);
+
+  .search-label {
+    flex: 1;
+    text-align: start;
+  }
+
+  kbd {
+    border-color: var(--chrome-rule);
+    background: transparent;
+    color: var(--chrome-muted);
+  }
+
+  @include bp.below-wide {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+
+    .search-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    kbd {
+      display: none;
+    }
+
+    &:hover {
+      border-color: transparent;
+      background: var(--chrome-2);
+      color: var(--chrome-ink);
+    }
+  }
+
+  @include bp.phone {
+    width: var(--touch-min);
+    height: var(--touch-min);
+  }
+}
+
+// Icon buttons on the chrome: 40px, 44px on phones and touch.
+.chrome-icon,
+.chrome app-notification-bell .bell {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  position: relative;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--chrome-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover,
+  &.current,
+  &[aria-expanded='true'] {
+    background: var(--chrome-2);
+    color: var(--chrome-ink);
+  }
+
+  &:focus-visible {
+    outline-color: var(--chrome-accent);
+  }
+
+  @include bp.phone {
+    width: var(--touch-min);
+    height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    width: var(--touch-min);
+    height: var(--touch-min);
+  }
+}
+
+// The bell's unread count on the chrome: a small accent badge.
+.chrome app-notification-bell .badge {
+  top: 4px;
+  right: 3px;
+  border-color: var(--chrome);
+  background: var(--chrome-accent);
+  color: #0a0e1f;
+}
+
+// The avatar: a squircle with the initials.
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-avatar);
+  background: #4f61ff;
+  color: #ffffff;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+}
+
+// A sheet that opens from the chrome (workspace menu, account menu). Page
+// colours, an overlay shadow, a short scale and fade.
+.chrome-sheet {
+  position: absolute;
+  z-index: var(--z-menu);
+  top: calc(100% - 6px);
+  padding: var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sheet);
+  background: var(--raise);
+  color: var(--ink);
+  box-shadow: var(--shadow-overlay);
+  transform-origin: top left;
+  animation: menu-in var(--dur-menu) var(--ease-out);
+}
+
+// The session rail ------------------------------------------------------------
+// Chips on the rail: pills on --chrome-2.
+.rail-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--chrome-rule);
+  border-radius: var(--r-pill);
+  background: var(--chrome-2);
+  color: var(--chrome-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-label);
+  text-decoration: none;
+  white-space: nowrap;
+
+  .meta {
+    color: var(--chrome-muted);
+    font-weight: var(--weight-medium);
+  }
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+    height: auto;
+  }
+}
+
+// The phone bottom nav ------------------------------------------------------
+.bottom-nav {
+  display: none;
+
+  @include bp.phone {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: var(--z-sticky);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    border-top: 1px solid var(--rule);
+    background: var(--raise);
+  }
+}
+
+// Content clears the bottom nav on phones.
+@include bp.phone {
+  .has-bottom-nav main#main {
+    padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px);
+  }
+}

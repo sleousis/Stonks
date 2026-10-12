@@ -2,9 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  ElementRef,
   Injectable,
-  afterNextRender,
   computed,
   effect,
   inject,
@@ -13,331 +11,90 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs';
 
 import { SessionService } from '../core/auth/session.service';
 import { FeatureFlagsService } from '../core/features/feature-flags.service';
 import { TicketCountService } from '../core/tickets/ticket-count.service';
 import {
-  type FoldingGroup,
-  NAV_GROUPS,
   NAV_ITEMS,
   type NavItem,
-  defaultOpenGroups,
-  groupsForUrl,
+  type TabWorkspace,
+  WORKSPACES,
+  itemForUrl,
   navItemVisible,
   navViewer,
+  workspacesForUrl,
 } from './nav-items';
 
-/** Where the open groups are kept between visits (a per-browser convenience). */
-export const NAV_GROUPS_STORAGE_KEY = 'stonks.nav.groups';
+const TICKETS = '/tickets';
+
+/** A workspace with the pages this person may see in it. */
+export interface WorkspaceView {
+  name: TabWorkspace;
+  blurb: string;
+  items: readonly NavItem[];
+}
 
 /**
- * Which folding groups are open. Shared by the sidebar and the drawer, kept
- * in local storage, and the group that holds the current page always opens.
+ * The navigation's state, shared by the workspace switcher, the tabs, the
+ * phone bottom nav and the More sheet: which pages this person sees, the
+ * page on screen and its workspace. The active workspace is the one that
+ * holds the current route. On an account page (Profile, Settings) the last
+ * workspace stays, so the tabs do not jump.
  */
 @Injectable({ providedIn: 'root' })
-export class NavGroupsState {
+export class NavState {
   private readonly router = inject(Router);
-  private readonly session = inject(SessionService);
-  /** What the person chose, or null while they never touched a group. */
-  private readonly chosen = signal<ReadonlySet<FoldingGroup> | null>(readOpen());
-  /** The open groups: the person's choice, else the defaults for their role. */
-  readonly open = computed<ReadonlySet<FoldingGroup>>(
-    () => this.chosen() ?? new Set(defaultOpenGroups(this.session.isAdmin())),
+  private readonly viewer = navViewer(inject(SessionService), inject(FeatureFlagsService));
+  private readonly tickets = inject(TicketCountService);
+
+  /** The address on screen, without query or fragment. */
+  readonly url = signal(this.router.url);
+  private readonly lastTab = signal<TabWorkspace>('Trade');
+
+  /** The pages this person may see, in nav order. */
+  readonly visible = computed(() => NAV_ITEMS.filter((i) => navItemVisible(i, this.viewer)));
+
+  /** The workspaces with at least one visible page, in switcher order. */
+  readonly workspaces = computed<WorkspaceView[]>(() =>
+    WORKSPACES.map((ws) => ({
+      ...ws,
+      items: this.visible().filter((i) => i.workspace === ws.name),
+    })).filter((ws) => ws.items.length > 0),
+  );
+
+  /** The account pages (the avatar menu). */
+  readonly accountItems = computed(() => this.visible().filter((i) => i.workspace === 'Account'));
+
+  /** The nav item for the page on screen (the longest matching path). */
+  readonly activeItem = computed(() => itemForUrl(this.url(), this.visible()));
+
+  /** The workspace of the page on screen, or the last one for account pages. */
+  readonly current = computed<TabWorkspace>(() => {
+    const names = this.workspaces().map((w) => w.name);
+    const found = workspacesForUrl(this.url(), this.visible()).find(
+      (w): w is TabWorkspace => w !== 'Account' && names.includes(w as TabWorkspace),
+    );
+    if (found) return found;
+    const last = this.lastTab();
+    return names.includes(last) ? last : (names[0] ?? 'Trade');
+  });
+
+  /** The current workspace with its pages: the tabs in the chrome bar. */
+  readonly currentView = computed(
+    () => this.workspaces().find((w) => w.name === this.current()) ?? null,
   );
 
   constructor() {
-    this.reveal(this.router.url);
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe((e) => this.reveal((e as NavigationEnd).urlAfterRedirects));
-  }
-
-  set(group: FoldingGroup, on: boolean): void {
-    if (this.open().has(group) === on) return;
-    const next = new Set(this.open());
-    if (on) next.add(group);
-    else next.delete(group);
-    this.chosen.set(next);
-    try {
-      localStorage.setItem(NAV_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
-    } catch {
-      // Storage blocked: the choice lasts for this page view.
-    }
-  }
-
-  private reveal(url: string): void {
-    for (const group of groupsForUrl(url)) {
-      if ((NAV_GROUPS as readonly string[]).includes(group)) this.set(group as FoldingGroup, true);
-    }
-  }
-}
-
-function readOpen(): ReadonlySet<FoldingGroup> | null {
-  try {
-    const raw = localStorage.getItem(NAV_GROUPS_STORAGE_KEY);
-    if (raw) {
-      const list = JSON.parse(raw) as unknown;
-      if (Array.isArray(list)) {
-        return new Set(
-          list.filter((g): g is FoldingGroup => (NAV_GROUPS as readonly unknown[]).includes(g)),
-        );
-      }
-    }
-  } catch {
-    // Unreadable or blocked: fall back to the defaults.
-  }
-  return null;
-}
-
-/**
- * Main navigation (M1, FR-08). About seven trader pages sit on top with
- * nothing to open: Today, Strategies, Build a strategy, Lab, Orders,
- * Insights and Charts. Notifications live behind the bell. Below them,
- * folding groups, closed at first: More (approvals, markets, trial
- * results, the assistant when it is on), Advanced (the strategy review,
- * options when chains are stored, trade costs) and, for admins, System,
- * open at first. Each group is a disclosure
- * that remembers whether it is open, and the one holding the current page
- * opens by itself. Account pages live in the account menu, pinned below.
- *
- * Approvals carries a badge with the tickets that wait (22.10). The number
- * is hidden from screen readers, and the link's label says it in words.
- */
-const TICKETS = '/tickets';
-
-@Component({
-  selector: 'app-nav',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive],
-  template: `
-    <nav aria-label="Main">
-      <ul aria-label="Trading">
-        @for (item of main(); track item.path) {
-          <li>
-            <a
-              [routerLink]="item.path"
-              routerLinkActive="active"
-              ariaCurrentWhenActive="page"
-              [routerLinkActiveOptions]="{ exact: item.path === '/' }"
-              [attr.aria-label]="spoken(item)"
-              (click)="navigate.emit()"
-            >
-              <span>{{ item.label }}</span>
-              @if (badge(item); as n) {
-                <b class="count" aria-hidden="true">{{ n }}</b>
-              }
-              @if (item.key) {
-                <kbd aria-hidden="true">g {{ item.key }}</kbd>
-              }
-            </a>
-          </li>
-        }
-      </ul>
-      @for (group of groups(); track group.title) {
-        <details class="fold" [open]="isOpen(group.title)" (toggle)="onToggle(group.title, $event)">
-          <summary
-            class="group"
-            [id]="idPrefix() + '-group-' + group.title"
-            (click)="asked = group.title"
-          >
-            <span>{{ group.title }}</span>
-            <span class="chev" aria-hidden="true"></span>
-          </summary>
-          <ul [attr.aria-labelledby]="idPrefix() + '-group-' + group.title">
-            @for (item of group.items; track item.path) {
-              <li>
-                <a
-                  [routerLink]="item.path"
-                  routerLinkActive="active"
-                  ariaCurrentWhenActive="page"
-                  [attr.aria-label]="spoken(item)"
-                  (click)="navigate.emit()"
-                >
-                  <span>{{ item.label }}</span>
-                  @if (badge(item); as n) {
-                    <b class="count" aria-hidden="true">{{ n }}</b>
-                  }
-                  @if (item.key) {
-                    <kbd aria-hidden="true">g {{ item.key }}</kbd>
-                  }
-                </a>
-              </li>
-            }
-          </ul>
-        </details>
-      }
-    </nav>
-  `,
-  styles: `
-    nav {
-      display: grid;
-      gap: var(--space-1);
-    }
-    .group {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 28px;
-      margin: var(--space-3) 0 var(--space-1);
-      padding: 0 var(--space-3);
-      border-radius: var(--radius-sm);
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
-      font-weight: 600;
-      letter-spacing: var(--tracking-overline);
-      text-transform: uppercase;
-      cursor: pointer;
-      list-style: none;
-      user-select: none;
-      transition:
-        background-color var(--dur-fast) var(--ease),
-        color var(--dur-fast) var(--ease);
-    }
-    .group::-webkit-details-marker {
-      display: none;
-    }
-    .group:hover {
-      background: var(--color-hover);
-      color: var(--color-ink-2);
-    }
-    /* A quieter chevron: thinner, smaller, half strength until hovered or open. */
-    .chev {
-      width: 0.4em;
-      height: 0.4em;
-      margin-right: 3px;
-      border-right: 1.25px solid currentColor;
-      border-bottom: 1.25px solid currentColor;
-      opacity: 0.7;
-      transform: rotate(-45deg);
-      transition:
-        transform var(--dur-fast) var(--ease),
-        opacity var(--dur-fast) var(--ease);
-    }
-    .group:hover .chev,
-    details[open] > .group .chev {
-      opacity: 1;
-    }
-    details[open] > .group .chev {
-      transform: rotate(45deg);
-    }
-    ul {
-      display: grid;
-      gap: 2px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    a {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 36px;
-      padding: 0 var(--space-3);
-      border-radius: var(--radius-sm);
-      color: var(--color-ink-2);
-      text-decoration: none;
-      font-weight: var(--weight-medium);
-      transition:
-        background-color var(--dur-fast) var(--ease),
-        color var(--dur-fast) var(--ease);
-    }
-    a:hover {
-      background: var(--color-hover);
-      color: var(--color-ink);
-    }
-    a:active {
-      background: var(--color-pressed);
-    }
-    a.active {
-      background: var(--color-surface-2);
-      color: var(--color-ink);
-      font-weight: var(--weight-semibold);
-    }
-    a.active::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 8px;
-      bottom: 8px;
-      width: 3px;
-      border-radius: var(--radius-xs);
-      background: var(--color-accent);
-    }
-    .count {
-      min-width: 20px;
-      margin-left: auto;
-      padding: 0 6px;
-      border-radius: var(--radius-pill);
-      background: var(--color-primary);
-      color: var(--color-primary-ink);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-semibold);
-      font-family: var(--font-mono);
-      line-height: 20px;
-      text-align: center;
-      font-variant-numeric: tabular-nums slashed-zero;
-    }
-    .count + kbd {
-      margin-left: var(--space-2);
-    }
-    kbd {
-      font-family: var(--font-mono);
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
-      opacity: 0;
-      transition: opacity var(--dur-fast) var(--ease);
-    }
-    a:hover kbd,
-    a:focus-visible kbd {
-      opacity: 1;
-    }
-    @media (pointer: coarse), (max-width: 767.98px) {
-      a,
-      .group {
-        min-height: var(--touch-min);
-      }
-      kbd {
-        display: none;
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .chev,
-      .group,
-      a {
-        transition: none;
-      }
-    }
-  `,
-})
-export class Nav {
-  readonly navigate = output<void>();
-  /** Keeps ids unique: the sidebar and the drawer both render a nav. */
-  readonly idPrefix = input('nav');
-  private readonly viewer = navViewer(inject(SessionService), inject(FeatureFlagsService));
-  private readonly folds = inject(NavGroupsState);
-
-  private readonly visible = computed(() =>
-    NAV_ITEMS.filter((i) => navItemVisible(i, this.viewer)),
-  );
-  protected readonly main = computed(() => this.visible().filter((i) => i.group === 'Main'));
-  private readonly tickets = inject(TicketCountService);
-
-  /** The group the person just clicked open, so groups the page opened never scroll the rail. */
-  protected asked: FoldingGroup | null = null;
-
-  constructor() {
-    const host = inject<ElementRef<HTMLElement>>(ElementRef);
-    // The page on screen is in view in the rail on load (FR-09).
-    afterNextRender(() => {
-      host.nativeElement.querySelector('a.active')?.scrollIntoView?.({ block: 'nearest' });
-    });
+      .subscribe((e) => this.url.set((e as NavigationEnd).urlAfterRedirects));
+    effect(() => this.lastTab.set(this.current()));
     const destroyRef = inject(DestroyRef);
     let watching = false;
     effect(() => {
@@ -347,34 +104,104 @@ export class Nav {
     });
   }
 
-  protected isOpen(group: FoldingGroup): boolean {
-    return this.folds.open().has(group);
-  }
-
-  protected onToggle(group: FoldingGroup, event: Event): void {
-    const details = event.target as HTMLDetailsElement;
-    this.folds.set(group, details.open);
-    // A group opening below the fold shows its items, not just a cut first one (FR-09).
-    if (details.open && this.asked === group) {
-      details.querySelector('li:last-child a')?.scrollIntoView?.({ block: 'nearest' });
-    }
-    this.asked = null;
+  /** Is `item` the page on screen? */
+  isActive(item: NavItem): boolean {
+    const active = this.activeItem();
+    return !!active && active.path === item.path && active.workspace === item.workspace;
   }
 
   /** The count shown on an item, or 0 for none. */
-  protected badge(item: NavItem): number {
+  badge(item: NavItem): number {
     return item.path === TICKETS ? this.tickets.waiting() : 0;
   }
 
   /** The link's accessible name when it carries a badge, else null (its text). */
-  protected spoken(item: NavItem): string | null {
+  spoken(item: NavItem): string | null {
     const n = this.badge(item);
     return n > 0 ? `${item.label}, ${n} ${n === 1 ? 'ticket' : 'tickets'} waiting` : null;
   }
-  protected readonly groups = computed(() =>
-    NAV_GROUPS.map((title) => ({
-      title,
-      items: this.visible().filter((i: NavItem) => i.group === title),
-    })).filter((g) => g.items.length > 0),
-  );
+}
+
+/**
+ * Every workspace and its pages as a list of links: the phone More sheet.
+ * The page on screen carries aria-current. Approvals carries a badge with
+ * the tickets that wait (22.10): the number is hidden from screen readers
+ * and the link's label says it in words.
+ */
+@Component({
+  selector: 'app-nav',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
+  template: `
+    <nav class="nav" aria-label="All pages">
+      @for (ws of state.workspaces(); track ws.name) {
+        <section class="group" [attr.aria-labelledby]="idPrefix() + '-ws-' + ws.name">
+          <h2 class="group-title" [id]="idPrefix() + '-ws-' + ws.name">{{ ws.name }}</h2>
+          <ul>
+            @for (item of ws.items; track item.path) {
+              <li>
+                <a
+                  [routerLink]="item.path"
+                  [class.active]="state.isActive(item)"
+                  [attr.aria-current]="state.isActive(item) ? 'page' : null"
+                  [attr.aria-label]="state.spoken(item)"
+                  (click)="navigate.emit()"
+                >
+                  <span>{{ item.label }}</span>
+                  @if (state.badge(item); as n) {
+                    <b class="count-badge" aria-hidden="true">{{ n }}</b>
+                  }
+                </a>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </nav>
+  `,
+  styles: `
+    .nav {
+      display: grid;
+      gap: var(--space-6);
+    }
+    .group-title {
+      padding: 0 0 var(--space-2);
+      border-bottom: 2px solid var(--rule-strong);
+      font-size: var(--text-lead);
+      font-weight: var(--weight-bold);
+    }
+    ul {
+      display: grid;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    li + li {
+      border-top: 1px solid var(--rule);
+    }
+    a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      min-height: var(--touch-min);
+      color: var(--ink-2);
+      font-weight: var(--weight-medium);
+      text-decoration: none;
+    }
+    a:hover {
+      color: var(--ink);
+    }
+    a.active {
+      color: var(--accent);
+      font-weight: var(--weight-semibold);
+    }
+  `,
+})
+export class Nav {
+  /** A link was followed (the sheet closes). */
+  readonly navigate = output<void>();
+  /** Keeps ids unique if two lists render. */
+  readonly idPrefix = input('nav');
+  protected readonly state = inject(NavState);
 }

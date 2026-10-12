@@ -50,11 +50,13 @@ export interface TableColumn<T> {
   /** Money columns: the row's currency (ISO 4217); USD when missing. */
   currency?: (row: T) => string | null | undefined;
   /**
-   * Phone card layout: `title` is the card heading (use it for the key
-   * column, e.g. ticker or id), `hide` drops the column on phones, and the
-   * default shows a label/value line.
+   * Phone list layout: `title` is the item's name (the key column, a ticker
+   * or a strategy), `figure` sits on the right of the name at 15px (a second
+   * figure column goes muted under it), `inline` goes under the name
+   * without a label, `hide` drops the column on phones, and the default
+   * shows a label over its value, two to a line.
    */
-  mobile?: 'title' | 'show' | 'hide';
+  mobile?: 'title' | 'figure' | 'inline' | 'show' | 'hide';
   /**
    * Long text (a description, an explanation): the cell wraps at about 40
    * characters and the row grows to two lines instead of running wide.

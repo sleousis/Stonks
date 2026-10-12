@@ -12,6 +12,8 @@ export interface PaletteCommand {
   keywords?: readonly string[];
   /** Shown on the right, e.g. the keyboard shortcut "g d". */
   hint?: string;
+  /** A quiet word beside the label: the workspace that holds a page. */
+  detail?: string;
   /**
    * Hidden when this returns false (a page or action the user may not use).
    * It may read signals: the palette re-checks when they change.

@@ -61,8 +61,8 @@ let nextId = 0;
         [disabled]="busy() || !canManage()"
         (click)="toggle()"
       >
-        <span class="track" aria-hidden="true"><span class="thumb"></span></span>
         <span class="state">{{ current().enabled ? 'Following' : 'Paused' }}</span>
+        <span class="track" aria-hidden="true"><span class="thumb"></span></span>
       </button>
     </div>
 
@@ -126,6 +126,7 @@ let nextId = 0;
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
+    /* A 36x20 pill switch, on in accent, its word on the left. */
     .switch {
       display: inline-flex;
       flex: none;
@@ -135,70 +136,70 @@ let nextId = 0;
       padding: 0 var(--space-1);
       border: 0;
       background: none;
-      color: inherit;
+      color: var(--ink-2);
       cursor: pointer;
       font-size: var(--text-sm);
+      font-weight: var(--weight-label);
     }
     .switch:disabled {
       cursor: not-allowed;
-      opacity: 0.55;
+      opacity: 0.5;
     }
     .track {
       position: relative;
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--color-control-border);
-      border-radius: 12px;
-      background: var(--color-surface-3);
-      transition: background-color var(--dur-fast) var(--ease);
+      width: 36px;
+      height: 20px;
+      border-radius: var(--r-pill);
+      background: var(--rule-control);
+      transition: background-color var(--dur-fast) var(--ease-out);
     }
     .thumb {
       position: absolute;
       top: 2px;
       left: 2px;
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
-      background: var(--color-surface);
-      box-shadow: var(--shadow-1);
-      transition: transform var(--dur-fast) var(--ease);
+      background: var(--raise);
+      transition: transform var(--dur-fast) var(--ease-out);
     }
     .switch[aria-checked='true'] .track {
-      background: var(--color-primary);
-      border-color: var(--color-primary);
+      background: var(--accent);
     }
     .switch[aria-checked='true'] .thumb {
       transform: translateX(16px);
     }
     .state {
       min-width: 2em;
+      text-align: right;
     }
-    /* One row when there is room, two by two on a phone. The 1px gap on a
-       border-coloured ground draws the dividers however the modes wrap. */
+    /* The modes: a segmented control. A sunk track, the picked mode a raised
+       chip with an accent line and accent text. */
     .modes {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(max(6.5rem, 22%), 1fr));
-      gap: 1px;
+      gap: 2px;
       margin: 0;
-      padding: 0;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-sm);
-      background: var(--color-border-strong);
-      overflow: hidden;
+      padding: 3px;
+      border: 0;
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
     }
     .modes:disabled {
-      opacity: 0.55;
+      opacity: 0.5;
     }
     .mode {
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: var(--touch-min);
+      min-height: 38px;
       padding: 0 var(--space-2);
-      background: var(--color-surface);
+      border: 1px solid transparent;
+      border-radius: var(--r-tag);
+      color: var(--ink-2);
       font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      font-weight: var(--weight-label);
       text-align: center;
       cursor: pointer;
     }
@@ -210,17 +211,13 @@ let nextId = 0;
       cursor: inherit;
     }
     .mode:has(input:focus-visible) {
-      outline: 2px solid var(--color-focus);
-      outline-offset: -2px;
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
     }
-    /* Picked: a soft blue fill with a primary ring, so the three modes do
-       not outrank the page's primary button. Link blue stays readable in
-       both themes. */
     .mode.on {
-      background: var(--color-primary-soft);
-      box-shadow: inset 0 0 0 1px var(--color-primary);
-      color: var(--color-link);
-      font-weight: var(--weight-semibold);
+      border-color: var(--accent-line);
+      background: var(--raise);
+      color: var(--accent);
     }
     .help,
     .why {
@@ -232,9 +229,9 @@ let nextId = 0;
     }
     .note {
       padding: var(--space-2) var(--space-3);
-      border-left: 2px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
+      border-left: 3px solid var(--warn);
+      border-radius: var(--r-sheet);
+      background: var(--warn-soft);
       font-size: var(--text-sm);
     }
     @media (max-width: 30rem) {

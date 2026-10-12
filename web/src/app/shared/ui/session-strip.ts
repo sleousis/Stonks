@@ -19,18 +19,22 @@ import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { jobLabel, nextTradingRun } from '../../core/schedule/job-labels';
+import { DaySpine, daySpine } from './day-spine';
 import { KillSheet } from './kill-sheet';
 import { StopTradingVisibility } from '../../shell/stop-visibility';
 import { PortfolioPicker } from './portfolio-picker';
 import { StripHaltActions } from './strip-halt-actions';
 
-/** How often the strip re-reads the schedule (the countdown ticks every second). */
+/** How often the rail re-reads the schedule (the countdown ticks every second). */
 export const SCHEDULE_POLL_MS = new InjectionToken<number>('SCHEDULE_POLL_MS', {
   providedIn: 'root',
   factory: () => 5 * 60_000,
 });
 
 export { nextJob } from '../../core/schedule/job-labels';
+
+/** After-hours trading runs four hours past the close. */
+const POST_MS = 4 * 3_600_000;
 
 /** "2h 05m", "4m 09s", "12s", "now". */
 export function countdown(ms: number): string {
@@ -47,17 +51,17 @@ export function countdown(ms: number): string {
   return `${sec}s`;
 }
 
-/** Where the trading day stands, for the strip. */
+/** Where the trading day stands, for the rail. */
 export interface SessionPhase {
-  phase: 'pre' | 'open' | 'closed';
-  /** "Pre-open", "Market open", "Market closed". */
+  phase: 'pre' | 'open' | 'post' | 'closed';
+  /** "Pre-market", "Market open", "After hours", "Market closed". */
   label: string;
   /** What happens next and when: "Opens", "Closes", with its time. */
   event: string;
   at: string;
   /** Milliseconds until that event. */
   inMs: number;
-  /** Today's session for the track, or null on a day without one. */
+  /** Today's session, or null on a day without one. */
   track: {
     preOpen: string;
     open: string;
@@ -88,13 +92,13 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
           now: Math.min(1, Math.max(0, (now - day.pre) / (day.close - day.pre))),
         }
       : null;
-  const nextOpen = (): SessionPhase => {
+  const nextOpen = (phase: 'closed' | 'post', label: string): SessionPhase => {
     const future = day && now < day.open ? today! : market.next;
     const openAt = Date.parse(future.open);
     const sameDay = day && now < day.open;
     return {
-      phase: 'closed',
-      label: 'Market closed',
+      phase,
+      label,
       event: 'Opens',
       at: sameDay
         ? formatTime(future.open)
@@ -103,7 +107,10 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
       track,
     };
   };
-  if (!day || now >= day.close) return nextOpen();
+  if (day && now >= day.close && now < day.close + POST_MS) {
+    return nextOpen('post', 'After hours');
+  }
+  if (!day || now >= day.close) return nextOpen('closed', 'Market closed');
   if (now >= day.open) {
     return {
       phase: 'open',
@@ -117,14 +124,14 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
   if (now >= day.pre) {
     return {
       phase: 'pre',
-      label: 'Pre-open',
+      label: 'Pre-market',
       event: 'Opens',
       at: formatTime(today!.open),
       inMs: day.open - now,
       track,
     };
   }
-  return nextOpen();
+  return nextOpen('closed', 'Market closed');
 }
 
 /** "16:45" for today, "Mon 16:45" for another day. */
@@ -136,82 +143,72 @@ function runTime(iso: string, now: number): string {
 }
 
 /**
- * The trading day, on every page: the market phase (pre-open, open, closed)
- * with a track from pre-open to the close, the next trading run with a live
- * countdown (UX-08), and the halt state. It turns red while a kill switch is
- * on (amber for a breaker). It holds the portfolio picker when the user has
- * more than one portfolio, and the Stop trading control (UX-01): one tap
- * opens the kill switch sheet, with a brass ring when the shown portfolio
- * trades real money. While a kill switch is on the control turns into
- * Resume, which leads to the halts page.
+ * The session rail under the chrome bar, on every page: the portfolio
+ * switcher with its PAPER or LIVE stamp, the market session chip (closed,
+ * pre-market, open, after hours, halted), the day spine over the local day
+ * (desktop), the next trading run with a live countdown (UX-08) and Stop
+ * trading (UX-01): one tap opens the kill switch sheet, with a brass ring
+ * when the shown portfolio trades real money. While trading is halted the
+ * rail turns red and a halt band under it says why, with Resume.
  */
 @Component({
   selector: 'app-session-strip',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PortfolioPicker, KillSheet, StripHaltActions],
+  imports: [RouterLink, PortfolioPicker, KillSheet, StripHaltActions, DaySpine],
   template: `
     @let halt = halted();
     @let day = phase();
     <div aria-live="polite">
-      @if (halt || next() || noRun() || day || waiting() || portfolios.hasChoice() || canKill()) {
+      @if (
+        halt || next() || noRun() || day || waiting() || portfolios.options().length || canKill()
+      ) {
         <div class="strip" [attr.data-tone]="halt?.tone ?? 'calm'">
-          @if (halt) {
-            <p class="halt" role="region" aria-label="Trading halted">
-              <span class="mark" aria-hidden="true"></span>
-              <span class="text"
-                ><strong>{{ halt.title }}</strong> {{ halt.text }}</span
-              >
-              @if (isAdmin()) {
-                <a class="strip-link" routerLink="/ops/halts">Review halts</a>
-              } @else {
-                <app-strip-halt-actions />
-              }
-            </p>
-          }
-          <div class="row">
+          <div class="rail">
+            @if (portfolios.options().length) {
+              <span class="pick"><app-portfolio-picker /></span>
+            }
             @if (day) {
-              <p class="phase" [attr.data-phase]="day.phase">
-                <span class="lamp" aria-hidden="true"></span>
-                <span class="phase-label">{{ day.label }}</span>
-                <span class="phase-event muted">
+              <p
+                class="rail-chip phase"
+                [attr.data-phase]="halt ? 'halted' : day.phase"
+                [attr.data-day]="day.phase"
+              >
+                <span class="glyph" aria-hidden="true"></span>
+                <span class="phase-label">{{ halt ? 'Halted' : day.label }}</span>
+                <span class="meta phase-event">
                   {{ day.event }} <span class="num">{{ day.at }}</span>
                 </span>
               </p>
-              @if (day.track; as t) {
-                <div class="track" aria-hidden="true">
-                  <span class="t-time num">{{ t.preOpen }}</span>
-                  <span class="rail">
-                    <span class="pre" [style.width.%]="t.openAt * 100"></span>
-                    <span class="now" [style.left.%]="t.now * 100"></span>
-                  </span>
-                  <span class="t-time num">{{ t.close }}</span>
-                </div>
-              }
             } @else if (waiting()) {
               <!-- Holds the phase's place until the schedule is read, so pages do not jump. -->
-              <p class="phase hold" aria-hidden="true">
-                <span class="lamp"></span><span class="phase-label">Market</span>
-                <span class="phase-event muted">Opens <span class="num">00:00</span></span>
+              <p class="rail-chip phase hold" aria-hidden="true">
+                <span class="glyph"></span><span class="phase-label">Market</span>
+                <span class="meta">Opens <span class="num">00:00</span></span>
               </p>
             }
-            @if (portfolios.hasChoice()) {
-              <span class="pick"><app-portfolio-picker /></span>
+            @if (spine(); as s) {
+              <app-day-spine class="spine" [spine]="s" [halted]="!!halt" />
+            } @else {
+              <span class="gap"></span>
             }
             @if (next(); as n) {
               <a
-                class="next"
+                class="rail-chip next"
                 [routerLink]="schedulePath()"
                 [attr.aria-label]="nextLabel()"
                 [attr.title]="n.trigger"
               >
-                <span class="job">{{ n.label }}</span>
-                <span class="at num muted">{{ n.at }}</span>
+                <span class="job">Trading run</span>
+                <span class="at num meta">{{ n.at }}</span>
+                <span class="in" aria-hidden="true">in</span>
                 <span class="clock num" aria-hidden="true">{{ n.in }}</span>
               </a>
             } @else if (noRun()) {
-              <a class="next none muted" [routerLink]="schedulePath()">No trading run scheduled</a>
+              <a class="rail-chip next none" [routerLink]="schedulePath()"
+                >No trading run scheduled</a
+              >
             } @else if (waiting()) {
-              <span class="next hold" aria-hidden="true">
+              <span class="rail-chip next hold" aria-hidden="true">
                 <span class="job">Trading run</span>
                 <span class="clock num">0h 00m</span>
               </span>
@@ -234,14 +231,40 @@ function runTime(iso: string, now: number): string {
                   class="stop"
                   [class.live]="live()"
                   aria-haspopup="dialog"
+                  aria-label="Stop trading"
                   (click)="sheetOpen.set(true)"
                 >
                   <span class="stop-mark" aria-hidden="true"></span>
-                  Stop trading
+                  <span>Stop<span class="stop-long" aria-hidden="true"> trading</span></span>
                 </button>
               }
             }
           </div>
+          @if (halt) {
+            <div class="halt" role="region" aria-label="Trading halted">
+              <svg
+                class="warn"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="M8 1.8 15 14H1z" stroke-linejoin="round" />
+                <path d="M8 6.2v3.6M8 11.6v.4" stroke-linecap="round" />
+              </svg>
+              <p class="text">
+                <strong>{{ halt.title }}</strong> <span>{{ halt.text }}</span>
+              </p>
+              <span class="halt-actions">
+                @if (isAdmin()) {
+                  <a class="strip-link" routerLink="/ops/halts">Review halts</a>
+                } @else {
+                  <app-strip-halt-actions />
+                }
+              </span>
+            </div>
+          }
         </div>
       }
     </div>
@@ -258,216 +281,129 @@ function runTime(iso: string, now: number): string {
       display: block;
     }
     .strip {
-      --tone: var(--color-border-strong);
-      --tone-soft: var(--color-surface);
-      margin-bottom: var(--space-5);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--tone-soft);
-      font-size: var(--text-sm);
-      overflow: hidden;
+      --stamp-ink: var(--chrome-ink);
+      border-top: 1px solid var(--chrome-rule);
+      background: var(--chrome);
+      color: var(--chrome-ink);
     }
-    .strip[data-tone='kill'] {
-      --tone: var(--color-loss);
-      --tone-soft: var(--color-loss-soft);
-      border: 2px solid var(--color-loss);
-    }
+    .strip[data-tone='kill'],
     .strip[data-tone='halt'] {
-      --tone: var(--color-warn);
-      --tone-soft: var(--color-warn-soft);
-      border: 2px solid var(--color-warn);
-    }
-    .row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-1) var(--space-4);
-      min-height: var(--strip-h);
-      padding: var(--space-1) var(--space-3);
-    }
-    .halt {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-1) var(--space-3);
-      margin: 0;
-      padding: var(--space-2) var(--space-3);
-      background: var(--tone);
-      color: var(--color-surface);
-    }
-    .halt .text {
-      flex: 1 1 14rem;
-      min-width: 0;
-      overflow-wrap: anywhere;
-    }
-    .mark {
-      width: 10px;
-      height: 10px;
-      flex: none;
-      background: currentColor;
-      transform: rotate(45deg);
-    }
-    .strip[data-tone='halt'] .mark {
-      transform: none;
-      width: 12px;
-      clip-path: polygon(50% 0, 100% 100%, 0 100%);
-    }
-    .strip-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: 32px;
-      color: inherit;
-      font-weight: var(--weight-bold);
-    }
-
-    /* The market phase: a lamp, the phase in the display face, what is next. */
-    .phase {
-      display: inline-flex;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 0 var(--space-2);
-      min-width: 0;
-      margin: 0;
-    }
-    .lamp {
-      align-self: center;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      border: 1.5px solid var(--color-ink-3);
-    }
-    .phase[data-phase='open'] .lamp {
-      border-color: var(--color-gain);
-      background: var(--color-gain);
-      box-shadow: 0 0 0 3px var(--color-gain-soft);
-    }
-    .phase[data-phase='pre'] .lamp {
-      border-color: var(--color-accent);
-      background: linear-gradient(90deg, var(--color-accent) 50%, transparent 50%);
-    }
-    .phase-label {
-      font-family: var(--font-display);
-      font-stretch: var(--display-stretch);
-      font-size: var(--text-lg);
-      font-weight: var(--weight-bold);
-      letter-spacing: var(--tracking-display-sm);
-    }
-
-    /* The day track: pre-open shaded, the open session plain, a tick at now. */
-    .track {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      flex: 1 1 10rem;
-      min-width: 8rem;
-      max-width: 22rem;
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
+      border-top-color: var(--halt-rule);
+      background: var(--halt-band);
     }
     .rail {
-      position: relative;
-      flex: 1;
-      height: 6px;
-      border-radius: var(--radius-xs);
-      background: var(--color-surface-3);
-    }
-    .pre {
-      position: absolute;
-      inset: 0 auto 0 0;
-      border-radius: var(--radius-xs) 0 0 var(--radius-xs);
-      background: repeating-linear-gradient(
-        -45deg,
-        var(--color-border-strong) 0 2px,
-        transparent 2px 5px
-      );
-    }
-    .now {
-      position: absolute;
-      top: -4px;
-      width: 2px;
-      height: 14px;
-      margin-left: -1px;
-      border-radius: 1px;
-      background: var(--color-ink);
-      transition: left var(--dur-slow) var(--ease);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      max-width: var(--content-max);
+      min-height: var(--rail-h);
+      margin: 0 auto;
+      padding: var(--space-1) var(--gutter);
+      padding-left: calc(var(--gutter) + env(safe-area-inset-left));
+      padding-right: calc(var(--gutter) + env(safe-area-inset-right));
     }
     .pick {
       display: inline-flex;
       min-width: 0;
-      max-width: 100%;
     }
-
+    .phase {
+      margin: 0;
+    }
+    .glyph {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      border: 1.5px solid var(--chrome-muted);
+    }
+    .phase[data-phase='open'] .glyph {
+      border-color: #3fd29a;
+      background: #3fd29a;
+    }
+    .phase[data-phase='pre'] .glyph,
+    .phase[data-phase='post'] .glyph {
+      border-color: #3fd29a;
+      background: linear-gradient(90deg, #3fd29a 50%, transparent 50%);
+    }
+    .phase[data-phase='halted'] {
+      border-color: var(--halt-rule);
+      background: #5a1418;
+    }
+    .phase[data-phase='halted'] .glyph {
+      border-color: var(--on-halt);
+      border-radius: 1px;
+      background: var(--on-halt);
+    }
+    .strip:not([data-tone='calm']) .meta {
+      color: var(--on-halt-muted);
+    }
+    .gap {
+      flex: 1 1 auto;
+    }
     .hold {
       visibility: hidden;
     }
     .next {
-      display: inline-flex;
-      gap: var(--space-2);
-      min-height: 32px;
-      margin-left: auto;
-      align-items: center;
-      color: inherit;
-      text-decoration: none;
+      background: none;
     }
     .next:hover .job,
     .next.none:hover {
       text-decoration: underline;
     }
-    .job {
-      font-weight: var(--weight-semibold);
-    }
     .clock {
-      min-width: 6.5ch;
-      padding: 1px var(--space-2);
-      border-radius: var(--radius-xs);
-      background: var(--color-slab);
-      color: var(--color-slab-ink);
-      text-align: center;
+      color: var(--chrome-accent);
       font-weight: var(--weight-semibold);
     }
-    /* Admins: the next system job, quieter than the trading run. */
+    .strip:not([data-tone='calm']) .clock {
+      color: var(--on-halt);
+    }
+    .in {
+      color: var(--chrome-muted);
+      font-weight: var(--weight-medium);
+    }
+    /* With the spine on screen the run's time is on it already. */
+    @include bp.from-desktop {
+      .spine ~ .next .at {
+        display: none;
+      }
+    }
 
-    /* Stop trading: always one tap away. Red outline, a solid square mark,
-       and the brass ring when the shown portfolio trades real money. */
+    /* Stop trading: outlined red on the ink, a stop square. Brass ring for real money. */
     .stop {
       display: inline-flex;
+      flex: none;
       align-items: center;
       gap: var(--space-2);
-      min-height: 32px;
+      min-height: 34px;
       padding: 0 var(--space-3);
-      border: 1.5px solid var(--color-loss);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface);
-      color: var(--color-loss);
+      border: 1px solid var(--chrome-stop-line);
+      border-radius: var(--r-ctl);
+      background: none;
+      color: var(--chrome-stop);
       font: inherit;
-      font-weight: var(--weight-bold);
+      font-size: 0.8125rem;
+      font-weight: var(--weight-semibold);
       white-space: nowrap;
       text-decoration: none;
       cursor: pointer;
     }
-    .next ~ .stop,
-    .none ~ .stop {
-      margin-left: 0;
-    }
     .stop:hover {
-      background: var(--color-loss-soft);
+      background: #2a1416;
     }
     .stop.live {
       box-shadow:
-        0 0 0 2px var(--color-surface),
-        var(--ring-live);
+        0 0 0 2px var(--chrome),
+        0 0 0 4px var(--brass-fill);
     }
     .stop-mark {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       flex: none;
-      border-radius: 1px;
+      border-radius: 2px;
       background: currentColor;
     }
     .stop.resume {
-      border-color: currentColor;
-      background: var(--color-loss);
-      color: var(--color-surface);
+      border-color: var(--on-halt);
+      color: var(--on-halt);
     }
     .stop.resume .stop-mark {
       width: 0;
@@ -477,77 +413,112 @@ function runTime(iso: string, now: number): string {
       border-block: 5px solid transparent;
       border-left: 9px solid currentColor;
     }
+
+    /* The halt band: full width under the rail. */
+    .halt {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+      max-width: var(--content-max);
+      min-height: 44px;
+      margin: 0 auto;
+      padding: var(--space-2) var(--gutter);
+      border-top: 1px solid var(--halt-rule);
+      color: var(--on-halt);
+      font-size: var(--text-md);
+    }
+    .warn {
+      flex: none;
+      width: 16px;
+      height: 16px;
+    }
+    .text {
+      flex: 1 1 18rem;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .text strong {
+      font-weight: var(--weight-bold);
+    }
+    .halt-actions {
+      display: inline-flex;
+      gap: var(--space-2);
+    }
+    .strip-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 0 var(--space-3);
+      border: 1px solid var(--on-halt);
+      border-radius: var(--r-ctl);
+      color: var(--on-halt);
+      font-weight: var(--weight-semibold);
+      text-decoration: none;
+    }
+    @include bp.below-desktop {
+      .spine {
+        display: none;
+      }
+    }
     @include bp.coarse {
       .strip-link,
-      .next,
       .stop {
         min-height: var(--touch-min);
       }
     }
+    /* Phones: line 1 the portfolio and a red Stop, line 2 the session and run chips. */
     @include bp.phone {
-      .strip {
-        margin-bottom: var(--space-4);
+      .rail {
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4) 10px;
       }
-      .strip-link,
-      .next,
-      .stop {
-        min-height: var(--touch-min);
-      }
-      .strip-link {
-        width: 100%;
-      }
-      /* Two rows at most. Row 1: the phase on one line and Stop trading.
-         Row 2: the portfolio picker, its stamp and the trading run chip. */
-      .row {
-        gap: var(--space-2) var(--space-3);
-        padding: var(--space-2) var(--space-3);
-      }
-      .phase {
+      /* Wide enough that only Stop fits beside it: the chips wrap below. */
+      .pick {
         order: 1;
-        flex: 1 1 9rem;
-        flex-wrap: nowrap;
+        flex: 1 0 calc(100% - 7rem);
         min-width: 0;
-        overflow: hidden;
-      }
-      .phase-label {
-        white-space: nowrap;
-      }
-      .phase-event {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
       .stop {
         order: 2;
+        min-height: var(--touch-min);
         margin-left: auto;
       }
-      /* The day track is a desktop detail: the phase line says the same. */
-      .track {
+      .stop:not(.resume) {
+        border-color: var(--chrome-stop-line);
+        background: #a6242b;
+        color: var(--on-halt);
+      }
+      .stop-long {
         display: none;
       }
-      .pick {
+      .phase {
         order: 3;
-        flex: 1 1 auto;
-        min-width: 8rem;
+      }
+      .phase-event {
+        display: none;
+      }
+      .gap {
+        display: none;
       }
       .next {
         order: 4;
-        flex: none;
-        gap: var(--space-2);
-        margin-left: auto;
       }
-      .next .job {
-        color: var(--color-ink-3);
-        font-size: var(--text-xs);
-        font-weight: var(--weight-medium);
-      }
-      .next.none {
-        flex: 1 1 100%;
-        order: 5;
-      }
-      .at {
+      .next .at {
         display: none;
+      }
+      .halt {
+        padding: var(--space-3) var(--space-4);
+      }
+      .halt-actions,
+      .halt-actions > *,
+      .strip-link {
+        width: 100%;
+      }
+      .strip-link {
+        justify-content: center;
+        min-height: var(--touch-min);
       }
     }
   `,
@@ -580,9 +551,11 @@ export class SessionStrip {
   });
 
   /** The next trading run: the countdown that matters to a trader (UX-08). */
+  private readonly nextRun = computed(() => nextTradingRun(this.jobs(), this.now()));
+
   protected readonly next = computed(() => {
     const now = this.now();
-    const job = nextTradingRun(this.jobs(), now);
+    const job = this.nextRun();
     if (!job?.next_run_at) return null;
     return {
       label: jobLabel(job),
@@ -592,9 +565,15 @@ export class SessionStrip {
     };
   });
 
+  /** The day spine: the session's hours over the local day, now and the next run. */
+  protected readonly spine = computed(() => {
+    const market = this.market();
+    return market ? daySpine(market, this.now(), this.nextRun()?.next_run_at ?? null) : null;
+  });
+
   /** The schedule loaded and holds no trading run: say so plainly. */
   protected readonly noRun = computed(() => this.day.loaded() && !this.next());
-  /** Signed in and the schedule not read yet: hold the strip's height. */
+  /** Signed in and the schedule not read yet: hold the rail's height. */
   protected readonly waiting = computed(() => this.session.canRead() && !this.day.settled());
 
   /** Traders and admins can stop trading; admins also reach the Halts and Schedule pages. */

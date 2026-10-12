@@ -268,7 +268,14 @@ export class CommandPalette {
       .map((c) => ({ c, score: commandScore(q, c.label, c.keywords) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
-      .map(({ c }) => ({ id: c.id, group, label: c.label, hint: c.hint, run: c.run }));
+      .map(({ c }) => ({
+        id: c.id,
+        group,
+        label: c.label,
+        detail: c.detail,
+        hint: c.hint,
+        run: c.run,
+      }));
   }
 
   private strategyItems(q: string): PaletteItem[] {

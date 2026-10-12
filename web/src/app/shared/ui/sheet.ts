@@ -54,26 +54,20 @@ import {
       width: min(460px, calc(100vw - 32px));
       max-height: calc(100dvh - 32px);
       padding: 0;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      background: var(--color-surface);
-      color: var(--color-ink);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-sheet);
+      background: var(--raise);
+      color: var(--ink);
       box-shadow: var(--shadow-overlay);
     }
     app-sheet .sheet[open] {
-      animation: sheet-in var(--dur) var(--ease-out);
-    }
-    @keyframes sheet-in {
-      from {
-        opacity: 0;
-        transform: translateY(8px);
-      }
+      animation: menu-in var(--dur-menu) var(--ease-out);
     }
     app-sheet .sheet.sheet-wide {
       width: min(520px, calc(100vw - 32px));
     }
     app-sheet .sheet::backdrop {
-      background: var(--color-scrim);
+      background: var(--scrim);
     }
     app-sheet .sheet-form {
       display: grid;
@@ -81,12 +75,12 @@ import {
       padding: var(--space-5);
     }
     app-sheet .sheet-form h2 {
-      font-size: var(--text-lg);
-      font-weight: var(--weight-semibold);
+      font-size: var(--text-section);
+      font-weight: var(--weight-bold);
       overflow-wrap: anywhere;
     }
     app-sheet .sheet-message {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     app-sheet .sheet-actions {
       display: flex;
