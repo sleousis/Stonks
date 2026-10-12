@@ -101,6 +101,24 @@ export class DashboardPage {
       : 'No snapshot yet. The first trading run seeds the portfolio.';
   });
 
+  /**
+   * One sentence from the data: how the checks stand and how many
+   * strategies are approved and on trial.
+   */
+  protected readonly standfirst = computed(() => {
+    const parts: string[] = [];
+    if (this.health.hasValue()) {
+      const n = this.checkCount();
+      const failing = this.failingChecks();
+      parts.push(failing ? `${failing} of ${n} checks failed.` : `All ${n} checks passed.`);
+    }
+    if (this.strategyCounts.hasValue()) {
+      const { active, shadow } = this.strategyCounts.value();
+      parts.push(`${active} approved, ${shadow} on trial.`);
+    }
+    return parts.length ? parts.join(' ') : 'Your portfolio, the system checks and recent runs.';
+  });
+
   protected readonly rows = computed(() => (this.pnl.hasValue() ? this.pnl.value().rows : []));
   private readonly latest = computed(() => this.rows().at(-1) ?? null);
 
@@ -196,15 +214,22 @@ export class DashboardPage {
   protected readonly positionColumns: TableColumn<PositionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'quantity', label: 'Quantity', format: 'number', mobile: 'hide' },
-    { key: 'market_value', label: 'Value', format: 'money', currency: (p) => p.currency },
+    {
+      key: 'market_value',
+      label: 'Value',
+      format: 'money',
+      currency: (p) => p.currency,
+      mobile: 'figure',
+    },
     {
       key: 'unrealized_pnl',
       label: 'Unrealized P&L',
       format: 'signedMoney',
       tone: true,
       currency: (p) => p.currency,
+      mobile: 'figure',
     },
-    { key: 'weight', label: 'Weight', format: 'percent' },
+    { key: 'weight', label: 'Weight', format: 'percent', mobile: 'inline' },
   ];
   protected readonly positionKey = (p: PositionView) => p.ticker;
 
@@ -216,7 +241,7 @@ export class DashboardPage {
       mobile: 'title',
       value: (t) => t.as_of ?? t.started_at,
     },
-    { key: 'status', label: 'Status', value: (t) => runWords(t.status).label },
+    { key: 'status', label: 'Status', value: (t) => runWords(t.status).label, mobile: 'inline' },
     {
       key: 'orders',
       label: 'Orders',

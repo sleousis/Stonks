@@ -48,17 +48,18 @@ def test_the_demo_and_privacy_mode(browse, stack, viewport):
     expect(page.get_by_text("ACME.DEMO").first).to_be_visible()
     v.check_page("demo")
 
-    tiles = page.locator("app-stat-tile")
-    expect(tiles.first).to_contain_text("$")
+    value = page.locator(".headline-figure")
+    expect(page.locator(".demo-band")).to_contain_text("PAPER")
+    expect(value).to_contain_text("$")
     page.locator("main h1").click()
     page.keyboard.press("h")
-    expect(tiles.first).to_contain_text(MASK)
-    expect(tiles.nth(1)).to_contain_text("%")  # the return stays
+    expect(value).to_contain_text(MASK)
+    expect(page.locator(".fact-list dd").first).to_contain_text("%")  # the return stays
     expect(page.locator("html")).to_have_attribute("data-privacy", "on")
     page.reload()
-    expect(page.locator("app-stat-tile").first).to_contain_text(MASK)  # per device
+    expect(page.locator(".headline-figure")).to_contain_text(MASK)  # per device
     page.keyboard.press("Alt+Shift+H")
-    expect(page.locator("app-stat-tile").first).not_to_contain_text(MASK)
+    expect(page.locator(".headline-figure")).not_to_contain_text(MASK)
 
     page.get_by_role("button", name="Remove the demo").click()
     page.get_by_role("dialog").get_by_role("button", name="Remove demo").click()

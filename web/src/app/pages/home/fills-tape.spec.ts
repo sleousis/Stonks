@@ -6,7 +6,8 @@ import type { FillView, OrderView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { FillsTape, TAPE_MOVES_FROM, latestFills, sideByOrder } from './fills-tape';
+import { FillsTape, PHONE_FILLS, latestFills, sideByOrder } from './fills-tape';
+import { HomeStore } from './home-store';
 
 function fill(overrides: Partial<FillView>): FillView {
   return {
@@ -57,7 +58,7 @@ describe('FillsTape', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting(), HomeStore],
     });
     controller = TestBed.inject(HttpTestingController);
   });
@@ -66,6 +67,7 @@ describe('FillsTape', () => {
 
   async function render(fills: FillView[], orders: OrderView[]) {
     const fixture = TestBed.createComponent(FillsTape);
+    TestBed.inject(HomeStore);
     fixture.detectChanges();
     (await nextRequest(controller, '/api/portfolios')).flush(
       page([book({ id: 'pf_1', name: 'Main' })]),
@@ -77,7 +79,7 @@ describe('FillsTape', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('prints each fill with its side, quantity at price, and sits still when short', async () => {
+  it('prints each fill with its side and quantity at price, with a count', async () => {
     const el = await render(
       [
         fill({ id: 1, order_client_id: 'c1' }),
@@ -85,23 +87,23 @@ describe('FillsTape', () => {
       ],
       [order('c1', 'buy'), order('c2', 'sell')],
     );
-    const items = [...el.querySelectorAll('.run:not([aria-hidden]) li')];
+    const items = [...el.querySelectorAll('.run li')];
     expect(items).toHaveLength(2);
     expect(items[0].querySelector('app-side-tag .tag')?.getAttribute('data-side')).toBe('buy');
     expect(items[1].querySelector('app-side-tag .tag')?.getAttribute('data-side')).toBe('sell');
     expect(items[0].textContent).toContain('AAA.US');
     expect(items[0].textContent).toContain('$101.25');
-    expect(el.querySelector('.track.moving')).toBeNull();
+    expect(el.querySelector('.count-badge')?.textContent).toBe('2');
     expect(el.querySelector('a.all')?.getAttribute('href')).toBe('/orders/fills');
   });
 
-  it('moves once it is full, with a hidden copy for the loop', async () => {
-    const fills = Array.from({ length: TAPE_MOVES_FROM }, (_, i) =>
+  it('marks the fills past the first few, which a phone leaves out', async () => {
+    const fills = Array.from({ length: PHONE_FILLS + 2 }, (_, i) =>
       fill({ id: i + 1, order_client_id: `c${i}` }),
     );
     const el = await render(fills, []);
-    expect(el.querySelector('.track.moving')).not.toBeNull();
-    expect(el.querySelectorAll('.run[aria-hidden="true"] li')).toHaveLength(TAPE_MOVES_FROM);
+    expect(el.querySelectorAll('.run li')).toHaveLength(PHONE_FILLS + 2);
+    expect(el.querySelectorAll('.run li.extra')).toHaveLength(2);
   });
 
   it('says so when nothing filled this week', async () => {

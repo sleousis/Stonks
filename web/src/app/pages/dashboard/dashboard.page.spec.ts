@@ -197,6 +197,11 @@ describe('DashboardPage', () => {
     const text = el.textContent ?? '';
 
     expect(el.querySelector('h1')?.textContent).toContain('Dashboard');
+    // The standfirst is built from the data.
+    expect(el.querySelector('.standfirst')?.textContent).toBe(
+      '1 of 4 checks failed. 3 approved, 2 on trial.',
+    );
+    expect(el.querySelector('.health-figure')?.textContent).toContain('3');
     expect(text).toContain('$76,750.00');
     expect(text).toContain('$25,000.00');
     expect(text).toContain('32.6% of value');

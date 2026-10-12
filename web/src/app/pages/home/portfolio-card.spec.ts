@@ -7,7 +7,9 @@ import type { PortfolioRef } from '../../api/portfolios.service';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { PortfolioCard, sessionLabel } from './portfolio-card';
+import type { SubscriptionView } from '../../api/subscriptions.service';
+import { HomeStore } from './home-store';
+import { PortfolioCard, inRange, sessionLabel, splitMoney } from './portfolio-card';
 
 const PORTFOLIO: PortfolioView = {
   taken_at: '2026-09-25T21:00:00Z',
@@ -46,12 +48,27 @@ describe('sessionLabel (UX-34)', () => {
   });
 });
 
+describe('overview helpers', () => {
+  it('splits the cents off a money figure for the muted ink', () => {
+    expect(splitMoney('$10,412.37')).toEqual(['$10,412', '.37']);
+    expect(splitMoney('10.412,37 €')).toEqual(['10.412', ',37 €']);
+    expect(splitMoney('•••••')).toEqual(['•••••', '']);
+  });
+
+  it('keeps the rows of the picked range', () => {
+    const rows = ['2026-01-01', '2026-09-01', '2026-09-20', '2026-09-25'].map((day) => ({ day }));
+    expect(inRange(rows, '1W').map((r) => r.day)).toEqual(['2026-09-20', '2026-09-25']);
+    expect(inRange(rows, '1M')).toHaveLength(3);
+    expect(inRange(rows, 'All')).toHaveLength(4);
+  });
+});
+
 describe('PortfolioCard', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting(), HomeStore],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -61,7 +78,12 @@ describe('PortfolioCard', () => {
   async function render(
     books: PortfolioRef[],
     day = new Date().toISOString().slice(0, 10),
-    extra: { portfolio?: Partial<PortfolioView>; pnl?: Partial<PnlSeries> } = {},
+    extra: {
+      portfolio?: Partial<PortfolioView>;
+      pnl?: Partial<PnlSeries>;
+      orders?: { status: string }[];
+      follows?: Partial<SubscriptionView>[];
+    } = {},
   ) {
     const fixture = TestBed.createComponent(PortfolioCard);
     fixture.detectChanges();
@@ -69,7 +91,9 @@ describe('PortfolioCard', () => {
     if (books.length) {
       (await nextRequest(http, '/api/portfolio')).flush({ ...PORTFOLIO, ...extra.portfolio });
       (await nextRequest(http, '/api/pnl')).flush({ ...pnl(day), ...extra.pnl });
+      (await nextRequest(http, '/api/orders')).flush(page(extra.orders ?? []));
     }
+    (await nextRequest(http, '/api/subscriptions')).flush(page(extra.follows ?? []));
     for (let i = 0; i < 3; i++) {
       await tick(2);
       fixture.detectChanges();
@@ -104,62 +128,23 @@ describe('PortfolioCard', () => {
     );
   });
 
-  it('rounds paper shares to two decimals (NB-14)', async () => {
-    const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })], undefined, {
-      portfolio: {
-        positions: [
-          {
-            ticker: 'AAPL.US',
-            quantity: 139.9214,
-            price: 1,
-            price_date: '2026-09-25',
-            market_value: 139.92,
-            weight: 1,
-          },
-        ],
-      },
-    });
-    expect(el.querySelector('.qty')?.textContent).toBe('139.92 shares');
-  });
-
-  it('shows each holding in its own currency', async () => {
-    const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })], undefined, {
-      portfolio: {
-        currency: 'EUR',
-        positions: [
-          {
-            ticker: 'SAP.XETRA',
-            quantity: 2,
-            price: 150,
-            price_date: '2026-09-25',
-            market_value: 300,
-            weight: 1,
-            currency: 'EUR',
-          },
-        ],
-      },
-    });
-    expect(el.textContent).toContain('€300.00');
-    expect(el.textContent).not.toContain('$300.00');
-  });
-
   it('shows no base line when the base currency is the one shown', async () => {
     const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })]);
     expect(el.textContent).not.toContain('Value in');
     expect(el.querySelector('.returns')).toBeNull();
   });
 
-  it('wears the brass frame and LIVE stamp only for a live portfolio', async () => {
+  it('sets the figure in brass with a LIVE stamp only for a live portfolio', async () => {
     const el = await render([
       book({ id: 'pf_1', name: 'Real', is_default: true, trading: 'live' }),
     ]);
-    expect(el.querySelector('section')?.classList).toContain('live-frame');
+    expect(el.querySelector('.value')?.classList).toContain('brass');
     expect(el.querySelector('app-mode-stamp')?.textContent).toContain('LIVE');
   });
 
   it('stays plain paper grey for a paper portfolio', async () => {
     const el = await render([book({ id: 'pf_1', name: 'Paper', is_default: true })]);
-    expect(el.querySelector('section')?.classList).not.toContain('live-frame');
+    expect(el.querySelector('.value')?.classList).not.toContain('brass');
     expect(el.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
   });
 
@@ -193,7 +178,7 @@ describe('PortfolioCard', () => {
         },
       },
     );
-    const value = el.querySelector('app-stat-tile')?.textContent ?? '';
+    const value = el.querySelector('.value')?.textContent ?? '';
     expect(value).toContain('€950.00');
     expect(value).not.toContain('$');
   });
@@ -207,10 +192,11 @@ describe('PortfolioCard', () => {
   it('labels a change from an earlier session with its weekday, not Today (UX-34)', async () => {
     const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
     const el = await render([book({ id: 'pf_1', name: 'Paper', is_default: true })], threeDaysAgo);
-    const labels = [...el.querySelectorAll('app-stat-tile')].map((t) => t.textContent ?? '');
-    expect(labels[1]).toContain('+$25.00');
-    expect(labels[1]).not.toContain('Today');
-    expect(labels[1]).toMatch(/day/);
+    const change = el.querySelector('.change')?.textContent ?? '';
+    expect(change).toContain('+$25.00');
+    expect(change).toContain('+2.50%');
+    expect(change).not.toContain('today');
+    expect(change).toMatch(/on \w+day/);
   });
 
   it('with no portfolio offers to open one and hides Details (UX-13)', async () => {
@@ -220,5 +206,55 @@ describe('PortfolioCard', () => {
     expect(links[0].getAttribute('href')).toBe('/welcome?step=portfolio');
     expect(el.textContent).not.toMatch(/admin/i);
     http.expectNone('/api/portfolio');
+  });
+
+  it('lists cash, invested, open orders and the worst drop beside the figure', async () => {
+    const rows = [
+      { ...pnl('2026-09-24').rows[0], drawdown: -0.0231 },
+      { ...pnl('2026-09-25').rows[0], drawdown: -0.01 },
+    ];
+    const el = await render([book({ id: 'pf_1', name: 'Paper', is_default: true })], undefined, {
+      portfolio: { cash: 3_108.52, positions_value: 7_303.85 },
+      pnl: { rows },
+      orders: [{ status: 'submitted' }, { status: 'filled' }, { status: 'pending' }],
+    });
+    const facts = [...el.querySelectorAll('.fact-list > div')].map((d) => [
+      d.querySelector('dt')?.textContent?.trim(),
+      d.querySelector('dd')?.textContent?.trim(),
+    ]);
+    expect(facts).toEqual([
+      ['Cash', '$3,108.52'],
+      ['Invested', '$7,303.85'],
+      ['Open orders', '2'],
+      ['Worst drop', '-2.31%'],
+    ]);
+    expect(el.querySelector('.fact-list dd.loss')?.textContent).toContain('-2.31%');
+  });
+
+  it('draws the value curve with a range picker once there are two days', async () => {
+    const rows = [pnl('2026-09-24').rows[0], { ...pnl('2026-09-25').rows[0], total_value: 1_100 }];
+    const el = await render([book({ id: 'pf_1', name: 'Paper', is_default: true })], undefined, {
+      pnl: { rows },
+    });
+    expect(el.querySelector('app-equity-area [role="img"]')?.getAttribute('aria-label')).toBe(
+      'Portfolio value over 1M: from $1,000.00 to $1,100.00.',
+    );
+    const ranges = [...el.querySelectorAll('.range [role="radio"]')].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(ranges).toEqual(['1W', '1M', '3M', '1Y', 'All']);
+  });
+
+  it('counts paper days toward a broker account on the meter', async () => {
+    const el = await render([book({ id: 'pf_1', name: 'Paper', is_default: true })], undefined, {
+      follows: [
+        { id: 's1', portfolio_id: 'pf_1', paper_days_completed: 6, paper_days_required: 20 },
+        { id: 's2', portfolio_id: 'pf_1', paper_days_completed: 2, paper_days_required: 20 },
+      ],
+    });
+    expect(el.querySelector('.meter-head')?.textContent).toContain('6 of 20');
+    expect(el.querySelectorAll('.ticks li')).toHaveLength(20);
+    expect(el.querySelectorAll('.ticks li.on')).toHaveLength(6);
+    expect(el.querySelector('.meter-text')?.textContent).toContain('After 20 paper days');
   });
 });

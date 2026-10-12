@@ -1226,7 +1226,12 @@ flowchart LR
   `<app-setup-card>` shows on Today while `show` is true. Admins read
   `GET /api/onboarding/system` (`operations.run`): data source key, first
   data load, a backup on disk, a running scheduler, each with a link to fix it.
-  Profile links back to the guide.
+  Profile links back to the guide. The page is a checklist of big step
+  rows on hairlines: a state glyph (a check when done, the number when to
+  do, dashed when skipped, accent when open), the title, one sentence and
+  the state pill with a chevron. The open step shows its form in a sheet
+  under the row. The standfirst says "1 of 3 done. Next: follow a
+  strategy." There is no hero.
 - **Watchlists.** `WatchlistContextService` (`core/watchlists/`) holds your
   lists and the one picked as a filter, remembered per browser.
   `<app-watchlist-filter>` ("Show") sits in the Today and chart headers;
@@ -1307,9 +1312,10 @@ flowchart LR
 - **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
 - **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
 - **Suggested orders.** The Approvals page reads `GET /api/orders/drafts` once: pending ones under Waiting for you, the rest under History. `pages/tickets/suggested-orders.ts` shows them. **Approve** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the card, and the order turns rejected. **Reject** takes an optional note.
-- **Price alerts.** `<app-notifications-tabs>` links the Feed, Price alerts and Alert settings. The page says alerts check each day's closing price after the evening data update, not live prices. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
+- **Notifications.** `<app-notifications-tabs>` is an underline tab row: Inbox, Price alerts and Settings (the Alert settings page). The standfirst counts the unread items. Each inbox row has its category's glyph in a sunk squircle, the title and message, and the time with Mark read and Open on the right. Unread rows carry a 3px accent edge and the word Unread.
+- **Price alerts.** The page says alerts check each closing price in the evening. Alerts check each day's closing price after the evening data update, not live prices. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
 - **Telegram.** `<app-telegram-link>` (`pages/notifications/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing, and an admin also gets the next step (the operations guide's Telegram section).
-- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is its own page and the one home of every alert setting, the third tab of Notifications. Two groups, in this order: "Where alerts reach you" (`<app-telegram-link>` first, the main channel without a broker, then `<app-notification-settings>` (Push on this device), `<app-push-devices>` (Your devices), and More channels: Email and the webhook through `[only]="['webhook']"`), then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: Which alerts go where with a one-line hint per alert on wider screens and Send a test notification, upcoming events and economic releases with the countries folded, quiet hours, Briefings while the server has them on, and a Price alerts panel that links to the tab). The grid shows a column only for a channel that is set up: Push, Telegram once linked, Email and Webhook once added under More channels. The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings has no alerts section, and the Feed no longer carries the devices list.
+- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is its own page and the one home of every alert setting, the third tab of Notifications. Two groups, in this order: "Where alerts reach you" (`<app-telegram-link>` first, the main channel without a broker, then `<app-notification-settings>` (Push on this device), `<app-push-devices>` (Your devices), and More channels: Email and the webhook through `[only]="['webhook']"`), then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: Which alerts go where with a one-line hint per alert on wider screens and Send a test notification, upcoming events and economic releases with the countries folded, quiet hours, Briefings while the server has them on, and a Price alerts panel that links to the tab). The grid shows a column only for a channel that is set up: Push, Telegram once linked, Email and Webhook once added under More channels. The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings has no alerts section, and the Inbox no longer carries the devices list.
 - `<app-notification-prefs>` shows one titled panel per part (`[only]` picks some; all by default). The alert settings table scrolls inside its own box on phones.
 
 ## Calendar, news and the screener (20.7, 20.8)
@@ -1348,7 +1354,7 @@ flowchart LR
 | Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, or read a DEGIRO export with its preset, preview, import and undo |
 
 - **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. Hide money amounts in the account menu (and the More sheet on phones), the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
-- **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. Get set up (Open the demo portfolio) and the setup card on Today (See a demo) link to it.
+- **Demo portfolio.** `pages/demo/demo.page.ts`. A band with the PAPER stamp says Sample data above the value, the curve and the facts. The instruments end in `.DEMO`. Get set up (Open the demo portfolio) and the setup card on Today (See a demo) link to it.
 - **Screen alerts.** `<app-screen-alerts>` (`pages/screener/screen-alerts.ts`) sits under Your screens. A When select per screen turns an alert on (Daily, or Weekly on a weekday), Remove asks first, and the newest finds list below. The Screen alerts row in the notification settings decides where alerts reach you.
 - **CSV import.** `pages/connections/statement-import.page.ts`, linked from Broker connections. The first Preview sends no mapping and fills the column selects from the server's guess. Preview and import are silent calls, and a refusal shows under the buttons. Pure helpers live in `statement-mapping.ts`.
 - **Broker exports (DEGIRO).** What file is it? on the import page picks a broker export (`GET /api/statement-imports/presets`), Find out from the headers (the default), or Another broker: I map the columns (`preset: none`). A preset reads the columns itself, so the mapping panel stays hidden, and the preview says Read as DEGIRO Transactions, Dutch, with notes on what it left out. A holdings export (DEGIRO Portfolio) asks the day of the export. `?preset=degiro_transactions` opens the page with that export chosen (router input binding). Broker connections shows `<app-broker-exports-panel>` (`broker-exports-panel.ts`): each broker read from its exports, marked Reads only, with a link per export and where to find it. DEGIRO is never offered as a connection. See [DEGIRO](design/degiro.md).
@@ -2005,26 +2011,60 @@ flowchart LR
   a Copy button (`<app-copy-button>`, which says so when the clipboard is
   blocked). Recovery codes also offer "Download .txt". The alerts step
   moves on only once push is really on, and says why otherwise.
-- **Today** (`pages/home/`): my portfolio for everyone (value, the day's
-  change, biggest holdings). Admins get the totals across traders under it,
-  never holdings, or one quiet line while there are too few traders with
-  real money to sum. A tape of the latest session's fills, today's signals
-  and trading runs in one time line with the next run on top (the feed's
-  `signal` items and the runs from the last 24 hours). A run line counts
-  only the orders and fills in the reader's own portfolios, as the API
-  scopes them (`ownRunCounts()`). When the counts are null it says only
-  "Trading run finished". Runs that traded nothing in your portfolios fold
-  into one line, such as "8 trading runs finished, nothing for you"
-  (`pages/home/signals-card.ts`). A signal row says what to do and when,
-  and a signal you follow on Alerts only says nothing traded. Its status reads Done, Partly done or Failed
-  (`shared/status-words.ts`). My strategies: one `<app-follow-control>` per
-  follow (the Following or Paused switch and the modes), the same control as the strategy page, the portfolio it trades when
-  there are several, and "Your paper days: 4 of 20." The unlock rule is said
-  once above the list. Approve each trade and Automatic stay hidden until the
-  broker portfolio, the paper days and the server's other checks pass, then ask for the step-up
-  and a ticket. Automatic asks for the strategy's name as shown, never its
-  id. The left column flows on its own (the last grid row is
-  flexible), so a tall strategies list never leaves a gap beside it.
+- **Today** (`pages/home/`), the reference layout of the console. The H1
+  is "Today" with a standfirst built from data ("Your paper portfolio rose
+  0.37% today. The next run is at 22:45.", `standfirst()` in
+  `home.page.ts`). Then, in this order:
+  1. The setup band (`setup-card.ts`) while first-run steps are left: "Get
+     set up", "2 of 3 done" in mono, the next step, a three-segment progress
+     line, Continue setup, See a demo and Hide.
+  2. The overview (`portfolio-card.ts`): My portfolio with its stamp and
+     Details, the value as the one 52px mono figure (cents muted), the last
+     session's change as a pill and a percent, the return since the start,
+     a range picker (1W, 1M, 3M, 1Y, All) and the value curve
+     (`equity-area.ts`, brass for a live portfolio). Beside it, a 320px facts
+     column: Cash, Invested, Open orders, Worst drop, and the paper-days
+     meter (one tick per day, accent when done) for the furthest follow.
+     Admins get the totals across traders under it, never holdings, or one
+     quiet line while there are too few traders with real money to sum.
+  3. The fills tape (`fills-tape.ts`): one row between hairlines, "Fills"
+     and a count badge, each fill of the latest session (side tag, ticker,
+     quantity at price, time) with thin rules between and a fade on the
+     right. It scrolls inside itself. On a phone it lists the first four.
+  4. Two columns (`.cols`): Strategies I follow (`strategies-card.ts`) and
+     Holdings (`holdings-section.ts`, weight bars without a track) on the
+     left, Signals and runs (`signals-card.ts`, a timeline with mono times on
+     a 1px rail, the next run as an accent ring, ticker tags) and Market
+     breadth (a split bar, four figures, a callout reading them) on the
+     right.
+  The sections share their reads through `HomeStore` (`home-store.ts`,
+  provided by the page), so the portfolio, orders and follows are each asked
+  for once. A strategy row shows the name, its paper return and the last 30
+  days as a sparkline (from the strategy's model book, `/api/shadow/pnl`),
+  then `<app-follow-control>` (the modes and the Following switch on the same
+  row from desktop). A run line counts only the orders and fills in the
+  reader's own portfolios, as the API scopes them (`ownRunCounts()`). Runs
+  that traded nothing in your portfolios fold into one line, such as "8
+  trading runs finished, nothing for you". Status words read Done, Partly
+  done or Failed (`shared/status-words.ts`). The unlock rule is said once
+  under the list. Approve each trade and Automatic stay hidden until the
+  broker portfolio, the paper days and the server's other checks pass, then
+  ask for the step-up and a ticket. Automatic asks for the strategy's name as
+  shown, never its id. On a phone the order is setup, portfolio, facts,
+  fills, strategies, holdings, signals, breadth.
+- **Dashboard** (admins, `pages/dashboard/`): a standfirst from the checks
+  and strategy counts ("All 12 checks passed. 4 approved, 2 on trial."), a
+  summary strip (value, cash, positions, drawdown, strategies), then the
+  value and drawdown chart and the positions on the left, and Health (the
+  passed count as a mono figure, one row per check) and the recent trading
+  runs on the right.
+- **Sign-in** (`pages/login/`): a centred 400px sheet on the page
+  background with the brand mark above it and no app chrome. The password,
+  the code (or setting up the app, or a recovery code) and the recovery
+  codes are steps in the same sheet, with Password and Code marked over the
+  heading.
+- **Not found and No access**: the page header with a standfirst and the
+  empty state with one action, Go to Today.
 - **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
   strategy on trial or approved has a Follow panel. Pick "Alerts only"
   (notify, which needs no portfolio and reads "No portfolio" once you

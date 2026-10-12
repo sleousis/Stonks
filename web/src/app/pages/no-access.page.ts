@@ -13,26 +13,23 @@ import { EmptyState } from '../shared/ui/states';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PageHeader, RouterLink, EmptyState],
   template: `
-    <app-page-header title="No access" />
-    <app-empty-state
-      compact
-      title="This page is for admins."
-      message="Ask your admin if you need what it shows."
-    >
-      <a routerLink="/" class="btn btn-primary">Go to Today</a>
-    </app-empty-state>
+    <app-page-header
+      title="No access"
+      description="Your role cannot open this page. The address stays as it was."
+    />
+    <section class="page-section">
+      <app-empty-state
+        title="This page is for admins."
+        message="Ask your admin if you need what it shows."
+      >
+        <a routerLink="/" class="btn btn-primary">Go to Today</a>
+      </app-empty-state>
+    </section>
   `,
   styles: `
-    /* Centred in the content column, with no panel round it. */
     :host {
       display: block;
-      max-width: 36rem;
-      margin: var(--space-7) auto 0;
-    }
-    /* The empty state's own padding lines its mark up with the title. */
-    app-empty-state {
-      display: block;
-      margin-inline: calc(-1 * var(--space-4));
+      max-width: 44rem;
     }
   `,
 })

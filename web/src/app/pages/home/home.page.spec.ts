@@ -145,13 +145,18 @@ describe('HomePage', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
 
-    expect(el.querySelector('h1')?.textContent).toContain('Hello, Ann');
+    expect(el.querySelector('h1')?.textContent).toBe('Today');
+    expect(el.querySelector('.standfirst')?.textContent).toContain(
+      'Your paper portfolio fell 1.60% last session.',
+    );
     expect(el.querySelector('app-fills-tape')?.textContent).toContain('No fills this week');
     const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
     expect(headings).toEqual([
       'My portfolio',
-      "Today's signals and runs",
-      'My strategies',
+      'Fills',
+      'Strategies I follow',
+      'Holdings 2',
+      'Signals and runs',
       'Market breadth',
     ]);
     expect(el.textContent).toContain('$76,750.00');
@@ -187,8 +192,10 @@ describe('HomePage', () => {
     expect(headings).toEqual([
       'My portfolio',
       'All traders',
-      "Today's signals and runs",
-      'My strategies',
+      'Fills',
+      'Strategies I follow',
+      'Holdings 2',
+      'Signals and runs',
       'Market breadth',
     ]);
     expect(el.textContent).toContain('$76,750.00');

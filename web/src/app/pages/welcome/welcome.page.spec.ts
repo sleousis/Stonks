@@ -166,7 +166,11 @@ describe('WelcomePage', () => {
     expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Follow a strategy');
     const tags = [...el.querySelectorAll('.step .tag')].map((t) => t.textContent?.trim());
     expect(tags).toEqual(['Done', 'To do', 'To do', 'Optional', 'Optional']);
-    expect(el.textContent).toContain('1 of 3 done');
+    expect(el.querySelector('.standfirst')?.textContent).toBe(
+      '1 of 3 done. Next: follow a strategy.',
+    );
+    // Closed steps say what they are for in one sentence.
+    expect(el.querySelectorAll('.step-lead').length).toBe(4);
     expect(el.textContent).not.toContain('Your install');
   });
 
