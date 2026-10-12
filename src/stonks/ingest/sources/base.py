@@ -11,13 +11,20 @@ Normalization and persistence are the pipeline's job; sources don't touch the la
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
+from dataclasses import dataclass, replace
 from datetime import date
+from typing import Protocol
 
 from stonks.core.interval import Interval
 from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
 from stonks.ingest.filing_schemas import CorporateFilingRow, InstitutionalHoldingRow
-from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.metadata_bundle import (
+    METADATA_PARTS,
+    CompanyData,
+    CompanyPart,
+    MetadataBundle,
+)
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.schemas import (
     BorrowRateRow,
@@ -43,14 +50,49 @@ class DataSourceError(RuntimeError):
     instead of being silently filed as "ticker had no data."""
 
 
+class QuotaExceededError(DataSourceError):
+    """The vendor refused a request because the account used its allowance
+    for the day. Retrying before the vendor's reset only fails again."""
+
+
 class UnsupportedCapabilityError(DataSourceError):
     """The source does not offer this kind of data at all (e.g. prices from
     a DeFi-TVL vendor). A :class:`DataSourceError`, so the pipeline counts
     the unit as failed and moves on instead of aborting the run."""
 
 
+@dataclass(frozen=True)
+class ApiUsage:
+    """What the vendor says the account used today, in its own units
+    (EODHD counts API calls, some endpoints costing more than one)."""
+
+    used_today: int
+    daily_limit: int | None = None
+    #: The day the vendor counts ``used_today`` for (``None``: not said).
+    day: date | None = None
+
+
+class RequestMeter(Protocol):
+    """Told about every request a source is about to send, with what it
+    costs in the vendor's units. It may sleep (to pace requests) or raise
+    (to stop at a budget) before the request leaves."""
+
+    def before_request(self, endpoint: str, cost: int) -> None: ...
+
+
 class DataSource(ABC):
     source_id: str  # unique id, e.g. "eodhd", "yahoo"
+
+    def set_request_meter(self, meter: RequestMeter | None) -> None:
+        """Have ``meter`` told about every request this source sends.
+
+        Optional capability: sources that do not count requests ignore it."""
+        del meter
+
+    def fetch_usage(self) -> ApiUsage | None:
+        """How much of the daily allowance the account used today, from
+        the vendor. ``None`` when the source cannot say."""
+        return None
 
     @abstractmethod
     def list_tickers(self, exchange: str) -> list[str]: ...
@@ -77,6 +119,22 @@ class DataSource(ABC):
     # subclasses don't have to opt in.
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
         return MetadataBundle()
+
+    def fetch_company_data(self, ticker: str, parts: Collection[CompanyPart]) -> CompanyData:
+        """Only the ``parts`` of one company's data a caller asks for.
+
+        The default calls :meth:`fetch_fundamentals`,
+        :meth:`fetch_fund_holdings` and :meth:`fetch_metadata` as needed
+        and keeps the metadata parts asked for. Sources that can fetch
+        the parts one by one, or share one response between them,
+        override it."""
+        wanted = set(parts)
+        statements = self.fetch_fundamentals(ticker) if "statements" in wanted else None
+        holdings = tuple(self.fetch_fund_holdings(ticker)) if "fund_holdings" in wanted else ()
+        metadata = MetadataBundle()
+        if wanted & METADATA_PARTS:
+            metadata = _keep_parts(self.fetch_metadata(ticker), wanted)
+        return CompanyData(metadata=metadata, statements=statements, fund_holdings=holdings)
 
     def fetch_intraday_bars(
         self,
@@ -128,6 +186,11 @@ class DataSource(ABC):
         only the adapters that actually serve macro data have to opt in.
         """
         del country_iso, indicator
+        return ()
+
+    def list_macro_indicators(self) -> Sequence[str]:
+        """The macro indicator keys :meth:`fetch_macro_indicator` serves.
+        Sources without macro data inherit the empty default."""
         return ()
 
     def fetch_option_quotes(
@@ -259,3 +322,29 @@ class DataSource(ABC):
         ``countries`` (ISO alpha-2) or every country (``None``)."""
         del start, end, countries
         raise UnsupportedCapabilityError(f"{self.source_id} does not serve economic events")
+
+
+#: Bundle fields each metadata part fills.
+_PART_FIELDS: dict[str, tuple[str, ...]] = {
+    "dividends": ("dividends",),
+    "splits": ("splits",),
+    "market_cap": ("market_cap_history",),
+    "news": ("news",),
+    "sentiment": ("news_sentiment",),
+    "insiders": ("insider_transactions",),
+}
+
+
+def _keep_parts(bundle: MetadataBundle, wanted: set[CompanyPart]) -> MetadataBundle:
+    """``bundle`` with the parts not in ``wanted`` cleared. Every field no
+    other part names belongs to ``profile``."""
+    cleared: dict[str, object] = {}
+    for part, fields in _PART_FIELDS.items():
+        if part not in wanted:
+            cleared.update(dict.fromkeys(fields, ()))
+    if "profile" not in wanted:
+        owned = {f for fields in _PART_FIELDS.values() for f in fields}
+        for name, value in vars(bundle).items():
+            if name not in owned:
+                cleared[name] = () if isinstance(value, tuple) else None
+    return replace(bundle, **cleared)  # type: ignore[arg-type]

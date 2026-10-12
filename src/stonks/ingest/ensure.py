@@ -94,9 +94,13 @@ class VendorLimits:
 
 
 #: Known plan limits by (source id, plan). EODHD's free tier serves daily
-#: prices for the last year only (CLAUDE.md, known external limits).
+#: prices for the last year only (CLAUDE.md, known external limits). The
+#: shipped default stays ``free``; a paid install sets ``[ensure.plans]`` in
+#: its own config or ``STONKS_EODHD_PLAN``.
 _KNOWN_LIMITS: dict[tuple[str, str], VendorLimits] = {
     ("eodhd", "free"): VendorLimits(max_history_days=365, bulk=False, intraday=False),
+    # All-in-one: full daily history, bulk and intraday (docs/backfill.md).
+    ("eodhd", "all_in_one"): VendorLimits(max_history_days=None, bulk=True, intraday=True),
 }
 
 
