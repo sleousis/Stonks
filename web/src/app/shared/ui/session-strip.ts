@@ -508,6 +508,11 @@ function runTime(iso: string, now: number): string {
       .stop-long {
         display: none;
       }
+      /* Resume gets its own full-width row under the portfolio. */
+      .stop.resume {
+        flex: 1 0 100%;
+        justify-content: center;
+      }
       .phase {
         order: 3;
       }
