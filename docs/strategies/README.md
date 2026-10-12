@@ -1,6 +1,6 @@
 # Strategies
 
-Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 39 in all. All are long-only by default, so short signals mean "flat".
+Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 44 in all. All are long-only by default, so short signals mean "flat".
 
 Four strategies can short: `ewmac_trend`, `tsmom` and the two long/short strategies below. Set `"short_mode": "short"` in their params. A short then opens only in a book that allows shorts (a portfolio with `allow_short`, or a lab dataset with `shorting`). Anywhere else the short legs are dropped. See [short selling](../design/shorting.md).
 
@@ -33,6 +33,8 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | Id | What it does |
 |----|--------------|
 | `factor` | Holds the top slice of a universe by any library factor or formula, equal weight, month-end rebalance. |
+| `low_vol_defensive` | Calm stocks: `factor` fixed to `low_vol_60`. Holds the fifth of the universe with the lowest 60-day volatility. |
+| `seasonality` | Same month last year: `factor` fixed to `seasonality_12m`. Holds the names that rose most in the coming calendar month a year ago. |
 | `learning_ranker` | A gradient-boosting model ranks the universe from many factors (Alpha158 by default), trained on purged windows, retrained through the model lifecycle ([details](learning-ranker.md)). |
 | `filing_events` | Holds a stock for a few days after a chosen kind of 8-K filing (earnings by default), read by SEC acceptance time. Built for the event study. See [EDGAR filings](../edgar.md). |
 
@@ -51,6 +53,7 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | `ewmac_trend` | Carver's EWMAC forecasts at several speeds, per instrument. Equity, crypto, commodity. |
 | `tsmom` | Time-series momentum: each instrument against its own past return. Equity, crypto, commodity. |
 | `ath_trend` | Buys weekly closes at all-time highs, exits on a wide ATR trailing stop. Equity and crypto. |
+| `dual_momentum` | Antonacci's Global Equities Momentum. Holds US stocks (SPY) or world stocks (EFA), whichever rose more over 12 months, while it beats cash (BIL). Holds bonds (AGG) otherwise. Month-end switch, lookback tunable. |
 | `forecast_blend` | EWMAC and TSMOM rules combined with weights fitted after costs, and rules too costly for an instrument dropped ([details](forecast-weights.md)). Equity, crypto, commodity. |
 
 ## Forecasting models ([details](../forecasting.md))
