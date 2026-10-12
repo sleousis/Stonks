@@ -21,6 +21,7 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { CategoryGlyph } from './category-glyph';
 
 /** Items per page; the API allows up to 200. */
 export const FEED_PAGE = 30;
@@ -42,9 +43,10 @@ export function categoryLabel(category: string | null): string {
 }
 
 /**
- * The in-app feed, newest first: everything the server sent the trader,
- * whatever the push, email and webhook settings are. Unread items carry a
- * dot and the word "Unread"; a deep link opens the page it is about.
+ * The inbox, newest first: everything the server sent the trader, whatever
+ * the push, email and webhook settings are. Each row has its category's
+ * glyph; unread rows carry a 3px accent edge and the word "Unread"; a deep
+ * link opens the page it is about.
  */
 @Component({
   selector: 'app-notification-feed',
@@ -57,14 +59,15 @@ export function categoryLabel(category: string | null): string {
     LoadingState,
     EmptyState,
     ErrorState,
+    CategoryGlyph,
   ],
   template: `
-    <section class="panel" aria-labelledby="feed-title">
-      <div class="panel-head head">
+    <section class="page-section" aria-labelledby="feed-title">
+      <header class="section-head head">
         <h2 id="feed-title">
-          Feed
+          Inbox
           @if (unread() > 0) {
-            <span class="count muted">{{ unread() }} unread</span>
+            <span class="count">{{ unread() }} unread</span>
           }
         </h2>
         <div class="tools">
@@ -83,77 +86,82 @@ export function categoryLabel(category: string | null): string {
             Mark all read
           </button>
         </div>
-      </div>
-      <div class="note-row"><app-permission-note permission="notifications.manage" /></div>
+      </header>
+      <app-permission-note permission="notifications.manage" />
 
       @if (feed.error(); as err) {
-        <app-error-state
-          title="Could not load notifications"
-          [error]="err"
-          (retry)="feed.reload()"
-        />
+        <div class="section-body">
+          <app-error-state
+            title="Could not load notifications"
+            [error]="err"
+            (retry)="feed.reload()"
+          />
+        </div>
       } @else if (!feed.hasValue()) {
-        <app-loading-state label="Loading notifications" [rows]="5" />
+        <div class="section-body">
+          <app-loading-state label="Loading notifications" [rows]="5" />
+        </div>
       } @else if (items().length === 0) {
-        @if (unreadOnly()) {
-          <app-empty-state
-            title="Nothing unread"
-            message="You are all caught up. Choose All to see older notifications."
-          >
-            <button type="button" class="btn" (click)="setShow('all')">Show all</button>
-          </app-empty-state>
-        } @else {
-          <app-empty-state
-            title="No notifications yet"
-            message="Signals from the strategies you follow, order fills, risk alerts and system news land here. They stay here even when push is off or you missed one on your phone."
-          >
-            <a class="btn" routerLink="/strategies">Find strategies to follow</a>
-          </app-empty-state>
-        }
+        <div class="section-body">
+          @if (unreadOnly()) {
+            <app-empty-state
+              title="Nothing unread"
+              message="You are all caught up. Choose All to see older notifications."
+            >
+              <button type="button" class="btn" (click)="setShow('all')">Show all</button>
+            </app-empty-state>
+          } @else {
+            <app-empty-state
+              title="No notifications yet"
+              message="Signals from the strategies you follow, order fills, risk alerts and system news land here. They stay here even when push is off or you missed one on your phone."
+            >
+              <a class="btn" routerLink="/strategies">Find strategies to follow</a>
+            </app-empty-state>
+          }
+        </div>
       } @else {
         <ul class="feed">
           @for (n of items(); track n.id) {
             <li [class.unread]="!n.read_at">
-              <div class="meta">
-                @if (!n.read_at) {
-                  <span class="unread-tag"><span class="dot" aria-hidden="true"></span>Unread</span>
-                }
-                <span class="category">{{ category(n.category) }}</span>
-                @if (n.level !== 'info') {
-                  <app-status-pill
-                    [status]="n.level"
-                    [tone]="pill(n.level).tone"
-                    [label]="pill(n.level).label"
-                  />
+              <app-category-glyph [category]="n.category" />
+              <div class="text">
+                <div class="meta">
+                  <span class="category">{{ category(n.category) }}</span>
+                  @if (!n.read_at) {
+                    <span class="unread-tag">Unread</span>
+                  }
+                  @if (n.level !== 'info') {
+                    <app-status-pill
+                      [status]="n.level"
+                      [tone]="pill(n.level).tone"
+                      [label]="pill(n.level).label"
+                    />
+                  }
+                </div>
+                <p class="title">{{ n.title }}</p>
+                @if (n.message) {
+                  <p class="message">{{ n.message }}</p>
                 }
               </div>
-              <p class="title">{{ n.title }}</p>
-              @if (n.message) {
-                <p class="message">{{ n.message }}</p>
-              }
               <div class="actions">
-                @if (link(n); as href) {
-                  <a class="btn btn-tertiary open" [routerLink]="href" (click)="opened(n)">
-                    Open<span class="visually-hidden">: {{ n.title }}</span>
-                  </a>
-                }
-                <span class="end">
-                  <time
-                    class="when num"
-                    [attr.datetime]="n.created_at"
-                    [title]="exact(n.created_at)"
-                  >
-                    {{ ago(n.created_at) }}
-                  </time>
+                <time class="when num" [attr.datetime]="n.created_at" [title]="exact(n.created_at)">
+                  {{ ago(n.created_at) }}
+                </time>
+                <span class="buttons">
                   @if (!n.read_at) {
                     <button
                       type="button"
-                      class="text-btn"
+                      class="btn btn-ghost btn-compact"
                       [disabled]="busy() || !canManage()"
                       (click)="markOne(n)"
                     >
                       Mark read<span class="visually-hidden">: {{ n.title }}</span>
                     </button>
+                  }
+                  @if (link(n); as href) {
+                    <a class="btn btn-compact open" [routerLink]="href" (click)="opened(n)">
+                      Open<span class="visually-hidden">: {{ n.title }}</span>
+                    </a>
                   }
                 </span>
               </div>
@@ -171,50 +179,40 @@ export function categoryLabel(category: string | null): string {
     </section>
   `,
   styles: `
+    @use 'breakpoints' as bp;
     :host {
       display: block;
       min-width: 0;
-    }
-    .head {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-2);
-    }
-    .count {
-      margin-left: var(--space-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-regular);
     }
     .tools {
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-2);
     }
-    .note-row {
-      padding: 0 var(--space-4);
-    }
     .feed {
       margin: 0;
       padding: 0;
       list-style: none;
     }
-    /* One item: meta, title, message, then Open and the time on one row. */
+    /* One row: the category glyph, the text, then the time and actions. */
     li {
       display: grid;
-      gap: var(--space-1);
+      grid-template-columns: 32px minmax(0, 1fr) auto;
+      gap: var(--space-1) var(--space-4);
+      align-items: start;
       min-width: 0;
-      padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-border);
-      box-shadow: inset 2px 0 0 transparent;
+      padding: var(--space-4) var(--space-3) var(--space-4) var(--space-4);
+      border-bottom: 1px solid var(--rule);
+      border-left: 3px solid transparent;
     }
-    li:last-child {
-      border-bottom: 0;
-    }
-    /* Unread: a 2px accent rule at the start, a dot and a semibold title. */
+    /* Unread: a 3px accent edge and a semibold title. */
     li.unread {
-      box-shadow: inset 2px 0 0 var(--color-accent);
+      border-left-color: var(--accent);
+    }
+    .text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
     }
     .meta {
       display: flex;
@@ -223,95 +221,63 @@ export function categoryLabel(category: string | null): string {
       gap: var(--space-1) var(--space-2);
       font-size: var(--text-xs);
     }
-    .unread-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-1);
-      font-weight: var(--weight-semibold);
-      color: var(--color-link);
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--color-accent);
-    }
     .category {
-      color: var(--color-ink-2);
+      color: var(--muted);
       font-weight: var(--weight-medium);
     }
-    .when {
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
+    .unread-tag {
+      color: var(--accent);
+      font-weight: var(--weight-semibold);
     }
     .title {
-      max-width: 70ch;
+      max-width: 68ch;
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     li:not(.unread) .title {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-weight: var(--weight-medium);
     }
     .message {
-      max-width: 70ch;
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
+      max-width: 68ch;
+      color: var(--ink-2);
+      font-size: var(--text-md);
       overflow-wrap: anywhere;
     }
     .actions {
+      display: grid;
+      justify-items: end;
+      gap: var(--space-2);
+    }
+    .when {
+      color: var(--muted);
+      font-size: var(--text-xs);
+    }
+    .buttons {
       display: flex;
       flex-wrap: wrap;
-      align-items: center;
+      justify-content: flex-end;
       gap: var(--space-2);
-      min-height: var(--control-h);
     }
-    /* Open pulls flush with the text above it. */
-    .open {
-      margin-left: calc(-1 * var(--space-3));
-    }
-    .end {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-3);
-      margin-left: auto;
-    }
-    /* Mark read: a quiet text button, a 44px target on touch. */
-    .text-btn {
-      display: inline-flex;
-      align-items: center;
-      min-height: var(--control-h);
-      padding: 0;
-      border: 0;
-      background: none;
-      color: var(--color-link);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-      cursor: pointer;
-    }
-    .text-btn:hover:not(:disabled) {
-      text-decoration: underline;
-    }
-    .text-btn:disabled {
-      color: var(--color-ink-3);
-      cursor: not-allowed;
-    }
-    @media (pointer: coarse), (max-width: 767.98px) {
+    /* Phones: the actions move under the text. */
+    @include bp.phone {
       li {
-        padding: var(--space-3);
+        grid-template-columns: 32px minmax(0, 1fr);
+        padding: var(--space-3) 0 var(--space-3) var(--space-3);
       }
-      .text-btn,
       .actions {
-        min-height: var(--touch-min);
-      }
-      .note-row {
-        padding: 0 var(--space-3);
+        grid-column: 2;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
       }
     }
     .more {
       display: flex;
       justify-content: center;
-      padding: var(--space-3) var(--space-4);
+      padding: var(--space-4) 0;
     }
   `,
 })

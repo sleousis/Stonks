@@ -40,7 +40,7 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
   template: `
     <app-page-header
       title="Price alerts"
-      description="Get told when a price crosses a level or moves fast. Alerts check each day's closing price after the evening data update, not live prices, so one fires the evening after the move."
+      description="Get told when a price crosses a level or moves fast. Alerts check each closing price in the evening."
     />
     <app-notifications-tabs />
 
@@ -52,13 +52,15 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
         (cancelled)="editing.set(null)"
       />
 
-      <section class="panel" aria-labelledby="alerts-title">
-        <div class="panel-head">
-          <h2 id="alerts-title">Your alerts</h2>
-          @if (alerts.hasValue()) {
-            <span class="muted num">{{ alerts.value().length }}</span>
-          }
-        </div>
+      <section class="page-section" aria-labelledby="alerts-title">
+        <header class="section-head">
+          <h2 id="alerts-title">
+            Your alerts
+            @if (alerts.hasValue()) {
+              <span class="count">{{ alerts.value().length }}</span>
+            }
+          </h2>
+        </header>
         @if (alerts.error(); as err) {
           <app-error-state title="Could not load alerts" [error]="err" (retry)="alerts.reload()" />
         } @else if (!alerts.hasValue()) {
@@ -66,7 +68,7 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
         } @else if (alerts.value().length === 0) {
           <app-empty-state
             title="No price alerts yet"
-            message="Make one with the form. It fires into your feed and on the channels you turned on in Alert settings."
+            message="Make one with the form. It fires into your feed and on the channels you turned on in Settings."
           />
         } @else {
           <ul class="alerts">
@@ -125,12 +127,16 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
     @use 'breakpoints' as bp;
     :host {
       display: grid;
-      gap: var(--space-5);
+      gap: var(--space-6);
+      grid-template-columns: minmax(0, 1fr);
       min-width: 0;
+    }
+    app-page-header {
+      margin-bottom: -28px;
     }
     .layout {
       display: grid;
-      gap: var(--space-5);
+      gap: var(--section-gap) var(--column-gap);
       min-width: 0;
       @include bp.from-desktop {
         grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
@@ -148,11 +154,12 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
       align-items: center;
       justify-content: space-between;
       gap: var(--space-2) var(--space-3);
-      padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-border);
+      min-height: var(--row-h-2);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
     }
     .alerts li.off .text {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .text {
       display: grid;

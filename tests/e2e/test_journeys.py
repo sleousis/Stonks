@@ -53,7 +53,7 @@ def test_first_sign_in_enrols_totp_then_signs_in_with_a_code(browse, stack, view
     expect(heading.or_(not_now).first).to_be_visible()
     if not_now.is_visible():
         not_now.click()
-    expect(heading).to_contain_text(f"Hello, New {viewport.title()}")
+    expect(heading).to_have_text("Today")
 
     sign_out(v)
     expect(page).to_have_url(re.compile(r"/login"))
@@ -64,7 +64,7 @@ def test_first_sign_in_enrols_totp_then_signs_in_with_a_code(browse, stack, view
     v.check_page("login-verify")
     page.get_by_role("textbox", name="Code").fill(person.code())
     page.get_by_role("button", name="Continue").click()
-    expect(page.get_by_role("heading", level=1)).to_contain_text("Hello")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Today")
     assert pyotp.TOTP(person.totp_secret).now()
 
 
@@ -96,7 +96,7 @@ def test_trader_home_shows_portfolio_signals_and_strategies(browse, stack, viewp
     expect(page.get_by_role("heading", name="My portfolio")).to_be_visible()
     expect(page.locator("app-portfolio-card")).to_contain_text("$4,321.00")
     expect(page.locator("app-signals-card")).to_contain_text(title)
-    expect(page.get_by_role("heading", name="My strategies")).to_be_visible()
+    expect(page.get_by_role("heading", name="Strategies I follow")).to_be_visible()
     v.check_page("home-trader")
 
 

@@ -10,26 +10,23 @@ import { EmptyState } from '../shared/ui/states';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PageHeader, RouterLink, EmptyState],
   template: `
-    <app-page-header title="Page not found" />
-    <app-empty-state
-      compact
-      title="There is no page at this address."
-      message="Check the address, or start again from Today."
-    >
-      <a routerLink="/" class="btn btn-primary">Go home</a>
-    </app-empty-state>
+    <app-page-header
+      title="Page not found"
+      description="There is no page at this address. It may have moved, or the link has a typo."
+    />
+    <section class="page-section">
+      <app-empty-state
+        title="Start again from Today"
+        message="Today holds your portfolio, the strategies you follow and what runs next."
+      >
+        <a routerLink="/" class="btn btn-primary">Go to Today</a>
+      </app-empty-state>
+    </section>
   `,
   styles: `
-    /* Centred in the content column, with no panel round it. */
     :host {
       display: block;
-      max-width: 36rem;
-      margin: var(--space-7) auto 0;
-    }
-    /* The empty state's own padding lines its mark up with the title. */
-    app-empty-state {
-      display: block;
-      margin-inline: calc(-1 * var(--space-4));
+      max-width: 44rem;
     }
   `,
 })

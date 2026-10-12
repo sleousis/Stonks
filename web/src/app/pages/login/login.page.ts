@@ -47,6 +47,16 @@ const HEADINGS: Record<LoginStep, string> = {
   push: 'Get alerts on this device?',
 };
 
+/** The step each screen belongs to, shown over the heading. */
+const FLOW_STEP: Record<LoginStep, 1 | 2 | 3 | null> = {
+  loading: null,
+  password: 1,
+  enrol: 2,
+  verify: 2,
+  codes: 3,
+  push: 3,
+};
+
 /**
  * Sign-in: password, then the second factor (set up at first login), then
  * recovery codes and the push offer after a first login. Shown without the
@@ -75,6 +85,12 @@ export class LoginPage implements OnInit {
 
   protected readonly current = signal<LoginStep>('password');
   protected readonly heading = computed(() => HEADINGS[this.current()]);
+  /**
+   * Where the sign-in stands, for the steps over the heading: 1 for the
+   * password, 2 for the code (setting up the app or entering it), 3 once
+   * both are done (recovery codes, alerts). Null while loading.
+   */
+  protected readonly flowStep = computed(() => FLOW_STEP[this.current()]);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
 

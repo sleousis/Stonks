@@ -68,7 +68,7 @@ def test_a_new_trader_walks_the_first_run_guide(browse, stack, viewport):
     guide = v.api("GET", "/api/onboarding").json()
     assert guide["complete"] is True and guide["show"] is False
     v.go("/")
-    expect(page.get_by_role("heading", level=1)).to_contain_text("Hello")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Today")
     expect(page.locator("app-setup-card section")).to_have_count(0)
     expect(page.get_by_label("Show fills and signals for")).to_be_visible()
     v.guard.assert_clean()

@@ -10,6 +10,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { MODES } from '../../shared/governance-labels';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
+import { HomeStore } from './home-store';
 import { StrategiesCard } from './strategies-card';
 import { sub } from '../../../testing/home-fixtures';
 
@@ -19,7 +20,7 @@ describe('StrategiesCard', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting(), HomeStore],
     });
     controller = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);
@@ -30,7 +31,7 @@ describe('StrategiesCard', () => {
 
   afterEach(() => controller.verify());
 
-  async function render(list: object | null, status = 200) {
+  async function render(list: object | null, status = 200, summaries: object[] = []) {
     fixture = TestBed.createComponent(StrategiesCard);
     fixture.detectChanges();
     const req = await nextRequest(controller, '/api/subscriptions');
@@ -39,6 +40,16 @@ describe('StrategiesCard', () => {
     else req.flush({ title: 'x', status }, { status, statusText: 'x' });
     await tick();
     fixture.detectChanges();
+    if (status === 200 && items.length) {
+      (await nextRequest(controller, '/api/shadow/pnl')).flush({
+        items: summaries,
+        total: summaries.length,
+        limit: 500,
+        offset: 0,
+      });
+      await tick();
+      fixture.detectChanges();
+    }
     return fixture.nativeElement as HTMLElement;
   }
 
@@ -297,5 +308,54 @@ describe('StrategiesCard', () => {
       true,
     );
     expect(el.textContent).toContain('Traders and admins only.');
+  });
+
+  it("shows each strategy's paper return and its last 30 days as a line", async () => {
+    fixture = TestBed.createComponent(StrategiesCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/subscriptions')).flush({
+      items: [sub()],
+      total: 1,
+      limit: 500,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/shadow/pnl')).flush({
+      items: [
+        {
+          strategy_id: 'momentum-v3',
+          cumulative_return: 0.0521,
+          days: 14,
+          first_day: '2026-09-01',
+          latest_day: '2026-09-25',
+          max_drawdown: -0.01,
+          status: 'active',
+          total_value: 10_521,
+        },
+      ],
+      total: 1,
+      limit: 500,
+      offset: 0,
+    });
+    const rows = [10_000, 10_200, 10_521].map((total_value, i) => ({
+      day: `2026-09-2${i}`,
+      total_value,
+      daily_change: null,
+      daily_return: null,
+      cumulative_return: null,
+      drawdown: 0,
+    }));
+    (await nextRequest(controller, '/api/shadow/strategies/momentum-v3/pnl')).flush({
+      strategy_id: 'momentum-v3',
+      rows,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.ret')?.textContent).toContain('+5.21%');
+    expect(el.querySelector('.ret')?.classList).toContain('gain');
+    expect(el.querySelector('app-sparkline path.line')).not.toBeNull();
+    expect(el.querySelector('h2')?.textContent).toContain('Strategies I follow');
   });
 });

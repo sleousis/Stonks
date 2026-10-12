@@ -87,6 +87,8 @@ describe('DemoPage', () => {
     await tick();
     fixture.detectChanges();
     expect(root.querySelector('[role="note"]')?.textContent).toContain('Sample data');
+    // A sample paper book: the band carries the PAPER stamp, never LIVE.
+    expect(root.querySelector('.demo-band app-mode-stamp')?.textContent).toContain('PAPER');
     expect(root.textContent).toContain('ACME.DEMO');
     expect(root.textContent).toContain('$112,000.00');
   });

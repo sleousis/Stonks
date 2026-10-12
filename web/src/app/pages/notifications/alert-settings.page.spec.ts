@@ -101,6 +101,6 @@ describe('AlertSettingsPage', () => {
   it('shows the three Notifications tabs', async () => {
     const el = await render();
     const tabs = [...el.querySelectorAll('.tabs a')].map((a) => a.textContent?.trim());
-    expect(tabs).toEqual(['Feed', 'Price alerts', 'Alert settings']);
+    expect(tabs).toEqual(['Inbox', 'Price alerts', 'Settings']);
   });
 });
