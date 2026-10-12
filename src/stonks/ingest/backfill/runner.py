@@ -13,7 +13,15 @@ Each unit ends its turn in one of four ways:
 - not found (HTTP 404): done with nothing stored, never asked again;
 - stopped by the budget or the vendor's quota: left as it was, so the next
   run picks it up. The run then sleeps until the budget refills, or
-  returns when ``until_budget`` is set so a scheduler can rerun it.
+  returns when ``until_budget`` is set so a scheduler can rerun it;
+- refused for going too fast (HTTP 429 after the source's own retries):
+  left as it was, no attempt counted, and the run pauses a minute (twice
+  that after each refusal in a row, up to 15 minutes) before going on.
+
+A phase whose listing fails is skipped for this pass and listed again on
+the next run. A write that raises is split per unit, so only the unit
+that cannot be stored fails. The calls spent are stored however the run
+ends, an interrupt included.
 """
 
 from __future__ import annotations
@@ -42,6 +50,10 @@ StopReason = Literal["finished", "budget", "cap", "waiting"]
 
 #: Longest single sleep, so a stop request is noticed between naps.
 _NAP_SECONDS = 300.0
+#: First pause after the vendor refuses requests for going too fast, and the
+#: longest one (the pause doubles with each refusal in a row).
+_RATE_PAUSE_SECONDS = 60.0
+_RATE_PAUSE_MAX_SECONDS = 900.0
 
 
 @dataclass
@@ -61,6 +73,8 @@ class _Fetched:
     payload: Any = None
     error: BaseException | None = None
     calls: int = 0
+    #: Counts the calls while the fetch runs (``None``: not started yet).
+    tracker: Any = None
 
 
 class BackfillRunner:
@@ -81,12 +95,23 @@ class BackfillRunner:
         self._sleep = sleep
         self._clock = clock or (lambda: datetime.now(UTC))
         self._report = RunReport()
+        self._rate_pauses = 0
+        #: Phases whose listing failed in the current pass.
+        self._unlisted: list[str] = []
         self._exchanges = sorted(ctx.exchanges) if ctx.exchanges is not None else None
 
     # ---- the loop -----------------------------------------------------------------
 
     def run(self) -> RunReport:
+        try:
+            return self._loop()
+        finally:
+            # an interrupt or a crash still stores the calls already spent
+            self._flush_calls()
+
+    def _loop(self) -> RunReport:
         while True:
+            self._unlisted = []
             try:
                 for phase in self._phases:
                     self._run_phase(phase)
@@ -105,7 +130,10 @@ class BackfillRunner:
                 [p.phase_id for p in self._phases], self._exchanges
             )
             if retry_at is None:
-                return self._stop("finished", "no work left")
+                detail = "no work left"
+                if self._unlisted:
+                    detail += f", listing failed for {', '.join(self._unlisted)} (next run)"
+                return self._stop("finished", detail)
             if self._until_budget:
                 return self._stop("waiting", f"retries wait until {retry_at.isoformat()}")
             _log.info("backfill.waiting_for_retries", until=retry_at.isoformat())
@@ -143,17 +171,17 @@ class BackfillRunner:
         listed = ctx.state.listed_at(phase.phase_id)
         ttl = phase.listing_ttl(ctx)
         stale = listed is None or ttl is None or self._clock() - listed >= ttl
-        if stale:
-            added = ctx.state.add_units(phase.phase_id, phase.list_units(ctx))
-            self._flush_calls()
-            _log.info("backfill.phase_listed", phase=phase.phase_id, new_units=added)
+        if stale and not self._list(phase):
+            return
         workers = ctx.settings.network_threads
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="backfill") as pool:
             current = self._submit(pool, phase, exclude=())
             while current:
                 stop: BudgetExhausted | None = None
                 try:
-                    following = self._submit(pool, phase, exclude=[f.unit.key for f, _ in current])
+                    following = self._submit(
+                        pool, phase, exclude=[f.unit.key for f, _ in current], in_flight=current
+                    )
                 except BudgetExhausted as exc:
                     following, stop = [], exc
                 try:
@@ -169,16 +197,49 @@ class BackfillRunner:
                 # units that ran a step are runnable again once stored
                 current = following or self._submit(pool, phase, exclude=())
 
+    def _list(self, phase: BackfillPhase) -> bool:
+        """List the phase's units. A listing the vendor refuses for the day
+        stops the run. One that fails otherwise skips the phase this pass."""
+        ctx = self._ctx
+        try:
+            added = ctx.state.add_units(phase.phase_id, phase.list_units(ctx))
+        except QuotaExceededError as exc:
+            self._budget.exhaust()
+            self._flush_calls()
+            raise BudgetExhausted(
+                f"the vendor refused a request: {exc}", self._budget.resets_at
+            ) from exc
+        except _SOFT_FAIL_EXCEPTIONS as exc:
+            self._flush_calls()
+            _log.warning(
+                "backfill.listing_failed", phase=phase.phase_id, error=format_exception(exc)
+            )
+            self._unlisted.append(phase.phase_id)
+            return False
+        self._flush_calls()
+        _log.info("backfill.phase_listed", phase=phase.phase_id, new_units=added)
+        return True
+
     def _submit(
-        self, pool: ThreadPoolExecutor, phase: BackfillPhase, exclude: Sequence[str]
+        self,
+        pool: ThreadPoolExecutor,
+        phase: BackfillPhase,
+        exclude: Sequence[str],
+        in_flight: Sequence[tuple[_Fetched, Future[_Fetched]]] = (),
     ) -> list[tuple[_Fetched, Future[_Fetched]]]:
         units = self._ctx.state.next_units(
             phase.phase_id, phase.batch_size, exchanges=self._exchanges, exclude=exclude
         )
         if not units:
             return []
-        # take as many units as fit the budget; none fitting stops the run
-        room = self._budget.remaining
+        # what the batch in flight may still spend is not charged yet
+        reserved = 0
+        for item, future in in_flight:
+            if not future.done():
+                spent = item.tracker.calls if item.tracker is not None else 0
+                reserved += max(0, phase.estimate(item.unit) - spent)
+        # take as many units as fit the budget
+        room = self._budget.remaining - reserved
         chosen: list[Unit] = []
         spend = 0
         for unit in units:
@@ -188,13 +249,17 @@ class BackfillRunner:
             chosen.append(unit)
             spend += cost
         if not chosen:
+            if reserved:
+                return []  # decided again once the batch in flight is stored
+            # no room stops the run, room found on a second look goes on
             self._budget.ensure_room(phase.estimate(units[0]))
-            return []
+            chosen = units[:1]
         return [(_Fetched(u), pool.submit(self._fetch_one, phase, u)) for u in chosen]
 
     def _fetch_one(self, phase: BackfillPhase, unit: Unit) -> _Fetched:
         out = _Fetched(unit)
         with self._budget.track() as tracker:
+            out.tracker = tracker
             try:
                 out.payload = phase.fetch(self._ctx, unit)
             except BaseException as exc:  # sorted out on the runner's thread
@@ -208,13 +273,18 @@ class BackfillRunner:
     def _finish(self, phase: BackfillPhase, fetched: list[_Fetched]) -> None:
         state = self._ctx.state
         stop: BaseException | None = None
+        rate_limited = False
         ok: list[_Fetched] = []
         for item in fetched:
             exc = item.error
             if exc is None:
                 ok.append(item)
                 continue
-            if isinstance(exc, BudgetExhausted | QuotaExceededError):
+            if _rate_limited(exc):
+                # going too fast is not the unit's fault: no attempt counted
+                state.add_unit_calls(item.unit, item.calls)
+                rate_limited = True
+            elif isinstance(exc, BudgetExhausted | QuotaExceededError):
                 if isinstance(exc, QuotaExceededError):
                     self._budget.exhaust()
                 state.add_unit_calls(item.unit, item.calls)
@@ -235,17 +305,51 @@ class BackfillRunner:
             else:
                 raise exc  # KeyboardInterrupt, SystemExit
         if ok:
-            outcomes = phase.write(self._ctx, [(i.unit, i.payload) for i in ok])
+            outcomes = self._write(phase, ok)
             for item in ok:
                 outcome = outcomes.get(item.unit.key, Outcome())
                 self._record(phase, item, outcome)
         self._flush_calls()
+        if stop is None:
+            self._pace(rate_limited)
         if stop is not None:
             if isinstance(stop, BudgetExhausted):
                 raise stop
             raise BudgetExhausted(
                 f"the vendor refused a request: {stop}", self._budget.resets_at
             ) from stop
+
+    def _write(self, phase: BackfillPhase, ok: list[_Fetched]) -> dict[str, Outcome]:
+        """Store the fetched units. A write that raises is tried again one
+        unit at a time, so only the unit that cannot be stored fails (and
+        a poison unit cannot stop every later run)."""
+        try:
+            return phase.write(self._ctx, [(i.unit, i.payload) for i in ok])
+        except Exception as exc:
+            if len(ok) == 1:
+                return {ok[0].unit.key: self._write_failed(phase, ok[0], exc)}
+        outcomes: dict[str, Outcome] = {}
+        for item in ok:
+            try:
+                outcomes.update(phase.write(self._ctx, [(item.unit, item.payload)]))
+            except Exception as exc:
+                outcomes[item.unit.key] = self._write_failed(phase, item, exc)
+        return outcomes
+
+    def _write_failed(self, phase: BackfillPhase, item: _Fetched, exc: Exception) -> Outcome:
+        error = format_exception(exc)
+        _log.error("backfill.write_failed", phase=phase.phase_id, unit=item.unit.key, error=error)
+        return Outcome(error=error)
+
+    def _pace(self, rate_limited: bool) -> None:
+        """Pause after the vendor refused requests for going too fast."""
+        if not rate_limited:
+            self._rate_pauses = 0
+            return
+        self._rate_pauses += 1
+        pause = min(_RATE_PAUSE_SECONDS * 2 ** (self._rate_pauses - 1), _RATE_PAUSE_MAX_SECONDS)
+        _log.warning("backfill.rate_limited", pause_seconds=pause)
+        self._sleep(pause)
 
     def _record(self, phase: BackfillPhase, item: _Fetched, outcome: Outcome) -> None:
         state = self._ctx.state
@@ -289,6 +393,14 @@ class BackfillRunner:
             state.add_calls(item.day, item.calls)
             for used, limit, read_at in item.readings:
                 state.record_vendor_usage(item.day, used, limit, read_at)
+
+
+def _rate_limited(exc: BaseException) -> bool:
+    return (
+        isinstance(exc, requests.HTTPError)
+        and exc.response is not None
+        and exc.response.status_code == 429
+    )
 
 
 def _not_found(exc: BaseException) -> bool:

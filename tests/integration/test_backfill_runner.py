@@ -41,6 +41,11 @@ class _NotFoundResponse:
     headers: dict[str, str] = {}
 
 
+class _RateLimitedResponse:
+    status_code = 429
+    headers: dict[str, str] = {}
+
+
 class FakeVendor(DataSource):
     """Canned answers with the EODHD costs, metered like the real source."""
 
@@ -53,6 +58,10 @@ class FakeVendor(DataSource):
         self.failing: set[str] = set()
         self.missing: set[str] = set()
         self.quota_on: set[str] = set()
+        #: ticker -> how many more requests answer HTTP 429
+        self.rate_limited: dict[str, int] = {}
+        self.interrupt_on: set[str] = set()
+        self.listing_error: BaseException | None = None
         self.vendor_used = 0
 
     # metering ----------------------------------------------------------------
@@ -74,6 +83,8 @@ class FakeVendor(DataSource):
 
     def list_exchanges(self) -> list[ExchangeInfo]:
         self._request("/exchanges-list", 1)
+        if self.listing_error is not None:
+            raise self.listing_error
         return [ExchangeInfo(code=c) for c in ("US", "CC", "FOREX")]
 
     def list_symbols(self, exchange: str) -> list[SymbolListing]:
@@ -92,6 +103,11 @@ class FakeVendor(DataSource):
 
     # bars --------------------------------------------------------------------
     def _check(self, key: str) -> None:
+        if key in self.interrupt_on:
+            raise KeyboardInterrupt
+        if self.rate_limited.get(key, 0) > 0:
+            self.rate_limited[key] -= 1
+            raise requests.HTTPError("429", response=_RateLimitedResponse())  # type: ignore[arg-type]
         if key in self.quota_on:
             raise QuotaExceededError("limit reached")
         if key in self.failing:
@@ -476,3 +492,72 @@ def test_status_counts_and_eta(lake, state, vendor, clock):
     assert daily.calls_left == daily.remaining  # one call each
     assert status.today.calls == vendor.calls
     assert status.eta_days == pytest.approx(status.calls_left / 7)
+
+
+# ---- review fixes ------------------------------------------------------------------
+
+
+def _unit_row(state, phase: str, key: str) -> dict[str, Any]:
+    rows = state.sql("SELECT * FROM backfill_units WHERE phase = ? AND unit_key = ?", [phase, key])
+    return dict(rows[0])
+
+
+def test_a_rate_limit_pauses_without_counting_an_attempt(lake, state, vendor, clock):
+    _run(lake, state, vendor, clock, phases=["symbols"], until_budget=True)
+    vendor.rate_limited["BBB.US"] = 2
+    report, bstate, _ = _run(lake, state, vendor, clock, phases=["daily"], until_budget=True)
+    assert report.stopped == "finished"
+    assert (report.units_retry, report.units_failed) == (0, 0)
+    assert bstate.summary()["daily"].done == 4
+    row = _unit_row(state, "daily", "BBB.US")
+    assert row["attempts"] == 0
+    assert row["last_error"] is None
+    # it paused a minute, then twice that, not the half hour of a retry
+    assert [s for s in clock.slept if s >= 1] == [60.0, 120.0]
+
+
+def test_a_listing_that_fails_skips_the_phase_and_goes_on(lake, state, vendor, clock):
+    vendor.listing_error = DataSourceError("exchanges list is down")
+    settings = BackfillSettings(requests_per_minute=1000, macro_countries=["USA"])
+    report, bstate, _ = _run(
+        lake, state, vendor, clock, settings, phases=["symbols", "macro"], until_budget=True
+    )
+    assert report.stopped == "finished"
+    assert "symbols" in report.detail
+    summary = bstate.summary()
+    assert summary["macro"].done == 1
+    assert bstate.listed_at("symbols") is None  # listed again on the next run
+    assert bstate.calls_on(clock.now.date()).calls == vendor.calls
+
+
+def test_the_quota_while_listing_stops_for_the_day(lake, state, vendor, clock):
+    vendor.listing_error = QuotaExceededError("limit reached")
+    report, _, _ = _run(lake, state, vendor, clock, phases=["symbols"], until_budget=True)
+    assert report.stopped == "budget"
+
+
+def test_a_write_that_crashes_fails_only_its_unit(lake, state, vendor, clock, monkeypatch):
+    _run(lake, state, vendor, clock, phases=["symbols"], until_budget=True)
+    upsert = lake.upsert_prices
+
+    def poisoned(frame, *args, **kwargs):
+        if "BBB.US" in set(frame["ticker"]):
+            raise RuntimeError("the lake refused BBB.US")
+        return upsert(frame, *args, **kwargs)
+
+    monkeypatch.setattr(lake, "upsert_prices", poisoned)
+    settings = BackfillSettings(requests_per_minute=1000, max_attempts=2, retry_backoff_minutes=1)
+    report, bstate, _ = _run(lake, state, vendor, clock, settings, phases=["daily"])
+    assert report.stopped == "finished"
+    summary = bstate.summary()["daily"]
+    assert (summary.done, summary.failed) == (3, 1)
+    assert "the lake refused BBB.US" in _unit_row(state, "daily", "BBB.US")["last_error"]
+
+
+def test_an_interrupt_still_stores_the_calls_spent(lake, state, vendor, clock):
+    _run(lake, state, vendor, clock, phases=["symbols"], until_budget=True)
+    vendor.interrupt_on.add("BBB.US")
+    bstate = BackfillState(state, clock=clock)
+    with pytest.raises(KeyboardInterrupt):
+        _run(lake, state, vendor, clock, phases=["daily"], until_budget=True)
+    assert bstate.calls_on(clock.now.date()).calls == vendor.calls

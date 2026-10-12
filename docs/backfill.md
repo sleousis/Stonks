@@ -86,11 +86,13 @@ Before each request the budget:
 - reads the account's count from `/user` at the start and every 10 minutes, so other processes on the same key count too,
 - refuses a request that would pass `daily_budget` (95000) or the plan's own limit.
 
-A refused request never leaves. The unit stays as it was and the next run picks it up. An HTTP 402 (allowance used) stops the day the same way. An HTTP 429 waits as long as `Retry-After` says. The day starts again at midnight UTC, when EODHD resets its counter.
+A refused request never leaves. The unit stays as it was and the next run picks it up. An HTTP 402 (allowance used) stops the day the same way. An HTTP 429 (too fast) is retried by the source after `Retry-After`. If the vendor still refuses, the unit is left as it was with no attempt counted, and the run pauses a minute, then twice as long for each refusal in a row, up to 15 minutes. The day starts again at midnight UTC, when EODHD resets its counter.
+
+The next batch is fetched while the last one is stored, so it leaves room for the calls the batch in flight may still spend. A unit is never cut off half way by the budget.
 
 ## Failures
 
-A unit that fails is tried again later, waiting 30 minutes and then twice as long each time. After 4 attempts it is marked failed. `retry` gives failed units new attempts. A ticker the vendor does not know (HTTP 404) is done with nothing stored and never asked again. Every write goes through the ingest pipeline, so bars get the usual quality checks and quarantine, and each batch has an `ingest_runs` row.
+A unit that fails is tried again later, waiting 30 minutes and then twice as long each time. After 4 attempts it is marked failed. `retry` gives failed units new attempts. A ticker the vendor does not know (HTTP 404) is done with nothing stored and never asked again. A phase whose listing fails (the exchange list is down, say) is skipped for this pass and listed again on the next run. A write that raises is tried again one unit at a time, so only the unit that cannot be stored fails. The calls spent are stored however the run ends, Ctrl+C included. Every write goes through the ingest pipeline, so bars get the usual quality checks and quarantine, and each batch has an `ingest_runs` row.
 
 ## Status
 
