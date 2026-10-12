@@ -1,8 +1,8 @@
-<a class="back-link" routerLink="/trades"><span aria-hidden="true">←</span> Trade costs</a>
-
 <app-page-header
   [title]="heading()"
   description="What this order cost, why it was placed and your notes."
+  backPath="/trades"
+  backLabel="Trade costs"
 />
 
 @if (order.error(); as err) {
@@ -63,6 +63,7 @@
       </p>
       @if (!s) {
         <app-empty-state
+          icon="orders"
           title="No cost yet"
           message="The cost shows once the order fills and the next session's prices arrive."
         />

@@ -1,0 +1,339 @@
+// Sections and the only three boxes. Cards are gone: a section is a title
+// on a 2px ink rule with 1px hairlines between its rows. The only boxes are
+// the sheet (--raise, radius 10), the callout (--sunk, radius 10) and the
+// band (--accent-soft, radius 10). Never nest boxes.
+@use 'breakpoints' as bp;
+
+// Sections ------------------------------------------------------------------
+// `.page-section` is the new name, `.panel` the older one: both render the
+// same.
+//
+//   <section class="page-section">
+//     <header class="section-head"><h2>Holdings <span class="count">5</span></h2>
+//       <a class="link" routerLink="/orders">See orders</a></header>
+//     <div class="section-body">...</div>
+//   </section>
+.page-section,
+.panel {
+  min-width: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+// A section without a head still opens on the ink rule.
+.page-section:not(:has(> .section-head, > .panel-head)),
+.panel:not(:has(> .section-head, > .panel-head)) {
+  border-top: 2px solid var(--rule-strong);
+}
+
+.section-head,
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  min-height: 36px;
+  padding: 0 0 var(--space-3);
+  border-bottom: 2px solid var(--rule-strong);
+
+  h2,
+  h3 {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: var(--text-section);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-section);
+  }
+
+  // The count beside a title: mono, muted.
+  .count {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+}
+
+.section-body,
+.panel-body {
+  padding: var(--space-4) 0 0;
+}
+
+// A section whose body is a table or a row list: rows start at the rule.
+.panel-flush > .panel-body,
+.section-flush > .section-body {
+  padding: 0;
+}
+
+// Stacked sections sit 40px apart (28 on phones).
+.section-stack {
+  display: grid;
+  gap: var(--section-gap);
+  min-width: 0;
+}
+
+// Page grid: one column on phones and tablets; 12 columns from desktop.
+// Children opt in with .span-4 ... .span-12. Sections 40px apart, columns
+// 56px apart.
+.page-grid {
+  display: grid;
+  gap: var(--section-gap) var(--column-gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+
+    @each $n in 4, 5, 6, 7, 8, 12 {
+      > .span-#{$n} {
+        grid-column: span $n;
+      }
+    }
+  }
+}
+
+// Two-column bodies: content plus a 380px side column (`.cols`), or plus a
+// 320px facts column (`.cols-facts`). One column below 1100px.
+.cols,
+.cols-facts {
+  display: grid;
+  gap: var(--section-gap) var(--column-gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+
+  @include bp.from-desktop {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+}
+
+.cols-facts {
+  @include bp.from-desktop {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+// Summary strip: 3 to 4 cells under a 2px ink rule with 1px rules between.
+// No boxes. `app-stat-tile` renders a cell. On phones a 2x2 grid.
+.summary-strip,
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  border-top: 2px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
+  overflow: hidden;
+
+  > * {
+    min-width: 0;
+    margin-top: -1px;
+    margin-inline-start: -1px;
+    border-top: 1px solid var(--rule);
+    border-inline-start: 1px solid var(--rule);
+  }
+
+  @include bp.phone {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > :last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+// Older tile grid: cells that fill the row, hairlines between them.
+.tile-grid {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  border-top: 2px solid var(--rule-strong);
+  overflow: hidden;
+
+  > * {
+    min-width: 0;
+    margin-top: -1px;
+    margin-inline-start: -1px;
+    border-top: 1px solid var(--rule);
+    border-inline-start: 1px solid var(--rule);
+  }
+
+  @include bp.phone {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > :last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @include bp.from-tablet {
+    > .featured {
+      grid-column: span 2;
+    }
+  }
+}
+
+// The three boxes -----------------------------------------------------------
+
+// Sheet: dialogs, menus, side sheets, the order ticket, a form edited in place.
+.sheet-box {
+  padding: var(--space-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sheet);
+  background: var(--raise);
+}
+
+// Callout: a plain-English explanation on --sunk, no border. Tone with
+// data-tone: warn and loss (or error) turn it into a warning or error band
+// with a 3px coloured left edge. info, gain and neutral stay a callout.
+.callout {
+  --callout-edge: transparent;
+  --callout-soft: var(--sunk);
+  padding: var(--space-4);
+  border: 0;
+  border-left: 3px solid var(--callout-edge);
+  border-radius: var(--r-sheet);
+  background: var(--callout-soft);
+  color: var(--ink-2);
+  font-size: var(--text-md);
+
+  > * {
+    max-width: 68ch;
+  }
+
+  > * + * {
+    margin-top: var(--space-1);
+  }
+
+  .callout-title {
+    color: var(--ink);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  &[data-tone='info'],
+  &[data-tone='neutral'],
+  &[data-tone='gain'] {
+    border-left: 0;
+  }
+
+  &[data-tone='warn'] {
+    --callout-edge: var(--warn);
+    --callout-soft: var(--warn-soft);
+    color: var(--ink);
+  }
+
+  &[data-tone='loss'],
+  &[data-tone='error'] {
+    --callout-edge: var(--down);
+    --callout-soft: var(--down-soft);
+    color: var(--ink);
+  }
+}
+
+// When no tone is set the edge is hidden, so a plain callout has no border.
+.callout:not([data-tone]) {
+  border-left: 0;
+}
+
+// Band: a one-time prompt or the setup band. Accent soft with an accent line.
+.band {
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sheet);
+  background: var(--accent-soft);
+}
+
+// Warning and error bands (the same as callouts with a tone).
+.band-warn,
+.band-error {
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-sheet);
+  background: var(--warn-soft);
+}
+
+.band-error {
+  border-left-color: var(--down);
+  background: var(--down-soft);
+}
+
+// An inset group (older name): a quiet callout.
+.well {
+  padding: var(--space-3);
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
+}
+
+// Real money: a brass frame on anything that holds live money (a live
+// portfolio, a live broker, a live ticket). Paper frames stay plain.
+.live-frame {
+  box-shadow: inset 0 0 0 2px var(--brass-fill);
+}
+
+// Order ticket: the look of every money confirmation (confirm dialog, the
+// trading run ticket). A sheet with ticket lines in mono and a PAPER or
+// LIVE stamp. Add `.live` for real money.
+.ticket {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
+
+  &.live {
+    border: 2px solid var(--brass-fill);
+  }
+
+  .ticket-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px dashed var(--rule-control);
+  }
+
+  .ticket-kind {
+    flex: 1;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+
+  .ticket-lines {
+    display: grid;
+    gap: var(--space-1);
+    margin: 0;
+
+    > div {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+
+    dt {
+      color: var(--ink-2);
+    }
+
+    dd {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: var(--mono-scale);
+      font-variant-numeric: tabular-nums slashed-zero;
+      text-align: right;
+      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+
+    // Free text someone typed (a reason) wraps inside the ticket.
+    dd.ticket-text {
+      font-family: inherit;
+      font-size: inherit;
+      white-space: normal;
+    }
+  }
+}

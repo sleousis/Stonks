@@ -8,7 +8,6 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 
 import type {
   ColumnMapping,
@@ -123,23 +122,14 @@ const MAX_FILE_BYTES = 5_000_000;
 @Component({
   selector: 'app-statement-import-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    RouterLink,
-    PageHeader,
-    PermissionNote,
-    Segmented,
-    DataTable,
-    EmptyState,
-    ErrorState,
-    LoadingState,
-  ],
+  imports: [PageHeader, PermissionNote, Segmented, DataTable, EmptyState, ErrorState, LoadingState],
   template: `
     <app-page-header
       title="Import a CSV statement"
-      description="For brokers without a connection: bring trades, dividends and cash flows in from the CSV file your broker exports. DEGIRO files need no mapping."
-    >
-      <a actions class="btn btn-tertiary" routerLink="/connections">Broker connections</a>
-    </app-page-header>
+      description="Bring trades, dividends and cash flows in from the CSV file your broker exports. DEGIRO files need no mapping."
+      backPath="/connections"
+      backLabel="Broker connections"
+    />
 
     <section class="panel" aria-labelledby="file-title">
       <div class="panel-head"><h2 id="file-title">1. The file</h2></div>
@@ -418,6 +408,7 @@ const MAX_FILE_BYTES = 5_000_000;
         <app-loading-state label="Loading your imports" [rows]="2" />
       } @else if (imports.value().length === 0) {
         <app-empty-state
+          icon="doc"
           title="No imports yet"
           message="Each import shows here, and you can undo it."
         />
@@ -438,7 +429,7 @@ const MAX_FILE_BYTES = 5_000_000;
               @if (!i.undone_at) {
                 <button
                   type="button"
-                  class="btn btn-tertiary"
+                  class="btn btn-ghost"
                   [attr.aria-label]="'Undo the import of ' + (i.filename || i.id)"
                   [disabled]="!canImport() || !!busy()"
                   (click)="undo(i)"
@@ -475,11 +466,11 @@ const MAX_FILE_BYTES = 5_000_000;
     }
     .hint {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .panel-head .hint {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-variant-numeric: tabular-nums slashed-zero;
     }
     .error {
@@ -488,7 +479,7 @@ const MAX_FILE_BYTES = 5_000_000;
     .preview-notes {
       display: grid;
       gap: var(--space-2);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     .preview-notes p {
       margin: 0;
@@ -512,7 +503,7 @@ const MAX_FILE_BYTES = 5_000_000;
       align-items: center;
       min-height: var(--touch-min);
       cursor: pointer;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
     }
@@ -541,7 +532,7 @@ const MAX_FILE_BYTES = 5_000_000;
       justify-content: space-between;
       gap: var(--space-2);
       padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     .import:last-child {
       border-bottom: 0;

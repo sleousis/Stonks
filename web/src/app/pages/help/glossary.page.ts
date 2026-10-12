@@ -1,8 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   type ElementRef,
   afterNextRender,
+  afterRenderEffect,
   computed,
   inject,
   signal,
@@ -17,23 +19,54 @@ import { PageHeader } from '../../shared/ui/page-header';
  * Every term the console explains, in one list with an anchor per term
  * (`/help/glossary#sharpe`). Help tips link here. Built from
  * `core/help/glossary.ts`, so a new metric shows up without touching this page.
+ * From 1024px a sticky contents column sits on the left: the sections, the
+ * one in view marked and opened to its terms. Narrower screens get the
+ * section pills on top instead.
  */
 @Component({
   selector: 'app-glossary-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PageHeader],
   template: `
-    <app-page-header
-      title="Help"
-      description="How Stonks works, and what each word and figure in the console means."
-    />
+    <app-page-header title="Help" [description]="standfirst" />
+
+    <!-- Search on top: it filters the glossary below as you type. -->
+    <div class="finder">
+      <div class="field search">
+        <label for="glossary-filter">Find a term</label>
+        <div class="search-box">
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.6" />
+            <path
+              d="m10.5 10.5 3 3"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+          <input
+            id="glossary-filter"
+            class="input"
+            type="search"
+            autocomplete="off"
+            placeholder="Sharpe, paper, drawdown"
+            [value]="query()"
+            (input)="query.set($any($event.target).value)"
+          />
+        </div>
+      </div>
+      <p class="count muted" role="status">
+        <span class="num">{{ entries().length }}</span>
+        {{ entries().length === 1 ? 'term' : 'terms' }}
+      </p>
+    </div>
 
     <!-- The product in five sentences (F21), in the words of docs/design/vocabulary.md. -->
-    <section class="panel intro" aria-labelledby="how-title">
-      <div class="panel-head">
+    <section class="page-section intro" aria-labelledby="how-title">
+      <div class="section-head">
         <h2 id="how-title">How Stonks works</h2>
       </div>
-      <ol class="panel-body steps prose">
+      <ol class="steps">
         <li>
           Stonks runs <strong>strategies</strong>: rules that read prices after each close and
           decide what to buy and sell.
@@ -58,136 +91,283 @@ import { PageHeader } from '../../shared/ui/page-header';
       </ol>
     </section>
 
-    <div class="field search">
-      <label for="glossary-filter">Find a term</label>
-      <input
-        id="glossary-filter"
-        class="input"
-        type="search"
-        autocomplete="off"
-        [value]="query()"
-        (input)="query.set($any($event.target).value)"
-      />
-    </div>
-
-    <p class="count muted" role="status">
-      {{ entries().length === 1 ? '1 term' : entries().length + ' terms' }}
-    </p>
-
     @if (entries().length === 0) {
       <p class="empty callout" data-tone="neutral">
         No term matches "{{ query() }}". Try a shorter word.
       </p>
     } @else {
-      <div #list>
+      <nav class="filter-pills jump" aria-label="Glossary sections">
         @for (g of groups(); track g.title) {
-          <section class="group panel" [attr.aria-labelledby]="'glossary-' + $index">
-            <div class="panel-head">
-              <h2 [id]="'glossary-' + $index">{{ g.title }}</h2>
-            </div>
-            <dl class="terms">
-              @for (e of g.entries; track e.key) {
-                <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
-                  <dt>{{ e.term }}</dt>
-                  <dd>{{ e.short }}</dd>
-                  @if (e.example) {
-                    <dd class="example">For example: {{ e.example }}</dd>
-                  }
-                  @if (e.aliases.length) {
-                    <dd class="aliases muted">Also shown as {{ e.aliases.join(', ') }}</dd>
-                  }
-                </div>
-              }
-            </dl>
-          </section>
+          <a
+            class="filter-pill"
+            [href]="'/help/glossary#glossary-' + $index"
+            (click)="jump($event, 'glossary-' + $index)"
+            >{{ g.title }} <span class="count">{{ g.entries.length }}</span></a
+          >
         }
+      </nav>
+      <div class="layout">
+        <nav class="toc" aria-label="Glossary contents">
+          <ol>
+            @for (g of groups(); track g.title; let gi = $index) {
+              <li [class.current]="gi === active()">
+                <a
+                  class="toc-group"
+                  [href]="'/help/glossary#glossary-' + gi"
+                  [attr.aria-current]="gi === active() ? 'true' : null"
+                  (click)="jump($event, 'glossary-' + gi)"
+                  >{{ g.title }} <span class="num toc-count">{{ g.entries.length }}</span></a
+                >
+                @if (gi === active()) {
+                  <ol class="toc-terms">
+                    @for (e of g.entries; track e.key) {
+                      <li>
+                        <a [href]="'/help/glossary#' + e.key" (click)="jump($event, e.key)">{{
+                          e.term
+                        }}</a>
+                      </li>
+                    }
+                  </ol>
+                }
+              </li>
+            }
+          </ol>
+        </nav>
+        <div #list class="groups">
+          @for (g of groups(); track g.title) {
+            <section class="group page-section" [attr.aria-labelledby]="'glossary-' + $index">
+              <div class="section-head">
+                <h2 [id]="'glossary-' + $index" tabindex="-1">
+                  {{ g.title }} <span class="count">{{ g.entries.length }}</span>
+                </h2>
+              </div>
+              <dl class="terms">
+                @for (e of g.entries; track e.key) {
+                  <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
+                    <dt>{{ e.term }}</dt>
+                    <dd>{{ e.short }}</dd>
+                    @if (e.example) {
+                      <dd class="example">For example: {{ e.example }}</dd>
+                    }
+                    @if (e.aliases.length) {
+                      <dd class="aliases">Also shown as {{ e.aliases.join(', ') }}</dd>
+                    }
+                  </div>
+                }
+              </dl>
+            </section>
+          }
+        </div>
       </div>
     }
   `,
   styles: `
-    .intro {
-      margin-bottom: var(--space-5);
+    @use 'breakpoints' as bp;
+    :host {
+      display: block;
     }
-    .steps {
-      display: grid;
-      gap: var(--space-2);
-      margin: 0;
-      padding-left: calc(var(--space-4) + 1.25rem);
-      color: var(--color-ink-2);
-    }
-    .steps ::marker {
-      font-family: var(--font-mono);
-      color: var(--color-ink-3);
+    .finder {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-3) var(--space-6);
+      margin-bottom: var(--section-gap);
     }
     .search {
-      max-width: 28rem;
+      flex: 1 1 22rem;
+      max-width: 36rem;
+    }
+    .search-box {
+      position: relative;
+    }
+    .search-box svg {
+      position: absolute;
+      top: 50%;
+      left: var(--space-3);
+      width: 16px;
+      height: 16px;
+      color: var(--muted);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .search-box .input {
+      min-height: 44px;
+      padding-left: 36px;
+      font-size: var(--text-body);
     }
     .count {
-      margin: var(--space-2) 0 var(--space-4);
+      margin: 0 0 var(--space-3);
       font-size: var(--text-sm);
-      font-variant-numeric: tabular-nums slashed-zero;
+    }
+    .intro {
+      margin-bottom: var(--section-gap);
+    }
+    /* Five sentences on a numbered strip, hairlines between them. */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+      overflow: hidden;
+    }
+    .steps li {
+      margin: -1px 0 0 -1px;
+      padding: var(--space-4) var(--space-5) var(--space-4) var(--space-4);
+      border-top: 1px solid var(--rule);
+      border-left: 1px solid var(--rule);
+      color: var(--ink-2);
+      font-size: var(--text-md);
+      counter-increment: step;
+    }
+    .steps li::before {
+      content: counter(step, decimal-leading-zero);
+      display: block;
+      margin-bottom: var(--space-2);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-semibold);
+    }
+    .steps strong {
+      color: var(--ink);
     }
     .empty {
       margin: 0;
     }
-    // One panel per group, the terms a definition list on hairlines.
-    .group + .group {
-      margin-top: var(--space-4);
+    .jump {
+      margin-bottom: var(--space-6);
     }
-    .terms {
+    .groups {
       display: grid;
+      gap: var(--section-gap);
+      min-width: 0;
+    }
+    /* The contents column: wide screens only, the pills stand in below. */
+    .toc {
+      display: none;
+    }
+    @media (min-width: 1024px) {
+      .jump {
+        display: none;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: var(--space-8);
+        align-items: start;
+      }
+      .toc {
+        position: sticky;
+        top: calc(var(--header-h) + var(--space-4));
+        display: block;
+        max-height: calc(100dvh - var(--header-h) - var(--space-8));
+        overflow-y: auto;
+        padding-top: var(--space-2);
+        border-top: 2px solid var(--rule-strong);
+        overscroll-behavior: contain;
+      }
+    }
+    .toc ol {
       margin: 0;
-      padding: 0 var(--space-4);
+      padding: 0;
+      list-style: none;
+    }
+    .toc a {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2);
+      min-height: 32px;
+      padding: 6px var(--space-2) 6px var(--space-3);
+      border-left: 2px solid transparent;
+      color: var(--ink-2);
+      font-size: var(--text-sm);
+      text-decoration: none;
+    }
+    .toc a:hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+    .toc-group {
+      font-weight: var(--weight-medium);
+    }
+    .toc li.current > .toc-group {
+      border-left-color: var(--accent);
+      color: var(--ink);
+      font-weight: var(--weight-semibold);
+    }
+    .toc-count {
+      color: var(--muted);
+      font-size: var(--text-xs);
+    }
+    .toc-terms {
+      padding-bottom: var(--space-2);
+    }
+    .toc-terms a {
+      min-height: 28px;
+      padding-left: var(--space-5);
+      color: var(--muted);
+    }
+    .group h2 {
+      outline: none;
+      scroll-margin-top: calc(var(--header-h) + var(--space-4));
+    }
+    /* Two columns: the term on the left, what it means on the right. */
+    .terms {
+      margin: 0;
     }
     .term {
-      padding: var(--space-3) 0;
-      scroll-margin-top: var(--space-8);
+      display: grid;
+      gap: var(--space-1) var(--space-8);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--rule);
+      scroll-margin-top: calc(var(--header-h) + var(--space-4));
     }
-    .term + .term {
-      border-top: 1px solid var(--color-border);
+    @include bp.from-tablet {
+      .term {
+        grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+      }
+      .term dt {
+        grid-row: 1 / span 3;
+      }
+      .term dd {
+        grid-column: 2;
+      }
     }
-    // The term a link pointed at: an accent rule at the panel edge.
+    .term:last-child {
+      border-bottom: 0;
+    }
+    /* The term a link pointed at: an accent edge and the soft accent fill. */
     .term.target {
-      margin-inline: calc(-1 * var(--space-4));
-      padding-inline: calc(var(--space-4) - 2px) var(--space-4);
-      border-left: 2px solid var(--color-focus);
-      background: var(--color-accent-soft);
+      padding-inline: var(--space-4);
+      border-radius: var(--r-sheet);
+      border-bottom-color: transparent;
+      box-shadow: inset 3px 0 0 var(--accent);
+      background: var(--accent-soft);
     }
     .term:focus-visible {
       outline-offset: -2px;
     }
     dt {
-      font-size: var(--text-md);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
     }
     dd {
-      max-width: 70ch;
-      margin: var(--space-1) 0 0;
+      max-width: 68ch;
+      margin: 0;
+      color: var(--ink-2);
       font-size: var(--text-md);
-      color: var(--color-ink-2);
       overflow-wrap: anywhere;
-    }
-    .aliases {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
     }
     .example {
       font-size: var(--text-sm);
     }
-    @media (max-width: 767.98px) {
-      .intro {
-        margin-bottom: var(--space-4);
-      }
-      .group + .group {
-        margin-top: var(--space-3);
-      }
-      .terms {
-        padding: 0 var(--space-3);
-      }
-      .term.target {
-        margin-inline: calc(-1 * var(--space-3));
-        padding-inline: calc(var(--space-3) - 2px) var(--space-3);
-      }
+    .aliases {
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
   `,
 })
@@ -227,7 +407,29 @@ export class GlossaryPage {
 
   protected readonly entries = computed(() => this.groups().flatMap((g) => g.entries));
 
+  /** The section in view, for the contents column (scroll-spy). */
+  protected readonly active = signal(0);
+
+  /** One sentence, counted from the glossary. */
+  protected readonly standfirst = `How Stonks works, and what each of the ${this.all.reduce(
+    (n, g) => n + g.entries.length,
+    0,
+  )} words and figures in the console means.`;
+
+  /** Jump to a glossary section or term and put focus on it. */
+  protected jump(event: Event, id: string): void {
+    event.preventDefault();
+    const heading = this.list()?.nativeElement.querySelector<HTMLElement>(
+      `[id="${CSS.escape(id)}"]`,
+    );
+    if (!heading) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    heading.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+    heading.focus({ preventScroll: true });
+  }
+
   constructor() {
+    this.watchSections();
     // Bring the linked term into view and focus it, so keyboard and screen
     // reader users land on it too.
     afterNextRender(() => {
@@ -236,6 +438,37 @@ export class GlossaryPage {
       const el = this.list()?.nativeElement.querySelector<HTMLElement>(`[id="${CSS.escape(key)}"]`);
       el?.scrollIntoView?.({ block: 'start' });
       el?.focus({ preventScroll: true });
+    });
+  }
+
+  /**
+   * Marks the section in view: the last heading above 30% of the screen.
+   * An IntersectionObserver on the sections says when to look again.
+   */
+  private watchSections(): void {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const pick = () => {
+      const root = this.list()?.nativeElement;
+      if (!root) return;
+      const line = window.innerHeight * 0.3;
+      let at = 0;
+      root.querySelectorAll<HTMLElement>('.group h2').forEach((h, i) => {
+        if (h.getBoundingClientRect().top <= line) at = i;
+      });
+      if (at !== this.active()) this.active.set(at);
+    };
+    const observer = new IntersectionObserver(pick, {
+      rootMargin: '0px 0px -70% 0px',
+      threshold: [0, 1],
+    });
+    inject(DestroyRef).onDestroy(() => observer.disconnect());
+    afterRenderEffect(() => {
+      this.groups();
+      const root = this.list()?.nativeElement;
+      observer.disconnect();
+      if (!root) return;
+      root.querySelectorAll('.group').forEach((el) => observer.observe(el));
+      pick();
     });
   }
 }

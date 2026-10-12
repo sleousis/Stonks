@@ -69,8 +69,8 @@ import { ToastService } from '../../core/notify/toast.service';
       overflow: visible;
       position: fixed;
       z-index: var(--z-toast);
-      right: var(--space-4);
-      bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+      left: var(--space-6);
+      bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
       display: grid;
       gap: var(--space-2);
       width: min(380px, calc(100vw - 32px));
@@ -82,9 +82,11 @@ import { ToastService } from '../../core/notify/toast.service';
       display: none;
     }
     @include bp.phone {
+      /* Above the bottom nav. */
       .toasts {
         left: var(--space-4);
         right: var(--space-4);
+        bottom: calc(var(--bottom-nav-h) + var(--space-3) + env(safe-area-inset-bottom));
         width: auto;
       }
     }
@@ -93,19 +95,19 @@ import { ToastService } from '../../core/notify/toast.service';
       align-items: flex-start;
       gap: var(--space-2);
       padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-left: 2px solid var(--color-info);
-      border-radius: var(--radius-lg);
-      background: var(--color-surface);
+      border: 1px solid var(--rule);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--r-sheet);
+      background: var(--raise);
       box-shadow: var(--shadow-overlay);
       pointer-events: auto;
       animation: rise var(--dur) var(--ease-out);
     }
     .toast[data-tone='success'] {
-      border-left-color: var(--color-gain);
+      border-left-color: var(--up);
     }
     .toast[data-tone='error'] {
-      border-left-color: var(--color-loss);
+      border-left-color: var(--down);
     }
     .body {
       flex: 1;
@@ -115,7 +117,7 @@ import { ToastService } from '../../core/notify/toast.service';
       font-weight: var(--weight-semibold);
     }
     .message {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .close {

@@ -95,10 +95,10 @@ import { readChartTheme } from './chart-theme';
       min-height: 22px;
       margin-bottom: var(--space-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .time {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .item {
       display: inline-flex;
@@ -106,38 +106,38 @@ import { readChartTheme } from './chart-theme';
       gap: 6px;
     }
     strong {
-      color: var(--color-ink);
+      color: var(--ink);
       font-weight: var(--weight-semibold);
     }
     .swatch {
       width: 10px;
       height: 3px;
       border-radius: var(--radius-xs);
-      background: var(--color-ink-3);
+      background: var(--muted);
     }
     .swatch[data-color='brass'] {
-      background: var(--color-brass);
+      background: var(--brass);
     }
     .swatch[data-color='primary'] {
-      background: var(--color-primary);
+      background: var(--accent);
     }
     .swatch[data-color='gain'] {
-      background: var(--color-gain);
+      background: var(--up);
     }
     .swatch[data-color='loss'] {
-      background: var(--color-loss);
+      background: var(--down);
     }
     .swatch[data-color='info'] {
-      background: var(--color-info);
+      background: var(--accent);
     }
     .swatch[data-color='warn'] {
-      background: var(--color-warn);
+      background: var(--warn);
     }
     .swatch[data-color='violet'] {
       background: var(--chart-violet);
     }
     .swatch[data-color='ink'] {
-      background: var(--color-ink-2);
+      background: var(--ink-2);
     }
     .swatch.dashed {
       width: 14px;
@@ -148,37 +148,37 @@ import { readChartTheme } from './chart-theme';
       );
     }
     .swatch.dashed[data-color='primary'] {
-      --swatch: var(--color-primary);
+      --swatch: var(--accent);
     }
     .swatch.dashed[data-color='info'] {
-      --swatch: var(--color-info);
+      --swatch: var(--accent);
     }
     .swatch.dashed[data-color='warn'] {
-      --swatch: var(--color-warn);
+      --swatch: var(--warn);
     }
     .swatch.dashed[data-color='violet'] {
       --swatch: var(--chart-violet);
     }
     .swatch.dashed[data-color='ink'] {
-      --swatch: var(--color-ink-2);
+      --swatch: var(--ink-2);
     }
     .swatch.dashed[data-color='muted'] {
-      --swatch: var(--color-ink-3);
+      --swatch: var(--muted);
     }
     .failed {
       display: grid;
       gap: var(--space-2);
       padding: var(--space-4);
-      border: 1px dashed var(--color-border-strong);
+      border: 1px dashed var(--rule-control);
       border-radius: var(--radius-md);
-      background: var(--color-surface-2);
+      background: var(--sunk);
       font-size: var(--text-sm);
     }
     .failed-summary {
-      color: var(--color-ink);
+      color: var(--ink);
     }
     .failed-hint {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .plot.gone {
       display: none;

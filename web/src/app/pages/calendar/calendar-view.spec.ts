@@ -1,4 +1,8 @@
 import {
+  dividendItem,
+  earningsItem,
+  groupByDay,
+  relativeDay,
   filingItemsLabel,
   addDays,
   comparisonLabel,
@@ -137,5 +141,36 @@ describe('filingItemsLabel', () => {
     );
     expect(economicValue(52.1, { event_type: 'ISM PMI', comparison: 'none' })).toBe('52.1');
     expect(economicValue(null, { event_type: 'CPI', comparison: 'yoy' })).toBe('–');
+  });
+
+  it('groups agenda events by day, earliest first, by time within a day', () => {
+    const a = earningsItem({
+      ticker: 'AAPL.US',
+      period_end: '2026-09-30',
+      report_date: '2026-10-29',
+      before_after_market: 'after',
+      eps_estimate: 1.6,
+      currency: 'USD',
+    });
+    const b = earningsItem({
+      ticker: 'MSFT.US',
+      period_end: '2026-09-30',
+      report_date: '2026-10-29',
+      before_after_market: 'before',
+    });
+    const c = dividendItem({ ticker: 'KO.US', ex_date: '2026-10-01', amount: 0.51 });
+    const days = groupByDay([a, b, c]);
+    expect(days.map((d) => d.day)).toEqual(['2026-10-01', '2026-10-29']);
+    expect(days[1].items.map((i) => i.ticker)).toEqual(['MSFT.US', 'AAPL.US']);
+    expect(a.when).toBe('After close');
+    expect(a.figures[0]).toEqual({ label: 'Estimate', value: '$1.60' });
+    expect(groupByDay([a, c], true).map((d) => d.day)).toEqual(['2026-10-29', '2026-10-01']);
+  });
+
+  it('names today, tomorrow and yesterday', () => {
+    expect(relativeDay('2026-10-12', '2026-10-12')).toBe('Today');
+    expect(relativeDay('2026-10-13', '2026-10-12')).toBe('Tomorrow');
+    expect(relativeDay('2026-10-11', '2026-10-12')).toBe('Yesterday');
+    expect(relativeDay('2026-10-20', '2026-10-12')).toBeNull();
   });
 });

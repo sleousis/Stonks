@@ -3,30 +3,37 @@ import {
   backtestErrors,
   boundText,
   buildBacktestRequest,
-  chainColumns,
+  chainLayout,
   checkLabel,
   costText,
   defaultBacktestForm,
+  inTheMoney,
   legText,
   paramLabel,
   payoffGeometry,
+  sortChainRows,
   splitTickers,
   structureLabel,
 } from './options-view';
 
 describe('options view helpers', () => {
-  it('builds chain columns for each side, the strike first', () => {
-    const both = chainColumns('both');
-    expect(both[0].key).toBe('strike');
-    expect(both[0].mobile).toBe('title');
-    expect(both.map((c) => c.label)).toContain('Call bid');
-    expect(both.map((c) => c.label)).toContain('Put vega');
-    expect(both.find((c) => c.key === 'call:gamma')!.mobile).toBe('hide');
-    expect(both.find((c) => c.key === 'put:delta')!.mobile).toBe('show');
-
-    const calls = chainColumns('calls');
-    expect(calls.map((c) => c.label)).toEqual([
-      'Strike',
+  it('mirrors calls and puts around the strike, bid nearest it', () => {
+    const both = chainLayout('both');
+    expect(both.calls.map((c) => c.label)).toEqual([
+      'Call open interest',
+      'Call vega',
+      'Call theta',
+      'Call gamma',
+      'Call delta',
+      'Call IV',
+      'Call ask',
+      'Call bid',
+    ]);
+    expect(both.puts[0].label).toBe('Put bid');
+    expect(both.puts.filter((c) => c.phone).map((c) => c.short)).toEqual(['Bid', 'Ask', 'Delta']);
+    const puts = chainLayout('puts');
+    expect(puts.calls).toEqual([]);
+    expect(puts.puts.map((c) => c.label)).toEqual([
       'Bid',
       'Ask',
       'IV',
@@ -36,16 +43,27 @@ describe('options view helpers', () => {
       'Vega',
       'Open interest',
     ]);
-    const row = CHAIN.rows[0];
-    const iv = calls.find((c) => c.key === 'call:iv')!;
-    expect(iv.display!(row)).toBe('25.0%');
-    expect(iv.value!(row)).toBe(0.25);
-    const puts = chainColumns('puts');
-    const putDelta = puts.find((c) => c.key === 'put:delta')!;
-    expect(putDelta.display!(row)).toBe('-0.44');
-    expect(putDelta.value!(CHAIN.rows[1])).toBeNull();
+    expect(puts.puts[0].show(CHAIN.rows[0])).not.toBe('');
   });
 
+  it('sorts the chain by any column, as the old sortable table did', () => {
+    const { calls, puts } = chainLayout('both');
+    const cells = [...calls, ...puts];
+    const strikes = (rows: typeof CHAIN.rows) => rows.map((r) => r.strike);
+    expect(strikes(sortChainRows(CHAIN.rows, null, cells))).toEqual(strikes(CHAIN.rows));
+    const down = sortChainRows(CHAIN.rows, { key: 'strike', dir: 'desc' }, cells);
+    expect(strikes(down)).toEqual([...strikes(CHAIN.rows)].sort((a, b) => b - a));
+    const byBid = sortChainRows(CHAIN.rows, { key: 'call:bid', dir: 'desc' }, cells);
+    const bids = byBid.map((r) => r.call?.bid ?? null).filter((b): b is number => b !== null);
+    expect(bids).toEqual([...bids].sort((a, b) => b - a));
+  });
+
+  it('marks calls below the price and puts above it as in the money', () => {
+    expect(inTheMoney('call', 90, 100)).toBe(true);
+    expect(inTheMoney('call', 110, 100)).toBe(false);
+    expect(inTheMoney('put', 110, 100)).toBe(true);
+    expect(inTheMoney('put', 90, null)).toBe(false);
+  });
   it('names structures, parameters and checks plainly', () => {
     expect(structureLabel('bull_call_spread')).toBe('Bull call spread');
     expect(paramLabel('dte')).toBe('Days to expiry');

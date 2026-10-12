@@ -118,15 +118,15 @@ const SAMPLE_TIME = '2026-09-26T14:05:00Z';
     .hint {
       margin: 0;
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .sample {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .sample .num {
-      color: var(--color-ink);
+      color: var(--ink);
       font-weight: var(--weight-medium);
     }
   `,

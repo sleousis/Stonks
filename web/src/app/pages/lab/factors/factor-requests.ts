@@ -260,8 +260,8 @@ export function matchesQuery(f: FactorView, query: string): boolean {
 export function divergingColor(value: number | null | undefined, scale: number): string | null {
   if (value == null || !Number.isFinite(value) || scale <= 0) return null;
   const share = Math.round(Math.min(1, Math.abs(value) / scale) * 60);
-  const tone = value < 0 ? 'var(--color-loss)' : 'var(--color-gain)';
-  return `color-mix(in srgb, ${tone} ${share}%, var(--color-surface))`;
+  const tone = value < 0 ? 'var(--down)' : 'var(--up)';
+  return `color-mix(in srgb, ${tone} ${share}%, var(--raise))`;
 }
 
 /** The largest finite magnitude, for `divergingColor`'s scale. */

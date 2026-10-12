@@ -3,22 +3,50 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import type { WatchlistView } from '../../api/models';
+import { MarketService } from '../../api/market.service';
+import { mapSettledLimit } from '../../core/http/map-limit';
 import { WatchlistsService } from '../../api/watchlists.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ApiError } from '../../core/http/api-error';
 import { ToastService } from '../../core/notify/toast.service';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
+import { NumPipe, PctPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
+import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { parseTickerText } from '../welcome/welcome-steps';
+import { Sparkline } from '../../shared/chart/sparkline';
+
+/** A ticker's last close, its day change and the last 60 closes. */
+export interface TickerQuote {
+  ticker: string;
+  last: number | null;
+  change: number | null;
+  closes: number[];
+}
+
+/** The quote of one ticker from its recent daily bars (oldest first). */
+export function quoteFrom(
+  ticker: string,
+  bars: readonly { close: number | null; adj_close?: number | null }[],
+): TickerQuote {
+  const closes = bars
+    .map((b) => b.adj_close ?? b.close)
+    .filter((c): c is number => c != null && Number.isFinite(c));
+  const last = closes.at(-1) ?? null;
+  const prev = closes.length > 1 ? closes[closes.length - 2] : null;
+  const change = last != null && prev ? last / prev - 1 : null;
+  return { ticker, last, change, closes };
+}
 
 /** `/lab?tickers=A,B`: the lab forms start from these tickers. */
 export function labLink(w: Pick<WatchlistView, 'tickers'>): { tickers: string } {
@@ -30,15 +58,32 @@ export function labLink(w: Pick<WatchlistView, 'tickers'>): { tickers: string } 
  * universe, each ticker opens its chart, and Today and the charts can show
  * only one list.
  */
+/** Quotes loaded at first; a longer list offers the rest on a tap. */
+export const QUOTE_MAX = 40;
+/** Price reads in flight at once. */
+const QUOTE_CONCURRENCY = 6;
+
 @Component({
   selector: 'app-watchlists-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeader, PermissionNote, LoadingState, EmptyState, ErrorState],
+  imports: [
+    RouterLink,
+    PageHeader,
+    PageTabs,
+    PermissionNote,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+    Sparkline,
+    NumPipe,
+    PctPipe,
+  ],
   templateUrl: './watchlists.page.html',
   styleUrl: './watchlists.page.scss',
 })
 export class WatchlistsPage {
   private readonly api = inject(WatchlistsService);
+  private readonly market = inject(MarketService);
   private readonly ctx = inject(WatchlistContextService);
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
@@ -46,6 +91,72 @@ export class WatchlistsPage {
 
   protected readonly lists = resource({ loader: () => this.api.list() });
   protected readonly canEdit = computed(() => this.session.can('portfolio.manage'));
+
+  /** The list shown: the one picked, else the first. */
+  protected readonly selectedId = linkedSignal<WatchlistView[] | undefined, string | null>({
+    source: () => (this.lists.hasValue() ? this.lists.value() : undefined),
+    computation: (lists, previous) => {
+      if (!lists?.length) return null;
+      const kept = previous?.value && lists.some((l) => l.id === previous.value);
+      return kept ? previous!.value : lists[0].id;
+    },
+  });
+  protected readonly selected = computed(() => {
+    const id = this.selectedId();
+    return this.lists.hasValue() ? (this.lists.value().find((l) => l.id === id) ?? null) : null;
+  });
+  protected readonly tabs = computed<PageTab[]>(() =>
+    this.lists.hasValue()
+      ? this.lists.value().map((l) => ({ id: l.id, label: l.name, badge: l.tickers.length }))
+      : [],
+  );
+
+  /** The picked list's tickers with their last close, day change and 60 closes. */
+  /** How many of the list's tickers get a quote; a long list asks first. */
+  protected readonly quoteLimit = linkedSignal({
+    source: this.selectedId,
+    computation: () => QUOTE_MAX,
+  });
+
+  protected readonly quotes = resource({
+    params: () => this.selected()?.tickers.slice(0, this.quoteLimit()),
+    loader: async ({ params: tickers }) => {
+      // Six reads at a time: a list may hold hundreds of tickers.
+      const settled = await mapSettledLimit(tickers, QUOTE_CONCURRENCY, async (t) => {
+        const series = await this.market.bars({ ticker: t, interval: '1d', limit: 60 });
+        return quoteFrom(t, series.bars);
+      });
+      const rows = settled.map((r, i) =>
+        r.status === 'fulfilled' ? r.value : quoteFrom(tickers[i], []),
+      );
+      return new Map(rows.map((r) => [r.ticker, r]));
+    },
+  });
+
+  /** Loads quotes for every ticker in the picked list. */
+  protected showAllQuotes(): void {
+    this.quoteLimit.set(this.selected()?.tickers.length ?? QUOTE_MAX);
+  }
+
+  protected quote(ticker: string): TickerQuote | null {
+    return this.quotes.hasValue() ? (this.quotes.value().get(ticker) ?? null) : null;
+  }
+
+  /** "3 lists, 24 tickers. Tech rose most today at +1.20%." */
+  protected readonly standfirst = computed(() => {
+    if (!this.lists.hasValue()) return 'Your own ticker lists, to chart, test and filter Today.';
+    const lists = this.lists.value();
+    if (!lists.length)
+      return 'Save the tickers you follow, then chart them or test them in the lab.';
+    const tickers = new Set(lists.flatMap((l) => l.tickers)).size;
+    const head = `${lists.length} ${lists.length === 1 ? 'list' : 'lists'}, ${tickers} ${tickers === 1 ? 'ticker' : 'tickers'}.`;
+    const list = this.selected();
+    if (!list || !this.quotes.hasValue()) return `${head} Pick a list to see its day.`;
+    const moves = [...this.quotes.value().values()].filter((q) => q.change != null);
+    if (!moves.length) return `${head} No prices yet for ${list.name}.`;
+    const up = moves.filter((q) => (q.change ?? 0) > 0).length;
+    return `${head} In ${list.name}, ${up} of ${moves.length} rose in the last session.`;
+  });
 
   protected readonly newName = signal('');
   protected readonly newTickers = signal('');

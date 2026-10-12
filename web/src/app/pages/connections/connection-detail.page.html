@@ -1,14 +1,17 @@
-<app-page-header [title]="name()" [description]="description()" />
+<app-page-header
+  [title]="name()"
+  [description]="description()"
+  backPath="/connections"
+  backLabel="Broker connections"
+/>
 
-<p class="back"><a routerLink="/connections">All connections</a></p>
-
-<div class="page-grid">
+<div class="section-stack">
   <!-- Status ---------------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="status-title">
-    <div class="panel-head">
+  <section class="page-section" aria-labelledby="status-title">
+    <div class="section-head">
       <h2 id="status-title">Status</h2>
     </div>
-    <div class="panel-body">
+    <div>
       @if (connection.error(); as err) {
         <app-error-state
           title="Could not load this connection"
@@ -19,7 +22,7 @@
         <app-loading-state label="Loading the connection" [rows]="2" />
       } @else {
         @let c = connection.value();
-        <dl class="facts">
+        <dl class="facts summary-strip">
           <div>
             <dt>Status</dt>
             <dd><app-status-pill [status]="c.status" [label]="statusLabel[c.status]" /></dd>
@@ -128,11 +131,16 @@
   </section>
 
   <!-- Accounts -------------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="accounts-title">
-    <div class="panel-head">
-      <h2 id="accounts-title">Accounts</h2>
+  <section class="page-section" aria-labelledby="accounts-title">
+    <div class="section-head">
+      <h2 id="accounts-title">
+        Accounts
+        @if (accounts.hasValue()) {
+          <span class="count">{{ accounts.value().length }}</span>
+        }
+      </h2>
     </div>
-    <div class="panel-body">
+    <div class="section-body">
       @if (accounts.error(); as err) {
         <app-error-state
           title="Could not load the accounts"
@@ -143,6 +151,7 @@
         <app-loading-state label="Loading accounts" [rows]="2" />
       } @else if (accounts.value().length === 0) {
         <app-empty-state
+          icon="plug"
           title="No accounts found yet"
           message="Accounts appear here after the broker confirms the connection. Try Sync now."
         />

@@ -36,10 +36,10 @@ describe('shared states', () => {
     const { fixture, el } = render();
     const loading = el.querySelector('app-loading-state [role="status"]')!;
     expect(loading.getAttribute('aria-label')).toBe('Loading orders');
-    expect(loading.querySelectorAll('.bar')).toHaveLength(3);
+    expect(loading.querySelectorAll('.row')).toHaveLength(3);
     fixture.componentInstance.rows.set(6);
     fixture.detectChanges();
-    expect(loading.querySelectorAll('.bar')).toHaveLength(6);
+    expect(loading.querySelectorAll('.row')).toHaveLength(6);
   });
 
   it('empty: title, message and projected action', () => {

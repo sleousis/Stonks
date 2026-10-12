@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
   inject,
   resource,
@@ -48,6 +49,7 @@ export const ROLES: readonly { value: Role; label: string; help: string }[] = [
   ],
   templateUrl: './admin-users.page.html',
   styleUrl: './admin-users.page.scss',
+  host: { '(document:click)': 'closeMenu()' },
 })
 export class AdminUsersPage {
   private readonly api = inject(UsersService);
@@ -65,6 +67,62 @@ export class AdminUsersPage {
       : [],
   );
   protected readonly myId = computed(() => this.session.me()?.user_id ?? null);
+
+  /** One sentence from the list: how many people, by role, and who has no authenticator. */
+  protected readonly standfirst = computed(() => {
+    const list = this.sorted();
+    if (!list.length) return 'People with an account, their role and sign-in status.';
+    const count = (role: Role) => list.filter((u) => u.role === role).length;
+    const parts = ROLES.map((r) => [count(r.value), r.label.toLowerCase()] as const)
+      .filter(([n]) => n > 0)
+      .map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+    const people = list.length === 1 ? '1 person' : `${list.length} people`;
+    const unguarded = list.filter((u) => !u.mfa_enrolled).length;
+    const guard =
+      unguarded === 0
+        ? 'Everyone has an authenticator app.'
+        : `${unguarded} without an authenticator app.`;
+    return `${people}: ${parts.join(', ')}. ${guard}`;
+  });
+
+  // Row actions: one overflow panel open at a time --------------------------
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly menuFor = signal<string | null>(null);
+
+  protected toggleMenu(id: string, event: Event): void {
+    event.stopPropagation();
+    const opening = this.menuFor() !== id;
+    this.menuFor.set(opening ? id : null);
+    if (opening) {
+      // Move focus into the panel, to its first control.
+      queueMicrotask(() =>
+        this.host.nativeElement
+          .querySelector<HTMLElement>(
+            `#actions-${CSS.escape(id)} select, #actions-${CSS.escape(id)} button`,
+          )
+          ?.focus(),
+      );
+    }
+  }
+
+  /** Close the open panel; `refocus` puts focus back on its button (Escape). */
+  protected closeMenu(refocus = false): void {
+    const id = this.menuFor();
+    if (id === null) return;
+    this.menuFor.set(null);
+    if (refocus) {
+      this.host.nativeElement
+        .querySelector<HTMLElement>(`[aria-controls="actions-${CSS.escape(id)}"]`)
+        ?.focus();
+    }
+  }
+
+  protected initials(user: UserView): string {
+    const parts = user.display_name.trim().split(/\s+/).filter(Boolean);
+    const letters =
+      parts.length > 1 ? parts[0][0] + parts.at(-1)![0] : user.display_name.slice(0, 2);
+    return letters.toUpperCase() || '?';
+  }
 
   protected readonly showForm = signal(false);
   protected readonly creating = signal(false);

@@ -26,6 +26,7 @@ import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { Segmented } from '../../shared/ui/segmented';
 
 interface Fact {
   label: string;
@@ -48,6 +49,12 @@ const SECTION_WORDS: Record<SettingsSection, string> = {
   system: 'How the server is set up. Only admins see this.',
 };
 
+const THEME_WORDS: Record<ThemeMode, string> = {
+  system: 'The theme follows your system',
+  light: 'The theme is light',
+  dark: 'The theme is dark',
+};
+
 /**
  * Settings, one section at a time (M14): Display, Risk limits, and System
  * for admins. Sign-in, security and API tokens live on Profile, alert
@@ -65,6 +72,7 @@ const SECTION_WORDS: Record<SettingsSection, string> = {
     PageTabs,
     ModeStamp,
     StatusPill,
+    Segmented,
     LoadingState,
     ErrorState,
     EmptyState,
@@ -96,7 +104,21 @@ export class SettingsPage {
     const tab = this.tabParam();
     return this.sections().some((s) => s.id === tab) ? (tab as SettingsSection) : 'display';
   });
-  protected readonly description = computed(() => SECTION_WORDS[this.section()]);
+  /** One standfirst sentence, built from what the section shows when it can be. */
+  protected readonly description = computed(() => {
+    const section = this.section();
+    if (section === 'display') {
+      return `${THEME_WORDS[this.theme.mode()]}. Numbers, dates and shortcuts are below.`;
+    }
+    if (section === 'system' && this.broker.hasValue() && this.sources.hasValue()) {
+      const b = this.broker.value();
+      const kind = b.kind === 'alpaca' ? 'Alpaca' : 'Simulated';
+      const list = this.sources.value();
+      const ready = list.filter((s) => s.configured).length;
+      return `${kind} broker on a ${b.paper ? 'paper' : 'live'} account. ${ready} of ${list.length} data sources set up.`;
+    }
+    return SECTION_WORDS[section];
+  });
 
   protected pick(id: string | null): void {
     const section = (id ?? 'display') as SettingsSection;
@@ -113,7 +135,7 @@ export class SettingsPage {
   protected readonly assistantOff = inject(FeatureFlagsService).assistantOff;
 
   protected readonly themes: readonly { value: ThemeMode; label: string }[] = [
-    { value: 'system', label: 'Match the system' },
+    { value: 'system', label: 'System' },
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
   ];

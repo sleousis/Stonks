@@ -61,7 +61,7 @@ When the backend changes a route: `uv run python -m stonks.api.openapi` (writes
   client, so interceptors apply). Never edit it; ESLint and Prettier skip it.
 - TradingView Lightweight Charts, behind the `ChartEngine` seam.
 - `@angular/service-worker` for the app-shell cache and Web Push.
-- Public Sans, Archivo and IBM Plex Mono, self-hosted from `@fontsource` (see [Identity](#identity)).
+- Geist and Geist Mono, self-hosted variable woff2 files in `src/styles/fonts/` (see [Identity](#identity)).
 - Vitest (Angular's default runner) with jsdom; ESLint; Prettier.
 
 ## Folders
@@ -416,7 +416,7 @@ neighbourhood is bordered, with the plateau verdict above. On phones the
 table scrolls inside its own labelled box.
 
 The Lab's screens sit in one row of underline tabs (`pages/lab/lab-nav.ts`)
-that wrap onto two lines on phones: Test a strategy (`/lab`) and Lab history
+that scroll sideways in their own row on phones: Test a strategy (`/lab`) and Lab history
 (`/lab/ledger`), then **More tools**: Sweep (`/lab/sweeps`), Signal check
 (`/lab/signal-ic`), Factors (`/lab/factors`) and Research sessions
 (`/lab/research`). A sweep
@@ -517,7 +517,7 @@ from it. Tips close when the page scrolls.
 
 ### Command palette and shortcuts
 
-Ctrl+K / Cmd+K (or `/`, or the search button in the top bar and sidebar)
+Ctrl+K / Cmd+K (or `/`, or "Search or jump to" in the chrome bar)
 opens the palette: pages, actions, strategies, tickers and recent jobs.
 The shell registers pages and global actions in `shell/shell-commands.ts`.
 A page can add its own while it is open:
@@ -674,8 +674,8 @@ top of Settings, System. It reads `GET /api/settings/system` through
 |---|---|---|
 | Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
 | Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards (reads only, or reads and trades when you allow it), "When Stonks trades", connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
-| Trade costs | `/trades`, `/trades/orders/:clientId` | In the Advanced menu, under the Orders title and tabs: totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
-| Journal | `/journal`, `/journal/trades/:tradeId` | Found with Search (Ctrl K). Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
+| Trade costs | `/trades`, `/trades/orders/:clientId` | A tab of the Trade workspace with its own title: a summary strip of totals, the breakdown by strategy, ticker or portfolio beside a How to read this callout, the trade journal, and each order as a ticket with notes |
+| Journal | `/journal`, `/journal/trades/:tradeId` | A tab of the Trade workspace, its views as a tab row. Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
 | Sweep, Signal check | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Help | `/help/glossary` | How Stonks works in five short steps, then every term the help tips explain, with a Find a term box |
 
@@ -683,7 +683,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 
 | Page | Route | What it does |
 |---|---|---|
-| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
+| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one inbox row each (side tag, order, price, about, stamp), grouped by portfolio and run, with Approve, Reject and Approve all. **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
 
 - **Approve each trade** is the optional mode between Paper and
   Automatic in the follow control (Today and the strategy page). Turning it
@@ -719,7 +719,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 
 - **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
   unread count, read quietly every minute while the tab is visible and after
-  any mark-read. `<app-notification-bell>` sits in the top bar and sidebar.
+  any mark-read. `<app-notification-bell>` sits in the chrome bar.
   `<app-alerts-panel>` shows recent system alerts on Health. Alert settings
   (`/notifications/settings`) also take a webhook address under More
   channels (write-only, shown as scheme and host after saving).
@@ -742,13 +742,15 @@ top of Settings, System. It reads `GET /api/settings/system` through
   `portfolio.manage`.
 - **Trade costs.** Shortfall is the gap between the price when the order was
   decided and the price paid, fees included. Positive figures are costs.
-  The featured Total cost tile spans two columns so its figure is never
-  smaller than its neighbours'.
+  The totals are a summary strip, and the breakdown sits beside a callout
+  that explains shortfall and basis points.
   Orders and fills link to the order ticket. Notes need `portfolio.manage`.
 - **Journal.** A trade runs from the fill that opened it to the fill that
   closed it, and a partial exit is its own line. Views: Trades, Calendar,
-  Results and Playbooks. The calendar is a month grid, Monday first, with the
-  week's total at the end of each row. A review (tags, mistakes, playbook,
+  Results and Playbooks. The calendar is a month grid of radius 4 squares,
+  Monday first, tinted up soft or down soft by the day's realised P&L, with
+  the week's total at the end of each row and the months listed beside it.
+  Results group by filter pills, and playbooks show as chips. A review (tags, mistakes, playbook,
   followed or broke the plan, a note) needs `portfolio.manage`. See
   [the journal](journal.md).
 - **Order tickets.** `ConfirmService.confirm({ ticket: { lines, side, live } })`
@@ -848,6 +850,51 @@ flowchart LR
   there follow the strategy page (a reason, the go-live check, a hold to
   confirm).
 
+## Research pages: the layout
+
+The research pages follow the page pattern: a title with a standfirst built
+from the data, a summary strip, then sections on ink rules.
+
+- **Strategies** (`/strategies`). Actions: New strategy, Test a strategy,
+  Leaderboard. A summary strip (Approved, On trial, Best trial return, Worst
+  drop), filter pills with a count each (All, Approved, On trial, Retired,
+  filtered in the browser), a labelled search and a Refresh icon button.
+  Each row: the name and kind, a status chip, the trial return, a 60-day
+  trend line of its test book, the worst drop, days on trial beside a ring
+  (filling toward the 63 days the go-live check asks for by default), how
+  you follow it (Alerts only, Paper with a PAPER stamp, Approve each trade
+  or Automatic with LIVE only at a real-money portfolio), the date added and
+  a chevron. The whole row opens the strategy. Tablets drop the trend line,
+  date and chevron. Phones show list items: name and kind with the status
+  and the follow under it, the return and trend line on the right.
+- **Strategy page** (`/strategies/:id`). A back link to Strategies, the
+  status chip and the PAPER or LIVE stamp under the name, Test again and
+  Leaderboard beside the forward step. A summary strip (Trial return, Worst
+  drop, Days on trial, Go-live check), the status ladder as a stepper, then
+  the underline tabs. The verdict is the one callout, with each go-live check
+  as a row with a pass or fail glyph and its value.
+- **Build a strategy** (`/studio/:id`). Two panes from 1100px: the rules on
+  the left as field groups (indicators as numbered rows, condition groups as
+  an accent rule, no boxes) and a sticky Check column on the right (the
+  check on sample data, problems, and Show JSON for admins).
+- **Lab** (`/lab`). The form in a 440px column, the result and the jobs on
+  the right. Field groups on ink rules, starting points and test suites as
+  radio rows. On phones the run button stays at the bottom of the screen
+  above the bottom nav. Wide tables (Recent lab jobs, Lab history) have a
+  Columns menu instead of scrolling sideways, remembered in this browser.
+  Robustness tests are rows with a chip. The parameter heatmap mixes up and
+  down into the page colour.
+- **Trial results** (`/paper`). A summary strip, the comparison chart, and
+  the strategies with a trial-day meter (20 ticks toward the go-live days).
+- **Strategy review** (`/go-live`). A summary strip (Ready to approve, On
+  trial, Approved), the queue with the go-live check as a pass, fail or
+  warning chip, days on trial with a ring, and the broker in a side column.
+  Approving happens on the strategy's Review tab with a reason.
+- **Going live** (`/going-live`). The stage path as a horizontal stepper
+  (Simulated, Broker paper, Real money small, Real money full): the current
+  stage in accent, the real-money stages in brass. The steps are rows on an
+  ink rule.
+
 ## Judging a strategy (release polish)
 
 One strategy page judges a strategy, and the Leaderboard compares them.
@@ -912,7 +959,7 @@ flowchart LR
   S[GET /api/risk/snapshots] --> R
 ```
 
-- Both screens read the portfolio picked in the session strip (a synced
+- Both screens read the portfolio picked in the session rail (a synced
   broker account too) through `api/insights.service.ts` and
   `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows, Tax and
   Behaviour screens (Overview, Risk, Cash flows, Tax, Behaviour), as
@@ -1086,7 +1133,7 @@ drive paper portfolios too).
 
 | Page | Route | What it does |
 |---|---|---|
-| Intraday engine | `/live` | Each intraday engine: running or not, its market, the silent-engine alarm, the price stream, speed from bar close to decision and from decision to order, and steps that failed |
+| Intraday engine | `/live` | Each intraday engine: running or not and a standfirst built from the data, its status as a summary strip (market, last bar closed, bars closed, started, silent for), speed (latency in mono) beside the price stream, and steps that failed |
 
 - **Getting there.** System group, admins. The page reads `GET
   /api/stream/status` (`data.read`) every 15 seconds and on Refresh.
@@ -1101,7 +1148,7 @@ drive paper portfolios too).
 - **Speed.** Median and 95% upper estimates from the histograms, the
   slowest order and how many orders were measured. Nothing measured yet
   reads so.
-- **Intraday P&L.** A panel for P&L per portfolio. Until live marks exist
+- **Intraday P&L.** A section for P&L per portfolio: today's P&L as bars either side of zero (`role="img"` with a summary), then each portfolio's figures. Until live marks exist
   (21.3.3) it shows the API's note.
 - **No engine.** An empty state in an Engines panel says intraday
   trading is off (the default, and what turns it on), or that minute
@@ -1226,7 +1273,12 @@ flowchart LR
   `<app-setup-card>` shows on Today while `show` is true. Admins read
   `GET /api/onboarding/system` (`operations.run`): data source key, first
   data load, a backup on disk, a running scheduler, each with a link to fix it.
-  Profile links back to the guide.
+  Profile links back to the guide. The page is a checklist of big step
+  rows on hairlines: a state glyph (a check when done, the number when to
+  do, dashed when skipped, accent when open), the title, one sentence and
+  the state pill with a chevron. The open step shows its form in a sheet
+  under the row. The standfirst says "1 of 3 done. Next: follow a
+  strategy." There is no hero.
 - **Watchlists.** `WatchlistContextService` (`core/watchlists/`) holds your
   lists and the one picked as a filter, remembered per browser.
   `<app-watchlist-filter>` ("Show") sits in the Today and chart headers;
@@ -1263,7 +1315,7 @@ flowchart LR
   No PDF library runs on the server: WeasyPrint needs GTK libraries that do
   not install cleanly on Windows, and a headless browser would grow the
   Docker image a lot. The print stylesheet at the end of `styles.scss` keeps
-  only the content, on white, without navigation, the session strip, toasts
+  only the content, on white, without the chrome bar, the session rail, toasts
   or buttons, and keeps panels and table rows whole. A dark theme switches
   to light for the print and back, so charts print in ink colours. Add
   `.print-only` or `.print-hide` to show or hide a block on paper. The
@@ -1302,14 +1354,15 @@ flowchart LR
   T --> P[Place order] --> W[Your orders by hand: Change, Cancel]
 ```
 
-- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). Side and order type use `<app-segmented emphasis="strong">`: the picked option is a solid block, and a line under Side says "You are buying" or "You are selling" with the side tag (M13). **Review order** is the one step (PO-08): it calls `POST /api/orders/manual/preview`, where every halt and risk rule runs and nothing is placed, then opens the order ticket (`ConfirmService`, `ticket`) with any cut by the risk limits or a halt note. **Place order** on the ticket places it, **Cancel** sends nothing. A refusal reads in plain words (`order-refusal.ts`). A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
+- **Order ticket.** `pages/orders/manual-ticket.page.ts`. A side sheet on the right of your orders by hand (a bottom sheet first on phones), with the PAPER or LIVE stamp on top and a brass edge for real money. Side, ticker, quantity, market or limit, the trade plan and a reason (kept with the order). Side is a two-segment control: Buy turns green and Sell red when picked, and a line under it says "You are buying" or "You are selling" with the side tag (M13). Preview rows in mono say the order so far, and the confirm is brass (`btn-live`) on a LIVE portfolio, the primary otherwise. **Review order** is the one step (PO-08): it calls `POST /api/orders/manual/preview`, where every halt and risk rule runs and nothing is placed, then opens the order ticket (`ConfirmService`, `ticket`) with any cut by the risk limits or a halt note. **Place order** on the ticket places it, **Cancel** sends nothing. A refusal reads in plain words (`order-refusal.ts`). A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
 - **Refusals.** A 409 `order_refused` carries `risk_adjustments`. `refusalOf()` (`pages/orders/order-refusal.ts`) reads them from `ApiError.problem`, the whole problem body. `<app-order-refusal>` lists each rule with what it did ("Cuts 100 to 40", "Drops the order") and, when the rules allow a smaller order, offers **Accept a smaller order**, which sends `allow_reduce` and checks again. Preview, place and change are silent: the ticket shows the failure, so no toast repeats it.
 - **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
 - **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
 - **Suggested orders.** The Approvals page reads `GET /api/orders/drafts` once: pending ones under Waiting for you, the rest under History. `pages/tickets/suggested-orders.ts` shows them. **Approve** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the card, and the order turns rejected. **Reject** takes an optional note.
-- **Price alerts.** `<app-notifications-tabs>` links the Feed, Price alerts and Alert settings. The page says alerts check each day's closing price after the evening data update, not live prices. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
+- **Notifications.** `<app-notifications-tabs>` is an underline tab row: Inbox, Price alerts and Settings (the Alert settings page). The standfirst counts the unread items. Each inbox row has its category's glyph in a sunk squircle, the title and message, and the time with Mark read and Open on the right. Unread rows carry a 3px accent edge and the word Unread.
+- **Price alerts.** The page says alerts check each closing price in the evening. Alerts check each day's closing price after the evening data update, not live prices. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
 - **Telegram.** `<app-telegram-link>` (`pages/notifications/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing, and an admin also gets the next step (the operations guide's Telegram section).
-- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is its own page and the one home of every alert setting, the third tab of Notifications. Two groups, in this order: "Where alerts reach you" (`<app-telegram-link>` first, the main channel without a broker, then `<app-notification-settings>` (Push on this device), `<app-push-devices>` (Your devices), and More channels: Email and the webhook through `[only]="['webhook']"`), then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: Which alerts go where with a one-line hint per alert on wider screens and Send a test notification, upcoming events and economic releases with the countries folded, quiet hours, Briefings while the server has them on, and a Price alerts panel that links to the tab). The grid shows a column only for a channel that is set up: Push, Telegram once linked, Email and Webhook once added under More channels. The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings has no alerts section, and the Feed no longer carries the devices list.
+- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is its own page and the one home of every alert setting, the third tab of Notifications. Two groups, in this order: "Where alerts reach you" (`<app-telegram-link>` first, the main channel without a broker, then `<app-notification-settings>` (Push on this device), `<app-push-devices>` (Your devices), and More channels: Email and the webhook through `[only]="['webhook']"`), then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: Which alerts go where with a one-line hint per alert on wider screens and Send a test notification, upcoming events and economic releases with the countries folded, quiet hours, Briefings while the server has them on, and a Price alerts panel that links to the tab). The grid shows a column only for a channel that is set up: Push, Telegram once linked, Email and Webhook once added under More channels. The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings has no alerts section, and the Inbox no longer carries the devices list.
 - `<app-notification-prefs>` shows one titled panel per part (`[only]` picks some; all by default). The alert settings table scrolls inside its own box on phones.
 
 ## Calendar, news and the screener (20.7, 20.8)
@@ -1323,19 +1376,20 @@ flowchart LR
 flowchart LR
   S[Whose events: holdings, watchlist, tickers, everything] --> C[GET /api/calendars]
   S --> N[GET /api/calendars/news]
-  C --> T[Tabs: Earnings, Ex-dividend, Economic]
+  C --> T[Show: All, Earnings, Ex-dividend, Economic, Filings, grouped by day]
   N --> P[News tab: mood per ticker, newest articles]
   F[Screener form] --> R[POST /api/screener/run] --> M[Matches table]
   F --> V[Save screen] & U[Save as a universe: rule or snapshot]
 ```
 
 - **Needs a data plan.** Calendars, news, fundamentals and option chains come with a paid data plan. `GET /api/market/data-coverage` says which kinds the lake holds at all, and `<app-data-plan-note kind="...">` (`shared/ui/data-plan-note.ts`) says plainly when one is missing, instead of an empty page that looks broken. Traders read who can fix it; admins read what to do and get a link (Data, or the schedule for the calendar update). It renders nothing while the data is stored or unknown. The Calendar, the News tab, the screener's filters, the factor library and Options research show it. `provideFakeDataCoverage()` (`src/testing/fake-data-coverage.ts`) keeps specs free of the call.
-- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. The Filings tab lists the SEC current reports (8-K) in `CalendarView.filings`: when filed, the ticker, the form, what it announces in words (`filingItemsLabel()`, "Item 5.02" when the name is unknown) and "Open on SEC" in a new tab, over http or https only. The link is 44px tall on phones. Filings are past events and follow named companies, so the empty state says to pick an earlier From date, or a narrower scope than Everything. Pure helpers live in `calendar-view.ts`.
-- **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
+- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. Show picks All (the default: earnings, ex-dividend dates and economic releases together), one kind, Filings or News, and counts each. One kind (Earnings, Ex-dividend, Economic, Filings) can also show as a sortable table, 50 rows a page, through the View switch (Agenda or Table, remembered on the device). Events read as an agenda grouped by day (`groupByDay()` in `calendar-view.ts`): a sticky mono date row (Today, Tomorrow or Yesterday beside it), then one row per event with its time, a type chip (Earnings, Ex-dividend, Economic, Filing), the ticker or release, a meta line and its figures on the right. The filters sit in a 380px column on the right (first on phones and tablets). Countries shows on the All and Economic views. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. The Filings tab lists the SEC current reports (8-K) in `CalendarView.filings`: when filed, the ticker, the form, what it announces in words (`filingItemsLabel()`, "Item 5.02" when the name is unknown) and "Open on SEC" in a new tab, over http or https only. The link is 44px tall on phones. Filings are past events and follow named companies, so the empty state says to pick an earlier From date, or a narrower scope than Everything. Pure helpers live in `calendar-view.ts`.
+- **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a cell in a hairline strip (the 30-day score weighted by articles, in words, a shape and a signed number). Articles are rows: the age in mono on the left, the title, then the ticker tag, source and mood. They link out only over http or https, in a new tab.
 - **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
-- **Event alerts.** Alert settings has an Upcoming events row in the channel grid (where they reach you) and an Upcoming events panel with one switch per kind (earnings, dividends, economic releases) plus the economic release importance and countries. A kind switched off sends nothing, not even to the Feed.
+- **Event alerts.** Alert settings has an Upcoming events row in the channel grid (where they reach you) and an Upcoming events panel with one switch per kind (earnings, dividends, economic releases) plus the economic release importance and countries. A kind switched off sends nothing, not even to the Inbox.
 - **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
-- **Saved screens.** Your screens list sits beside the form. Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
+- **Layout.** The builder is a 320px column on the left with the matches and screen alerts on the right (stacked on phones, the builder first). Screen alerts are rows: the screen and its state on the left, the When select on the right, and the new names found as ticker tags.
+- **Saved screens.** Your screens are filter pills above the builder, the open one filled with ink. A pill opens the screen ("Open <name>") and its small cross deletes it ("Delete <name>"). Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
 - **Save as a universe.** `<app-save-universe-sheet>` asks for a name and a short name (the universe id), then the members: Re-run the screen (rule mode, from a start date, weekly, monthly or quarterly) or Today's matches (snapshot mode, with the survivorship warning). An unchanged saved screen goes by its id, so the universe follows it. The call is silent and a refusal shows in the sheet. The page then shows the saved universe and the server's warnings.
 - `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
 - `provideFakeCalendars()` (`src/testing/fake-calendars.ts`) keeps specs of pages that embed a calendar piece free of calendar calls.
@@ -1347,8 +1401,8 @@ flowchart LR
 | Demo portfolio | `/demo` | Open, look around in and remove a sample book of made-up holdings and prices |
 | Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, or read a DEGIRO export with its preset, preview, import and undo |
 
-- **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. The eye button in the top bar and the sidebar, the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
-- **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. Get set up (Open the demo portfolio) and the setup card on Today (See a demo) link to it.
+- **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. Hide money amounts in the account menu (and the More sheet on phones), the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
+- **Demo portfolio.** `pages/demo/demo.page.ts`. A band with the PAPER stamp says Sample data above the value, the curve and the facts. The instruments end in `.DEMO`. Get set up (Open the demo portfolio) and the setup card on Today (See a demo) link to it.
 - **Screen alerts.** `<app-screen-alerts>` (`pages/screener/screen-alerts.ts`) sits under Your screens. A When select per screen turns an alert on (Daily, or Weekly on a weekday), Remove asks first, and the newest finds list below. The Screen alerts row in the notification settings decides where alerts reach you.
 - **CSV import.** `pages/connections/statement-import.page.ts`, linked from Broker connections. The first Preview sends no mapping and fills the column selects from the server's guess. Preview and import are silent calls, and a refusal shows under the buttons. Pure helpers live in `statement-mapping.ts`.
 - **Broker exports (DEGIRO).** What file is it? on the import page picks a broker export (`GET /api/statement-imports/presets`), Find out from the headers (the default), or Another broker: I map the columns (`preset: none`). A preset reads the columns itself, so the mapping panel stays hidden, and the preview says Read as DEGIRO Transactions, Dutch, with notes on what it left out. A holdings export (DEGIRO Portfolio) asks the day of the export. `?preset=degiro_transactions` opens the page with that export chosen (router input binding). Broker connections shows `<app-broker-exports-panel>` (`broker-exports-panel.ts`): each broker read from its exports, marked Reads only, with a link per export and where to find it. DEGIRO is never offered as a connection. See [DEGIRO](design/degiro.md).
@@ -1369,7 +1423,7 @@ flowchart LR
 
 - **Research note.** The page opens with "Research only, nothing trades options." No order, paper portfolio or real-money portfolio uses anything on it. With no chains stored it shows the data-plan note.
 - **Plain names.** Options strategies show their names in words (`optionsStrategyName`), pricing models by name ("Barone-Adesi Whaley (American)", `pricingModelName`), and chain columns keep short forms in capitals ("Call IV"). IV, delta, gamma, theta, vega and open interest carry glossary tips.
-- **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. The table is `<app-data-table>` with the strike as the card title on phones. With both sides, phone cards keep bid, ask and delta of each. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
+- **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. A dense table with calls and puts mirrored around the strike column (calls read outward from the strike), in-the-money cells shaded in accent soft and the underlying's price marked between two strikes. Phones keep bid, ask and delta each side. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
 - **Payoff.** Pick a structure from `GET /api/options/structures`. Its fields follow the parameters it reads (days to expiry, delta, long leg, short leg or wing delta). `<app-payoff-diagram>` (`payoff-diagram.ts`) draws the profit at expiry in SVG: the line, gain and loss shaded on either side of zero, today's price dashed. The cost, max loss, max gain ("Unlimited" when there is no bound) and breakevens sit above it and the legs below. The SVG has `role="img"` and a one sentence summary. A payoff the chain cannot supply shows inline with Retry.
 - **Strategies.** Each options strategy with its structures and hypothesis.
 - **Backtest.** `<app-options-backtest>` (`options-backtest.ts`) fills the underlying and window from the first stored underlying. Strategy parameters use `<app-param-form>`. It needs `lab.run` (a permission note otherwise), runs as a job followed with `JobFollower`, and shows return, Sharpe, drawdown, fills, the equity chart and each validation check with the verdict. On generated chains it says the result is never evidence.
@@ -1447,7 +1501,7 @@ flowchart LR
 | `FeatureFlagsService` | `core/features/` | Hide a page whose feature is off (the assistant) |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
-| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Three tabs that fit a phone: Orders, New order and Fills. Rebalance is a header button, See trading runs a link above the list, Trade costs sits in the Advanced menu and Journal is found with Search |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Three tabs that fit a phone: Orders, New order and Fills. Rebalance is a header button, See trading runs a link above the list, status filters are pills, and Trade costs and Journal are tabs of the Trade workspace |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few. `emphasis="strong"` fills the picked option solid, for Buy or Sell and the order type on the manual ticket |
 | `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
 | `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |
@@ -1474,7 +1528,7 @@ fills in a form that ends in a 403. The server still decides.
   prints "Admins only." and renders nothing when allowed.
   `route-permissions.gen.ts` supplies the permission names, and
   `permissions.spec.ts` fails if a route's permission has no rule.
-- The sidebar shows the user's name and role.
+- The account menu behind the avatar shows the user's name and role.
 
 ## Portfolio picker
 
@@ -1487,9 +1541,9 @@ s, ... up to a minute), and `load(true)` always starts a new read, so a
 network blip never hides the LIVE stamp for the session. `PortfolioService`,
 `OrdersService` and `TcaService` add `portfolio_id` from it. Pages put
 `portfolioCtx.selectedId()` in their resource params so a new pick reloads
-them. `<app-portfolio-picker>` sits in the session strip with a PAPER or
-LIVE stamp, and shows only with two or more portfolios, one option per
-portfolio.
+them. `<app-portfolio-picker>` starts the session rail: the portfolio's
+PAPER or LIVE stamp and its name, with a native select over it when there
+are two or more portfolios (one option per portfolio).
 
 A money page puts `bookState(ctx) === 'ready' ? {...} : undefined` in its
 resource params and renders `<app-no-book>` (`shared/ui/no-book.ts`) when
@@ -1631,145 +1685,213 @@ which admins also see without a single recipient.
 
 ## Identity
 
-The console should read as a trading desk, not an admin template. Three rules,
-layered, apply to every page and shared component:
-
-1. **The trading day is the spine.** `<app-session-strip>` sits on top of
-   every page: the market phase (pre-open, open, closed) with a track from
-   pre-open to the close, the next **trading run** with a live countdown
-   (never a system job; admins get a quiet "Then Broker sync 14:00" when
-   one comes first), and **Stop trading**. It reads `GET /api/schedule`
-   (`market`, `jobs`) once through `TradingDayService`, whose `runsPassed`
-   goes up just after each trading run starts: Today lists it as an
-   `autoRefresh` trigger, so the blotter, tape and value reload by
-   themselves. The strip turns red for a kill switch (the rail gets a red
-   edge too) and amber for a breaker. Home is **Today**: a blotter of the next run, trading runs and
-   signals in time order, a tape of the latest fills, the portfolio and my
-   strategies.
-2. **Tape and ticket.** Every price, quantity, date and time is set in the
-   mono figure face (`.num`, and the figure columns of the data table). Sides
-   are `<app-side-tag>`: a solid B and an outlined S. Money confirmations are
-   order tickets (`.ticket`, `.ticket-lines`) with an `<app-mode-stamp>`.
-3. **Brass means real money.** `--color-live` (brass) is used only for real
-   money: a live portfolio's headline figure and frame (`.live-frame`,
-   `<app-stat-tile featured live>`), the LIVE stamp, the live equity line
-   and the ring around the kill switch. Paper and research stay in cool
-   greys and blues (`--color-paper`, `--color-accent`, `--color-primary`).
-   Use `PortfolioContextService.live()` to decide.
+The console is a daily trading tool with a calm pro look: an ink chrome bar
+across the top, flat surfaces, one cobalt accent, Geist for the interface
+and Geist Mono for every figure. No cards: a section is a title on a 2px
+ink rule, with 1px hairlines between its rows.
 
 ```mermaid
-flowchart LR
-  S[Session strip on every page] --> T[Today: blotter, tape, portfolio, strategies]
-  T --> K[Tickets and stamps for money actions]
-  K --> B{Real money?}
-  B -->|yes| Br[Brass: figure, frame, LIVE, kill ring]
-  B -->|no| C[Cool greys and blues]
+flowchart TB
+  C[Chrome bar: brand, workspace, tabs, search, bell, theme, avatar] --> R[Session rail: portfolio and stamp, session, day spine, next run, Stop trading]
+  R --> H{Trading halted?}
+  H -->|yes| B[Rail turns red, halt band with Resume]
+  H -->|no| P[Page: title, standfirst, sections on ink rules]
 ```
 
-**Brand mark.** The favicon's rising line (`<app-brand-mark>`) is the loading
-indicator (it draws itself), the empty-state mark (still) and the error mark
-(it turns down). It also leads the wordmark in the rail and on sign-in.
+**What stays from before (the anchors).**
 
-**States are moments.** `<app-loading-state>` shows the drawing mark and the
-label. `<app-empty-state>` shows the mark, a title in the display face, one
-line on what fills the space, and one action in its content slot.
-`<app-error-state>` shows the broken mark, the API's message and Try again.
+1. **PAPER or LIVE stamp** wherever money mode matters (`<app-mode-stamp>`):
+   a dashed PAPER, a solid brass LIVE, a muted READ ONLY. `size="sm"` in rows.
+2. **Brass means real money**, nothing else: the LIVE stamp, live equity
+   figures (`<app-stat-tile live>`, `.brass`), the live confirm button
+   (`.btn-live`) and the ring on Stop trading for a live book. Warnings are
+   orange (`--warn`), never brass. Use `PortfolioContextService.live()`.
+3. **Mono tabular figures** for every price, quantity, percent, time and
+   countdown (`.num`).
+4. **B and S side tags** (`<app-side-tag>`): a green B, a red S.
+5. **The session state is always in the rail.** While trading is halted the
+   rail turns red, a halt band says why with Resume, and the session chip
+   reads Halted beside the market's own state (Market open).
 
-**Stop trading** (UX-01) is one tap from any page, on phones too, once the
-person has something that trades (see the session strip above): the
-strip's red-outlined button (with the brass ring when the book is live)
-opens `<app-kill-sheet>`, a full-screen sheet on phones that is its own
-ticket: scope preset to the portfolio on screen ("All your portfolios"
-always, "Every portfolio" with `killswitch.global`), All new orders or
-Stop new buys only, a reason filled in and editable, and the stamp. After
-it the strip is red at once and the button becomes Resume, with Review
-halts next to it (real money keeps the typed RESUME TRADING and a fresh
-code).
-The palette's "Stop trading" and the Halts page's "Stop trading…" open
+### The shell
+
+- **Chrome bar** (56px, ink in both themes, sticky): the brand, the
+  workspace switcher, the workspace's page tabs (the current one with a 3px
+  accent underline that slides), "Search or jump to" (Ctrl K, an icon below
+  1440px), the bell, the theme button and the avatar.
+- **Workspaces** (`workspace` on each `NavItem` in `shell/nav-items.ts`):
+  Trade (your day, orders and positions), Research (find, build and test
+  strategies), Portfolio (your money, risk and the road to live), System
+  (admins) and Account (the avatar menu). The active workspace is the one
+  that holds the page on screen. The switcher (`app-workspace-menu`) opens a
+  2x2 sheet with every workspace and links to its pages. `NavState`
+  (`shell/nav.ts`) holds the visible pages, the active item and the badges.
+- **Session rail** (`<app-session-strip>`, 48px): the portfolio switcher
+  with its stamp, the session chip (Market closed, Pre-market, Market open,
+  After hours, Halted), the day spine over the local 24 hours (desktop only,
+  `<app-day-spine>`: pre and post market hatched, regular hours green, Now,
+  the next run as a diamond), the next trading run with its countdown, and
+  Stop trading. It reads `GET /api/schedule` through `TradingDayService`.
+- **Account menu** (`app-account-menu`, the avatar): Profile, Settings,
+  Broker connections, Get set up, Help, the theme (System, Light, Dark),
+  Hide money amounts and Sign out.
+- **Phones** (under 768px): the chrome bar keeps the brand mark, the
+  workspace button, search, the bell, the theme and the avatar. Only the bar
+  stays pinned: the rail scrolls away with the page, and while trading is
+  halted the bar keeps a red edge. The rail wraps: the portfolio and a red
+  Stop, then the session and run chips. Halted, the session chip still says
+  the market's state beside the red Halted. A
+  bottom nav (`app-bottom-nav`: Today, Strategies, Orders, Charts, More)
+  replaces the tabs, and More opens a full-height sheet with every page, the
+  account pages, the theme and Sign out.
+
+**Stop trading** (UX-01) is one tap from any page once the person has
+something that trades. It opens `<app-kill-sheet>`, its own ticket: scope
+preset to the portfolio on screen, All new orders or Stop new buys only, a
+reason and the stamp. The palette's "Stop trading" and the Halts page open
 the same sheet (`StopTradingService`). Viewers never see it.
 
-**Every real-money moment is a ticket.** Approving a strategy (`goLiveTicket()`:
-strategy, following portfolios, broker, PAPER or LIVE, and the name typed
-when real money moves), turning auto on or back on (step-up first, then
-the ticket), a trading run from the runner or Schedule (`tickTicket()`:
-a paper run is worded as a paper run, with the primary button, and only a
-real-money run is red), Stop trading and Resume (`killTicket()`,
-`ConfirmTicket.kind`), and
-disconnecting a broker (each linked portfolio with its mode, the provider
-typed).
+**Every real-money moment is a ticket** (`.ticket`, `.ticket-lines`, with a
+stamp): approving a strategy, turning auto on, a trading run, Stop trading
+and Resume, disconnecting a broker.
 
-**Status differs by form** (`<app-status-pill>`, `pillForm()`): a lifecycle
-state is a round `lamp` pill (active, shadow, retired), an outcome is a
-square `receipt` tag with a tick or cross (passed, filled, failed), work in
-progress is the drawing mark (queued, running), and a stop is a solid
-`alarm` block (halted, unhealthy). A live portfolio or broker uses the LIVE
-stamp, never a pill.
+### Page pattern
 
-**Motion.** Only three things move without being asked: the headline figure
-counts up (`countUp()`, `--dur-count`), the countdowns tick, and the fills
-tape scrolls once it is full (paused on hover or focus). All three stop
-under `prefers-reduced-motion`, and the tape then scrolls by hand.
+Some pages put it together like this. Insights has a summary strip, the money as a split bar plus a table, returns and risk as mono fact rows in a 380px side column, look-through as a table and the behaviour report as a summary strip, a What stands out callout and rows. Charts open on the last close as a headline figure, then one toolbar row (ticker search, range, what to draw) and the chart at full width with no box. Watchlists are an underline tab row, each list a table of last close, day change and a 60-day sparkline (`shared/chart/sparkline.ts`, shared with Today and Strategies) with the new-list form in a side column. Universes have a summary strip and kind pills over the table, and a detail page with a facts strip and membership history first. Data opens on a summary of the last update and a warning band when updates had failed tickers, with Update data, Refresh and Universes in the header.
 
-**The rail.** The sidebar, the phone top bar and the drawer are a slate slab
-in both themes (`--color-rail*`). Inside it the colour tokens are remapped
-(`rail-scope` in `shell.scss`), so components placed there need no rules of
-their own.
 
-Tokens (`styles/_tokens.scss`), always via `var(--…)`. Light and dark each
-define every colour.
+- **Header** (`app-page-header`): the H1 (34px, 26 on phones), actions on
+  the right (one primary, then secondary, then ghost), and one standfirst
+  sentence under it (`description`, 15px), built from data when it can be.
+  No eyebrow, no breadcrumbs. A sub-page passes `backPath` and `backLabel`
+  for a small back link above the H1.
+- **Summary strip** (`.summary-strip` holding `app-stat-tile` cells): 3 to 4
+  cells under a 2px ink rule, 1px rules between, no boxes. A 2x2 grid on
+  phones.
+- **Sections** (`.page-section` or `.panel`): `.section-head` (or
+  `.panel-head`) with an h2 (17px), an optional `.count` and a
+  `.text-link` action, on a 2px ink rule. Rows below carry 1px rules.
+  Stack them in `.section-stack` (40px apart). Two-column bodies: `.cols`
+  (content plus 380px) or `.cols-facts` (content plus 320px), one column
+  below 1100px.
+- **The only three boxes:** the sheet (`.sheet-box`, dialogs, menus, the
+  ticket), the callout (`.callout`, a plain-English note on `--sunk`) and the
+  band (`.band`, a one-time prompt in accent soft). `.callout` with
+  `data-tone="warn"` or `"loss"` (or `.band-warn`, `.band-error`) is the
+  warning or error band with a 3px edge. Never nest boxes.
+- **Tables** (`app-data-table`): a 36px header in 12px muted text, 52px
+  rows, hover in `--sunk`, figures right-aligned in mono. On phones each row
+  is a list item of at most three lines: `mobile: 'title'` for the name,
+  `'figure'` for the key figure on the right (a second one muted under it),
+  `'inline'` for meta under the name, `'hide'` to drop. Every other column
+  joins one muted meta line, its label inline before the value.
+  `.table` styles a plain table the same way, `.row-list` a list of rows and
+  `dl.fact-list` label and value pairs.
+- **Controls:** `.btn` (secondary), `.btn-primary`, `.btn-ghost`
+  (`.btn-tertiary` is the older name), `.btn-link`, `.btn-danger` (outlined,
+  filled inside a dialog or with `.btn-danger-fill`), `.btn-live` (brass,
+  real money only), `.btn-compact` (32px in rows), `.btn-icon`. Fields:
+  `.field` (label above, `.hint`, `.error`), `.input`, `.check`,
+  `fieldset.group` (a 2px ink rule and a 15px title), `.form-grid`
+  (`.form-grid-2` from 1024px). `app-segmented` (a sunk track, the picked
+  option raised in accent; `emphasis="strong"` fills it with ink),
+  `.switch-control`, `.filter-pills` with `.filter-pill` (`aria-pressed`
+  picks it), `.count-badge`, `.ticker-tag`, `kbd`.
+- **Status** (`app-status-pill`): a 22px pill with a glyph. Approved and
+  passed in green with a check, on trial in accent with a clock, retired
+  muted with a dash, warnings orange, failures red with a cross, work in
+  progress with a turning ring, a halt solid red.
+- **States** (`states.ts`): empty is left-aligned with a 40px sunk squircle,
+  a title, one sentence and one action. Loading is skeleton rows in the
+  final shape. An error is the error band with the plain sentence and Try
+  again.
+- **Figures:** `.num` everywhere, `.stat-figure` (22px), `.headline-figure`
+  (52px, 40 on phones, wrap cents in `.minor`), `.figure` (older, mono, no
+  size).
+- **Charts:** the equity area is a 2px accent line over a 16% to 0 fill with
+  dotted gridlines and mono axes. Live portfolios draw in brass.
+
+**System and account pages.** These follow the pattern with a few shapes of
+their own:
+
+- **Settings and Profile:** a sticky 220px list of sections on the left from
+  1024px, an underline tab row (Settings) or a row of jump links (Profile)
+  on smaller screens. Settings shows one section at a time
+  (`/settings?tab=risk`). Profile keeps every section on the page and marks
+  the one in view. Security and new tokens are rows: what it is on the
+  left, the control on the right. A one-time secret sits in a callout.
+  System settings fold into groups on a 2px ink rule, fields in two
+  columns from 1024px, and the save bar is a sheet pinned to the foot.
+- **Users:** a table with a squircle avatar, role chips (admin in ink,
+  trader in accent, viewer quiet) and a "⋯" button per row that opens the
+  role select and the row actions (reset password, reset authenticator,
+  disable). Escape closes it. On phones each person is a list item.
+- **Broker connections:** your connections are link rows with a chevron,
+  the brokers are rows with a letter mark, what they give and Connect on the
+  right. API keys are typed in a side sheet from the right edge (full screen
+  on phones). The detail page shows its state as a summary strip.
+- **Halts:** each active halt is a row on a red edge with its way out
+  (Resume trading through the existing typed confirm, or Clear). Past
+  halts stay a table.
+- **Schedule:** a summary strip (scheduler, jobs, next run, failed of the
+  last runs) above the jobs, recent runs and backups.
+- **Health:** the verdict band, a summary strip, then the system checks as a
+  strip of cells with state chips, then one section per area.
+- **Help:** search on top, the five sentences as a numbered strip, then a
+  two-column glossary (the term left, what it means right), one column on
+  phones.
+- **Assistant:** the conversations on the left, a chat column of 760px at
+  most. Your turns sit right on a sunk bubble, answers are flat on the page,
+  tool steps are callouts and a write it wants to run is a sheet. A drafted
+  order says it is approved on Approvals with a fresh code.
+
+**Motion.** Short and purposeful: hover and press 150ms, menus 160ms (scale
+and fade), a page enters in 320ms (fade and a 6px rise), the tab underline
+slides (transform only), the headline figure counts up, countdowns tick.
+Everything stops under `prefers-reduced-motion`.
+
+**Empty states.** `<app-empty-state>` takes an `icon` (`chart`, `orders`,
+`inbox`, `check`, `search`, `plug`, `pause`, `doc`) for what would fill the
+space, and `tone="good"` for all-clear news ("Trading is not halted", "No
+failed trading runs"), which tints the glyph green.
+
+**Tab rows.** The workspace tabs and `<app-page-tabs>` fade an edge only
+while tabs hide past it. The workspace row also shows a small arrow on that
+edge to scroll it, and centres the current tab. On an account page
+(Profile, Settings, Notifications, Get set up, Help) the row shows those
+pages and the switcher reads Account.
+
+### Tokens
+
+Tokens live in `styles/_tokens.scss`, always used via `var(--…)`. Light
+and dark each define every colour. The older `--color-*` names are gone.
+A few `--radius-*` and type aliases remain, and new code uses the new names.
 
 | Group | Tokens |
 |---|---|
-| Colour | `--color-bg`, `-surface`, `-surface-2`, `-surface-3`, `-border`, `-border-strong`, `-control-border`, `-ink`, `-ink-2`, `-ink-3`. `--color-primary` (research blue, a filled button with `-primary-ink` text and `-primary-hover`), `--color-link` (text links, readable in both themes), `--color-accent` (markers). `--color-live`, `-live-ink`, `-live-soft` (brass, real money only). `--color-paper`, `-paper-soft`. `--color-gain`, `-loss`, `-warn`, `-info`, each with `-soft`. `--color-loss-ink` (text on a loss fill). `--color-focus`, `--color-scrim`. `--color-hover` (ink at 4%) and `--color-pressed` (ink at 8%) for hover and press. `--color-rail`, `-rail-2`, `-rail-ink`, `-rail-ink-2`, `-rail-accent`. `--color-brass` stays as an alias of `--color-live`. |
-| Type | `--font-sans` (Public Sans, body), `--font-display` (Archivo at `--display-stretch` 76%: page titles, headline figures, empty-state titles, stamps), `--font-mono` (IBM Plex Mono for figures, at `--mono-scale`). `--text-xs` 12, `sm` 13, `md` 14, `panel` 15 (panel titles), `lg` 16, `xl` 20, `stat` 24 (stat values), `2xl` 26, `title` 30 (26 on phones), `figure` 44 (36 on phones). `--weight-*`, `--leading-*`, `--tracking-display`, `--tracking-display-sm` (display text under 24px), `--tracking-overline`, `--tracking-stamp` |
-| Space | `--space-1`…`--space-8` = 4, 8, 12, 16, 24, 32, 48, 64 px. `--gutter` (24px, 16px on phones) |
-| Radius | `--radius-xs` 2 (tags, stamps, tickets), `-sm` 5 (controls, wells, callouts), `-md` 8 (panels, tables), `-lg` 12 (dialogs, drawer, palette, toasts), `-pill` (lifecycle status only). Pages never use a literal radius |
-| Border | `--border-live` 3px (real money), `--border-rule` |
-| Elevation | Panels are flat: a 1px hairline and no shadow (`--shadow-1` is none). `--shadow-overlay` (one tinted shadow for the palette, dialogs, sheets, toasts and the drawer, `--shadow-2` is its older name), `--shadow-ticket`, `--ring-live` |
-| Layers | `--z-sticky`, `--z-drawer`, `--z-overlay`, `--z-toast`, `--z-skip`. No other z-index values |
-| Motion | `--dur-fast` 120ms, `--dur` 200ms, `--dur-slow` 420ms, `--dur-count` 700ms, `--tape-speed`, `--ease`, `--ease-out`. Durations are 0 under reduced motion |
-| Size | `--control-h` 32, `--touch-min` 44, `--row-h` 34, `--row-h-2` 40 (two-line rows), `--sidebar-w` 224, `--strip-h` 40 |
+| Surfaces | `--bg` (page), `--sunk` (wells, hover rows, segmented track, callouts), `--raise` (inputs, sheets, menus), `--rule` (hairlines), `--rule-strong` (2px section rules), `--rule-control` (3:1 field edges) |
+| Ink | `--ink`, `--ink-2`, `--muted` |
+| Accent | `--accent` (you or Stonks acting: primary buttons, current tab, picked option, the portfolio curve), `--accent-soft`, `--accent-line`, `--on-accent` |
+| Meaning | `--up`, `--down`, `--warn` (orange), each with `-soft`. `--on-down`. `--brass` (text) and `--brass-fill` with `--on-brass`, `--brass-soft`: real money only. `--halt`, `--halt-band`, `--halt-rule`, `--on-halt`, `--on-halt-muted` |
+| Chrome | `--chrome`, `--chrome-2`, `--chrome-rule`, `--chrome-ink`, `--chrome-muted`, `--chrome-accent`, `--chrome-stop`, `--chrome-stop-line` |
+| Type | `--font-sans` (Geist), `--font-mono` (Geist Mono). `--text-2xs` 11 (stamps), `xs` 12, `sm` 12.5, `md` 13.5 (cells), `body` 14, `lead` 15 (standfirst), `section` 17, `stat` 22, `title` 34 (26 on phones), `figure` 52 (40 on phones). `--weight-regular` 400, `medium` 500, `label` 550, `semibold` 600, `bold` 650, `title` 680. `--tracking-title`, `-section`, `-figure`, `-stamp` |
+| Space | `--space-1`…`--space-10` = 4, 8, 12, 16, 20, 24, 32, 40, 48, 64. `--gutter` 32 (24 tablet, 16 phone), `--section-gap` 40 (28 phone), `--column-gap` 56 |
+| Radius | `--r-stamp` 3, `--r-tag` 4 (side and ticker tags, checkboxes), `--r-ctl` 6 (buttons, inputs, segmented), `--r-sheet` 10 (sheets, menus, dialogs, bands, callouts, palette), `--r-avatar` 10, `--r-pill` (chips, pills, switch, badges). Sections and tables are square |
+| Size | `--control-h` 36, `--control-h-compact` 32, `--input-h` 40 (44 on phones), `--touch-min` 44, `--row-h` 52, `--row-h-2` 60, `--chrome-h` 56, `--rail-h` 48, `--bottom-nav-h` 64, `--content-max` 1440 |
+| Elevation | Flat. `--shadow-overlay` on overlays only |
+| Layers | `--z-sticky` 20, `--z-menu` 40, `--z-sheet` 60, `--z-palette` 70, `--z-toast` 80, `--z-skip` 90 |
+| Motion | `--ease-out`, `--dur-fast` 150ms, `--dur-menu` 160ms, `--dur-page` 320ms, `--dur-count` 700ms. All 0 under reduced motion |
 
-Fonts are self-hosted from npm (`@fontsource-variable/public-sans`,
-`@fontsource-variable/archivo` with its width axis, `@fontsource/ibm-plex-mono`),
-so they work offline and under the API's content policy. Each has a fallback
-stack (Arial Narrow and Roboto Condensed for the display face, the system
-monospace for figures).
+Fonts are self-hosted variable woff2 files in `web/src/styles/fonts/`
+(Geist and Geist Mono, Latin and Latin Extended, OFL in `GEIST-OFL.txt`),
+declared in `styles.scss`, so they work offline and under the content
+policy.
 
-Global primitives (`styles.scss`):
-
-- Buttons: `.btn` (secondary, outlined), `.btn-primary` (filled blue, one per
-  action row), `.btn-tertiary` (a quiet text action, `.btn-ghost` is the older
-  name), `.btn-danger` (filled loss), `.btn-icon`. A press moves the button
-  down 1px. A disabled button fades and gets a dashed edge.
-- Fields: `.field` / `.input` / `.check` / `.hint` / `.error`, `fieldset.group`
-  (a group of fields under an overline), `.form-grid` (+ `.form-grid-2`).
-- Surfaces: three tiers only. The page, `.panel` (`.panel-head`, `.panel-body`,
-  `.panel-flush` when the body is a table) and `.well` (a borderless inset
-  group inside a panel). A panel never holds a bordered card.
-- `.callout` with `data-tone` `info`, `warn`, `loss`, `gain` or `neutral`: a
-  note with a 2px rule on the left (`.callout-title` for its heading). There
-  is no live tone: brass stays for frames that hold real money.
-- Grids: `.page-grid` with `.span-4…12`, `.tile-grid` (tiles that fill the
-  row, never an orphan on phones, `.featured` spans two), `.stat-strip` (stat
-  tiles inside a panel, a hairline between them).
-- Type: `.num`, `.figure`, `.display`, `.display-sm` (display face under
-  24px), `.overline` (the one small uppercase label), `.prose` (70ch measure).
-- Links: `.table-link` (ink, underline on hover, as links in table cells
-  are), `.touch-link` (a 44px hit box on an inline link without changing
-  the line).
-- `.ticket`, `.live-frame`, `.gain`, `.loss`, `.muted`, `.visually-hidden`.
-
-Reusable components: `app-page-header`, `app-page-tabs` (`variant="sub"` for
-a second tab row), `app-stat-tile` (`featured` for the one
-headline figure, `live`, `amount` with `format` to count up, and `bare`
-for a tile in a `.stat-strip`), `app-segmented`,
-`app-status-pill`, `app-side-tag`, `app-mode-stamp`, `app-brand-mark`,
-`app-data-table` (a column with `wrap: true` wraps long text),
-`app-loading-state`, `app-empty-state` (`compact` when it is a panel's only
-content), `app-error-state`,
-`app-time-series-chart`, `app-session-strip`. The shell hosts
-`app-confirm-dialog` and `app-toast-outlet`.
+Global styles are partials under `web/src/styles/`: `_base.scss` (type,
+figures, global states), `_controls.scss` (buttons, fields, pills),
+`_tables.scss`, `_sections.scss` (sections, strips, the three boxes,
+tickets) and `_chrome.scss` (the chrome bar, the rail, the bottom nav).
+Shared looks go there, so component styles stay small.
 
 ## Mobile and responsive rules
 
@@ -1777,19 +1899,20 @@ The console must work on phones (360–430px) as well as tablets and desktops.
 
 | Breakpoint | Width | Layout |
 |---|---|---|
-| phone | < 768px | Top bar with menu button opening the nav drawer; one column; 16px gutter; tables become cards; dialogs are full-screen sheets |
-| tablet | 768–1099px | Sidebar nav; single-column page grid; two-column tiles and forms |
-| desktop | ≥ 1100px | Sidebar nav; 12-column `.page-grid` |
+| phone | < 768px | Chrome bar without tabs, the wrapped session rail and a bottom nav with a More sheet; one column; 16px gutter; table rows become list items; dialogs are full-screen sheets |
+| tablet | 768–1099px | Chrome bar with tabs and a search icon; no day spine; one-column bodies |
+| desktop | ≥ 1100px | The day spine; two-column bodies (`.cols`) and the 12-column `.page-grid`. From 1440px the full search field |
 
 Use the mixins (`@use 'breakpoints' as bp;` then `@include bp.phone { … }`,
-`bp.from-tablet`, `bp.from-desktop`, `bp.coarse`) and write phone styles first.
+`bp.from-tablet`, `bp.below-desktop`, `bp.from-desktop`, `bp.below-wide`,
+`bp.below-xwide`, `bp.from-wide`, `bp.coarse`) and write phone styles first.
 
 - **No horizontal page scroll.** Wide content scrolls inside its own box
   (the data table does this on tablets). Use `min-width: 0` on grid and flex
   children that hold tables or charts.
-- **Tables:** under 768px each row is a card. Mark the key column
-  `mobile: 'title'`, keep ticker / quantity / value / P&L / status visible, and
-  mark secondary columns `mobile: 'hide'`. Sorting headers are hidden on phones,
+- **Tables:** under 768px each row is a list item. Mark the key column
+  `mobile: 'title'`, the key figure `mobile: 'figure'`, meta `mobile: 'inline'`,
+  and secondary columns `mobile: 'hide'`. Sorting headers are hidden on phones,
   so set a sensible `initialSort`.
 - **Charts** size to their container (plot height is 80% on phones); the legend
   shows values at the crosshair (tap and hold), and vertical swipes scroll the
@@ -1799,8 +1922,9 @@ Use the mixins (`@use 'breakpoints' as bp;` then `@include bp.phone { … }`,
   `--touch-min`). No hover-only information: anything in a hover state must
   also be visible or reachable by tap and keyboard.
 - **Dialogs** (confirm) become full-screen sheets with the actions at the
-  bottom; the nav drawer is a modal `<dialog>`.
-- **Safe areas:** the top bar, main padding, drawer, sheets and toasts add
+  bottom; the More sheet is a modal `<dialog>`. Content clears the bottom nav
+  (`--bottom-nav-h` plus the safe area).
+- **Safe areas:** the chrome bar, main padding, bottom nav, sheets and toasts add
   `env(safe-area-inset-*)`; do the same for anything fixed to a screen edge.
 - **Tiles and headers wrap:** stat tiles size their figure to the tile width
   (container queries); page header actions wrap under the title.
@@ -1810,9 +1934,6 @@ Checked by hand in Chromium (Playwright) at 375×812, 390×844, 820×1000 and
 1440×900 in both themes, with `scrollWidth === clientWidth` (no sideways
 scroll) and every visible button and link at least 44px tall on phones:
 
-| Phone, light (375) | Phone, dark (390) | Nav drawer (390) |
-|---|---|---|
-| ![](img/ui-dashboard-phone-375.png) | ![](img/ui-dashboard-phone-390-dark.png) | ![](img/ui-nav-drawer-390.png) |
 
 Repeat the check for every new page. Playwright smoke tests (WP 5.4) will
 automate it.
@@ -1836,24 +1957,27 @@ automate it.
   next to its name. Pages and actions a user may not
   use are hidden from the palette, the shortcuts and the cheat sheet. Single-key shortcuts can
   be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.
-  Escape closes dialogs and the drawer.
+  Escape closes dialogs, the workspace menu, the account menu and the More sheet.
 - Status is text plus shape (`app-status-pill`), never colour alone; signed
   numbers carry `+`/`-`.
 - Loading regions use `role="status"`, errors `role="alert"`. Each toast is
   its own live region (alert for errors, status otherwise). The table
   announces sort changes.
 - Colour pairs meet WCAG AA (4.5:1 text, 3:1 focus and UI) in both themes.
-  Checked for every text token on `bg`, `surface`, `surface-2`, `surface-3`
-  and each `-soft` background: all at least 4.5:1. Brass (`--color-live`)
+  Checked for every text token on `bg`, `raise`, `sunk` and `rule`
+  and each `-soft` background: all at least 4.5:1. Brass (`--brass`)
   is at least 4.5:1 on surfaces in both themes, so the LIVE stamp and a
-  live headline figure can be text. Text fields use `--color-control-border` (at least 3:1); buttons are
-  identified by their label, so they keep `--color-border-strong`.
+  live headline figure can be text. Text fields use `--rule-control` (at least 3:1); buttons are
+  identified by their label, so they keep `--rule-control` too.
 - Targets: 44px on phones and coarse pointers, at least 24px elsewhere (WCAG
   2.2, 2.5.8), including the help tip, whose button itself grows to 44px
-  there (negative margins keep the line height). On phones the sticky top bar never
-  hides the focused element (`scroll-padding-top`, 2.4.11), and fields use
+  there (negative margins keep the line height). The sticky chrome bar and rail never
+  hide the focused element (`scroll-padding-top`, 2.4.11): the shell measures
+  the pinned header (the halt band included) into `--header-h`, which
+  `scroll-padding-top` and every sticky `top` use. Fields use
   16px text so iOS does not zoom.
-- Motion is limited to the drawer slide, toast rise, the loading mark, the
+- Motion is limited to hover and press, menus and sheets opening, the page
+  rise, the tab underline, toast rise, the loading shimmer, the
   headline count-up, the countdowns and the fills tape, all off under
   `prefers-reduced-motion` (a global rule also stops any stray
   animation or transition). Forced-colours mode keeps the focus ring.
@@ -1895,8 +2019,9 @@ What keeps it there:
   inlining is off: its loader is an inline script the policy would block.
 - The command palette, shortcut sheet, step-up prompt and kill sheet are
   `@defer`red until first use (the kill sheet on idle).
-- The display face is Archivo cut to its one width and Latin only
-  (`src/styles/fonts/`, 30 kB instead of 90 kB).
+- Geist (28 kB) and Geist Mono (31 kB) load as Latin variable files; the
+  Latin Extended files (15 and 13 kB) load only for pages that need them
+  (`unicode-range`).
 - Nothing jumps as data arrives: the strip holds its phase and trading run
   slots until the schedule is read (`TradingDayService.settled`), Today's
   blotter waits for it too, the setup card holds its place while the guide
@@ -1946,7 +2071,7 @@ flowchart LR
   The nav scrolls between the search box and the account menu, with a
   shadow at an edge while there is more to scroll to, so the account menu
   never falls below the fold. A trader never gets a link to an admin-only
-  page: the session strip's next run opens Today (admins: the schedule), and a
+  page: the session rail's next run opens Today (admins: the schedule), and a
   trader resumes their own kill switch or clears their own breaker from the
   strip (`<app-strip-halt-actions>`), with the same ticket, typed words and
   code as the Halts page. A halt only an admin may end says so. The palette
@@ -1988,26 +2113,61 @@ flowchart LR
   a Copy button (`<app-copy-button>`, which says so when the clipboard is
   blocked). Recovery codes also offer "Download .txt". The alerts step
   moves on only once push is really on, and says why otherwise.
-- **Today** (`pages/home/`): my portfolio for everyone (value, the day's
-  change, biggest holdings). Admins get the totals across traders under it,
-  never holdings, or one quiet line while there are too few traders with
-  real money to sum. A tape of the latest session's fills, today's signals
-  and trading runs in one time line with the next run on top (the feed's
-  `signal` items and the runs from the last 24 hours). A run line counts
-  only the orders and fills in the reader's own portfolios, as the API
-  scopes them (`ownRunCounts()`). When the counts are null it says only
-  "Trading run finished". Runs that traded nothing in your portfolios fold
-  into one line, such as "8 trading runs finished, nothing for you"
-  (`pages/home/signals-card.ts`). A signal row says what to do and when,
-  and a signal you follow on Alerts only says nothing traded. Its status reads Done, Partly done or Failed
-  (`shared/status-words.ts`). My strategies: one `<app-follow-control>` per
-  follow (the Following or Paused switch and the modes), the same control as the strategy page, the portfolio it trades when
-  there are several, and "Your paper days: 4 of 20." The unlock rule is said
-  once above the list. Approve each trade and Automatic stay hidden until the
-  broker portfolio, the paper days and the server's other checks pass, then ask for the step-up
-  and a ticket. Automatic asks for the strategy's name as shown, never its
-  id. The left column flows on its own (the last grid row is
-  flexible), so a tall strategies list never leaves a gap beside it.
+- **Today** (`pages/home/`), the reference layout of the console. The H1
+  greets the trader ("Hello, Ann", or "Today" with no name), and the
+  standfirst opens with the long date, then a sentence built from data
+  ("Monday 12 October. Your paper portfolio rose 0.37% today. The next run
+  is at 22:45.", `standfirst()` in `home.page.ts`). Then, in this order:
+  1. The setup band (`setup-card.ts`) while first-run steps are left: "Get
+     set up", "2 of 3 done" in mono, the next step, a three-segment progress
+     line, Continue setup, See a demo and Hide.
+  2. The overview (`portfolio-card.ts`): My portfolio with its stamp and
+     Details, the value as the one 52px mono figure (cents muted), the last
+     session's change as a pill and a percent, the return since the start,
+     a range picker (1W, 1M, 3M, 1Y, All) and the value curve
+     (`equity-area.ts`, brass for a live portfolio). Beside it, a 320px facts
+     column: Cash, Invested, Open orders, Worst drop, and the paper-days
+     meter (one tick per day, accent when done) for the furthest follow.
+     Admins get the totals across traders under it, never holdings, or one
+     quiet line while there are too few traders with real money to sum.
+  3. The fills tape (`fills-tape.ts`): one row between hairlines, "Fills"
+     and a count badge, each fill of the latest session (side tag, ticker,
+     quantity at price, time) with thin rules between and a fade on the
+     right. It scrolls inside itself. On a phone it lists the first four.
+  4. Two columns (`.cols`): Strategies I follow (`strategies-card.ts`) and
+     Holdings (`holdings-section.ts`, weight bars without a track) on the
+     left, Signals and runs (`signals-card.ts`, a timeline with mono times on
+     a 1px rail, the next run as an accent ring, ticker tags) and Market
+     breadth (a split bar, four figures, a callout reading them) on the
+     right.
+  The sections share their reads through `HomeStore` (`home-store.ts`,
+  provided by the page), so the portfolio, orders and follows are each asked
+  for once. A strategy row shows the name, its paper return and the last 30
+  days as a sparkline (from the strategy's model book, `/api/shadow/pnl`),
+  then `<app-follow-control>` (the modes and the Following switch on the same
+  row from desktop). A run line counts only the orders and fills in the
+  reader's own portfolios, as the API scopes them (`ownRunCounts()`). Runs
+  that traded nothing in your portfolios fold into one line, such as "8
+  trading runs finished, nothing for you". Status words read Done, Partly
+  done or Failed (`shared/status-words.ts`). The unlock rule is said once
+  under the list. Approve each trade and Automatic stay hidden until the
+  broker portfolio, the paper days and the server's other checks pass, then
+  ask for the step-up and a ticket. Automatic asks for the strategy's name as
+  shown, never its id. On a phone the order is setup, portfolio, facts,
+  fills, strategies, holdings, signals, breadth.
+- **Dashboard** (admins, `pages/dashboard/`): a standfirst from the checks
+  and strategy counts ("All 12 checks passed. 4 approved, 2 on trial."), a
+  summary strip (value, cash, positions, drawdown, strategies), then the
+  value and drawdown chart and the positions on the left, and Health (the
+  passed count as a mono figure, one row per check) and the recent trading
+  runs on the right.
+- **Sign-in** (`pages/login/`): a centred 400px sheet on the page
+  background with the brand mark above it and no app chrome. The password,
+  the code (or setting up the app, or a recovery code) and the recovery
+  codes are steps in the same sheet, with Password and Code marked over the
+  heading.
+- **Not found and No access**: the page header with a standfirst and the
+  empty state with one action, Go to Today.
 - **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
   strategy on trial or approved has a Follow panel. Pick "Alerts only"
   (notify, which needs no portfolio and reads "No portfolio" once you

@@ -19,7 +19,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { ToastService } from '../../core/notify/toast.service';
-import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
+import { autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { AlertsPanel } from '../../shared/ui/alerts-panel';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -75,7 +75,6 @@ const RECENT_FAILURES = 10;
     ReconcilePanel,
     PriceCheckPanel,
     PermissionNote,
-    UpdatedAgo,
   ],
   templateUrl: './health.page.html',
   styleUrl: './health.page.scss',
@@ -126,6 +125,7 @@ export class HealthPage {
 
   protected readonly levelTone = LEVEL_TONE;
   protected readonly levelLabel = LEVEL_LABEL;
+  /** How urgent the overall state is, beside the headline (old health.page.html:46). */
   protected readonly levelUrgency = LEVEL_URGENCY;
   protected readonly checkTitle = checkTitle;
   protected readonly checkMeaning = checkMeaning;
@@ -152,20 +152,23 @@ export class HealthPage {
   protected readonly counts = computed(() => {
     const checks = this.report.hasValue() ? this.report.value().checks : [];
     const levels = checks.map(checkLevel);
+    // Passed for lack of data ("Not run yet", "Not enough data yet") is not a pass.
+    const idle = checks.filter((c) => c.ok && checkPill(c).tone === 'neutral').length;
     return {
       total: levels.length,
       critical: levels.filter((l) => l === 'critical').length,
       warning: levels.filter((l) => l === 'warning').length,
+      idle,
     };
   });
 
   protected readonly headline = computed(() => {
-    const { total, critical, warning } = this.counts();
+    const { total, critical, warning, idle } = this.counts();
     if (total === 0) return 'No checks ran';
-    if (!critical && !warning)
-      return total === 1 ? 'The check passed' : `All ${total} checks passed`;
     const failed = critical + warning;
-    return `${failed} of ${total} ${total === 1 ? 'check' : 'checks'} failed`;
+    if (failed) return `${failed} of ${total} ${total === 1 ? 'check' : 'checks'} failed`;
+    if (idle) return `${total - idle} passed, ${idle} not run yet`;
+    return total === 1 ? 'The check passed' : `All ${total} checks passed`;
   });
 
   protected readonly advice = computed(() => {

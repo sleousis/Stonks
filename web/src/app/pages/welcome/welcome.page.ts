@@ -138,6 +138,16 @@ export class WelcomePage {
   protected readonly progress = computed(() =>
     this.guide.hasValue() ? progressText(this.guide.value().steps) : '',
   );
+  /** "1 of 3 done. Next: follow a strategy." from the guide, else what the page is for. */
+  protected readonly standfirst = computed(() => {
+    if (!this.guide.hasValue()) return 'A few plain steps to your first signals.';
+    const view = this.guide.value();
+    if (this.complete()) return `${this.progress()}. Signals show on Today after each run.`;
+    const next = currentStep(view);
+    return next
+      ? `${this.progress()}. Next: ${STEP_COPY[next].title.toLowerCase()}.`
+      : `${this.progress()}.`;
+  });
   protected readonly busy = signal<string | null>(null);
 
   // ---- form state -------------------------------------------------------------

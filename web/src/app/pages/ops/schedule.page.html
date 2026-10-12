@@ -1,7 +1,4 @@
-<app-page-header
-  title="Schedule and backups"
-  description="When each job runs, how recent runs ended, and backups of the system's data."
->
+<app-page-header title="Schedule and backups" [description]="standfirst()">
   <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
@@ -15,11 +12,41 @@
   </button>
 </app-page-header>
 
-<div class="page-grid">
+<div class="section-stack">
+  <!-- Summary: the scheduler, the jobs, the next run and recent failures -->
+  @if (schedule.hasValue()) {
+    <div class="summary-strip" aria-label="Schedule summary" role="group">
+      <app-stat-tile
+        label="Scheduler"
+        [value]="scheduler()?.running ? 'Running' : 'Stopped'"
+        [detailTone]="scheduler()?.running ? 'gain' : 'loss'"
+        [help]="false"
+      />
+      <app-stat-tile label="Jobs" [value]="jobRows().length + ''" [help]="false" />
+      <app-stat-tile
+        label="Next run"
+        [value]="nextJob() ? untilNext(nextJob()!.next_run_at) : 'None planned'"
+        [detail]="nextJob() ? jobName(nextJob()!) : null"
+        [help]="false"
+      />
+      <app-stat-tile
+        label="Failed of last runs"
+        [value]="failedRecent() + ' of ' + schedule.value().recent.length"
+        [detailTone]="failedRecent() ? 'loss' : ''"
+        [help]="false"
+      />
+    </div>
+  }
+
   <!-- Jobs ------------------------------------------------------------------>
-  <section class="panel span-12" aria-labelledby="jobs-title">
-    <div class="panel-head">
-      <h2 id="jobs-title">Scheduled jobs</h2>
+  <section class="page-section" aria-labelledby="jobs-title">
+    <div class="section-head">
+      <h2 id="jobs-title">
+        Scheduled jobs
+        @if (schedule.hasValue()) {
+          <span class="count">{{ jobRows().length }}</span>
+        }
+      </h2>
     </div>
     @if (scheduler(); as s) {
       <p
@@ -88,7 +115,7 @@
         <ng-template appCell="run" [appCellOf]="jobRows()" let-j>
           <button
             type="button"
-            class="btn btn-tertiary btn-run"
+            class="btn btn-ghost btn-run"
             [disabled]="running() === j.name"
             [attr.aria-busy]="running() === j.name"
             [attr.aria-label]="'Run now: ' + jobName(j)"
@@ -118,12 +145,17 @@
   </section>
 
   <!-- Recent runs ----------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="runs-title">
-    <div class="panel-head">
-      <h2 id="runs-title">Recent runs</h2>
+  <section class="page-section" aria-labelledby="runs-title">
+    <div class="section-head">
+      <h2 id="runs-title">
+        Recent runs
+        @if (schedule.hasValue()) {
+          <span class="count">{{ schedule.value().recent.length }}</span>
+        }
+      </h2>
     </div>
     @if (schedule.error()) {
-      <p class="panel-body muted">Recent runs show once the schedule loads.</p>
+      <p class="muted section-note">Recent runs show once the schedule loads.</p>
     } @else if (!schedule.hasValue()) {
       <app-loading-state label="Loading recent runs" [rows]="4" />
     } @else if (schedule.value().recent.length === 0) {
@@ -161,9 +193,14 @@
   </section>
 
   <!-- Backups --------------------------------------------------------------->
-  <section class="panel span-12 backups" aria-labelledby="backups-title">
-    <div class="panel-head">
-      <h2 id="backups-title">Backups</h2>
+  <section class="page-section backups" aria-labelledby="backups-title">
+    <div class="section-head">
+      <h2 id="backups-title">
+        Backups
+        @if (backups.hasValue()) {
+          <span class="count">{{ backupRows().length }}</span>
+        }
+      </h2>
       <div class="head-action">
         <button
           type="button"

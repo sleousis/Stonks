@@ -108,6 +108,8 @@ interface BlotterRow {
   link: string | null;
   unread: boolean;
   status: { status: string; label: string } | null;
+  /** The ticker a signal names, shown as a tag. */
+  ticker?: string | null;
 }
 
 /**
@@ -120,32 +122,41 @@ interface BlotterRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, LoadingState, EmptyState, ErrorState, StatusPill],
   template: `
-    <section class="panel" aria-labelledby="home-signals">
-      <div class="panel-head">
-        <h2 id="home-signals">Today's signals and runs</h2>
-        @if (unread().length) {
-          <button
-            type="button"
-            class="btn btn-tertiary"
-            [disabled]="marking()"
-            (click)="markRead()"
-          >
-            Mark all read
-          </button>
-        }
-      </div>
+    <section class="page-section" aria-labelledby="home-signals">
+      <header class="section-head">
+        <h2 id="home-signals">Signals and runs</h2>
+        <span class="head-links">
+          @if (unread().length) {
+            <button
+              type="button"
+              class="btn btn-ghost btn-compact"
+              [disabled]="marking()"
+              (click)="markRead()"
+            >
+              Mark all read
+            </button>
+          }
+          <a routerLink="/notifications" class="text-link">All signals</a>
+        </span>
+      </header>
       @if (feed.error(); as err) {
-        <app-error-state title="Could not load signals" [error]="err" (retry)="feed.reload()" />
+        <div class="section-body">
+          <app-error-state title="Could not load signals" [error]="err" (retry)="feed.reload()" />
+        </div>
       } @else if (!feed.hasValue() || !day.settled()) {
         <!-- Waits for the schedule too, so the next run does not push the list down. -->
-        <app-loading-state label="Loading signals" [rows]="3" />
+        <div class="section-body">
+          <app-loading-state label="Loading signals" [rows]="3" />
+        </div>
       } @else if (rows().length === 0 && !next()) {
-        <app-empty-state
-          title="No signals today"
-          message="Signals from the strategies you follow show here after each daily run."
-        >
-          <a routerLink="/strategies" class="btn">Find strategies to follow</a>
-        </app-empty-state>
+        <div class="section-body">
+          <app-empty-state
+            title="No signals today"
+            message="Signals from the strategies you follow show here after each daily run."
+          >
+            <a routerLink="/strategies" class="btn">Find strategies to follow</a>
+          </app-empty-state>
+        </div>
       } @else {
         <ol class="blotter">
           @if (next(); as n) {
@@ -181,10 +192,13 @@ interface BlotterRow {
                 @if (r.message) {
                   <p class="message">{{ r.message }}</p>
                 }
+                @if (r.ticker; as t) {
+                  <span class="ticker-tag">{{ t }}</span>
+                }
+                @if (r.status; as st) {
+                  <app-status-pill class="status" [status]="st.status" [label]="st.label" />
+                }
               </div>
-              @if (r.status; as st) {
-                <app-status-pill class="status" [status]="st.status" [label]="st.label" />
-              }
             </li>
           }
           @if (signals().length > shownLimit) {
@@ -212,137 +226,131 @@ interface BlotterRow {
       display: block;
       min-width: 0;
     }
+    .head-links {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    /* A timeline: mono times on the left, a 1px rail with 8px nodes. */
     .blotter {
       display: grid;
       margin: 0;
-      padding: var(--space-2) var(--space-4) var(--space-3);
+      padding: var(--space-4) 0 0;
       list-style: none;
     }
     .row {
       position: relative;
       display: grid;
-      grid-template-columns: 3.25rem 14px minmax(0, 1fr) auto;
-      gap: 0 var(--space-3);
+      grid-template-columns: 4.25rem 8px minmax(0, 1fr);
+      gap: 0 var(--space-4);
       align-items: start;
-      padding: var(--space-2) 0;
+      padding-bottom: var(--space-5);
     }
-    /* The spine: a rule down the node column joins the day's events. */
     .row::before {
       content: '';
       position: absolute;
       top: 0;
       bottom: 0;
-      left: calc(3.25rem + var(--space-3) + 6px);
-      width: 2px;
-      background: var(--color-border);
+      left: calc(4.25rem + var(--space-4) + 3.5px);
+      width: 1px;
+      background: var(--rule);
     }
     .row:first-child::before {
-      top: 1.1rem;
+      top: 8px;
     }
     .row:last-child::before {
-      bottom: calc(100% - 1.1rem);
+      bottom: calc(100% - 8px);
+    }
+    .row:last-child {
+      padding-bottom: 0;
     }
     .weekday {
-      display: block;
+      margin-right: 4px;
     }
     .time {
       padding-top: 2px;
-      color: var(--color-ink-3);
-      text-align: right;
+      color: var(--muted);
+      font-size: var(--text-xs);
+      white-space: nowrap;
     }
     .node {
       position: relative;
       z-index: 1;
-      width: 14px;
-      height: 14px;
-      margin-top: 3px;
-      border: 2px solid var(--color-ink-3);
-      border-radius: var(--radius-xs);
-      background: var(--color-surface);
-    }
-    .row[data-kind='signal'] .node {
-      border-color: var(--color-accent);
-      transform: rotate(45deg) scale(0.8);
-    }
-    .row.unread .node {
-      background: var(--color-accent);
-    }
-    .row[data-kind='run'] .node {
-      border-color: var(--color-ink);
-      background: var(--color-ink);
-    }
-    .next .node {
-      border-style: dashed;
-      border-radius: 50%;
-      border-color: var(--color-accent);
-    }
-    .next .title {
-      color: var(--color-accent);
-    }
-    .quiet .node {
       width: 8px;
       height: 8px;
-      margin: 7px 3px 0;
-      border-width: 0;
-      background: var(--color-border-strong);
+      margin-top: 6px;
       border-radius: 50%;
+      background: var(--ink-2);
+      box-shadow: 0 0 0 3px var(--bg);
+    }
+    .row[data-kind='signal'] .node {
+      background: var(--bg);
+      box-shadow:
+        inset 0 0 0 1.5px var(--accent),
+        0 0 0 3px var(--bg);
+    }
+    .row.unread .node {
+      background: var(--accent);
+    }
+    /* The next run: an accent ring. */
+    .next .node {
+      background: var(--bg);
+      box-shadow:
+        inset 0 0 0 2px var(--accent),
+        0 0 0 3px var(--bg);
+    }
+    .next .title {
+      color: var(--accent);
+    }
+    .quiet .node,
+    .more .node {
+      background: var(--rule-control);
     }
     .text {
+      display: grid;
+      justify-items: start;
+      gap: 2px;
       min-width: 0;
     }
     .title {
       display: inline-flex;
       align-items: center;
-      min-height: 24px;
+      min-height: 20px;
+      font-size: var(--text-md);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
-    /* A 44px target that still lays out as one 24px line (FR-23). */
+    /* A 44px target that still lays out as one 20px line (FR-23). */
     a.title {
       min-height: var(--touch-min);
-      margin-block: calc((24px - var(--touch-min)) / 2);
-    }
-    .more a.title {
-      font-weight: var(--weight-medium);
-    }
-    /* The whole row is the link's target (44px at least). */
-    .row:has(a.title) {
-      min-height: var(--touch-min);
+      margin-block: calc((20px - var(--touch-min)) / 2);
+      color: var(--ink);
+      text-decoration: none;
     }
     a.title::after {
       content: '';
       position: absolute;
       inset: 0;
     }
-    /* Blotter titles read as names to open: ink, underlined on hover or focus. */
-    a.title {
-      color: var(--color-ink);
-      text-decoration: none;
-    }
     a.title:hover,
     a.title:focus-visible {
       text-decoration: underline;
     }
     .more a.title {
-      color: var(--color-link);
+      color: var(--accent);
+      font-weight: var(--weight-medium);
+    }
+    .row:has(a.title) {
+      min-height: var(--touch-min);
     }
     .message {
-      color: var(--color-ink-2);
+      color: var(--muted);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
+    .ticker-tag,
     .status {
-      margin-top: 2px;
-    }
-    @media (max-width: 767.98px) {
-      .row {
-        grid-template-columns: 3.25rem 14px minmax(0, 1fr);
-      }
-      .status {
-        grid-column: 3;
-        justify-self: start;
-        margin-top: var(--space-1);
-      }
+      margin-top: var(--space-1);
     }
   `,
 })
@@ -400,6 +408,7 @@ export class SignalsCard {
       link: appLink(s.deep_link),
       unread: !s.read_at,
       status: null,
+      ticker: signalTicker(s.title),
     }));
     const today = todaysRuns(this.ticks.hasValue() ? this.ticks.value() : []);
     const runs: BlotterRow[] = today.filter(runIsOwnRow).map((r) => ({

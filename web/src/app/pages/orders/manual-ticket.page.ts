@@ -153,12 +153,19 @@ export function orderLines(
   ],
   template: `
     <div class="layout">
-      <section class="panel" aria-labelledby="ticket-form-title">
-        <div class="panel-head">
-          <h2 id="ticket-form-title">New order</h2>
+      <!-- The ticket: a side sheet on the right (a bottom sheet on phones). -->
+      <section
+        class="ticket-sheet"
+        [class.live]="live()"
+        [attr.data-side]="sideField()"
+        aria-labelledby="ticket-form-title"
+      >
+        <header class="sheet-head">
           <app-mode-stamp [live]="live()" />
-        </div>
-        <form class="panel-body form" novalidate (submit)="$event.preventDefault(); place()">
+          <h2 id="ticket-form-title">New order</h2>
+          <span class="book">{{ portfolioName() }}</span>
+        </header>
+        <form class="form" novalidate (submit)="$event.preventDefault(); place()">
           <p class="lead">
             Trades in <strong>{{ portfolioName() }}</strong
             >. It goes through the same halts and risk limits as a strategy's order.
@@ -167,28 +174,10 @@ export function orderLines(
             }
           </p>
 
-          <div class="field">
-            <label for="mo-ticker">Ticker</label>
-            <input
-              id="mo-ticker"
-              class="input"
-              autocomplete="off"
-              autocapitalize="characters"
-              placeholder="AAPL.US"
-              [value]="tickerField()"
-              [attr.aria-invalid]="!!errors().ticker"
-              [attr.aria-describedby]="errors().ticker ? 'mo-ticker-error' : null"
-              (input)="edit(tickerField, $any($event.target).value.toUpperCase())"
-            />
-            @if (errors().ticker; as e) {
-              <span id="mo-ticker-error" class="hint error">{{ e }}</span>
-            }
-          </div>
-          <app-earnings-warning [ticker]="tickerField()" />
-
-          <div class="field">
+          <div class="field side-field">
             <span class="label">Side</span>
             <app-segmented
+              class="side-seg"
               label="Side"
               emphasis="strong"
               [options]="sides"
@@ -201,30 +190,49 @@ export function orderLines(
             </span>
           </div>
 
-          <div class="field">
-            <label for="mo-qty">Quantity</label>
-            <input
-              id="mo-qty"
-              class="input num"
-              type="number"
-              inputmode="decimal"
-              min="0"
-              step="any"
-              [value]="quantity()"
-              [attr.aria-invalid]="!!errors().quantity"
-              [attr.aria-describedby]="errors().quantity ? 'mo-qty-error' : null"
-              (input)="edit(quantity, $any($event.target).value)"
-            />
-            @if (errors().quantity; as e) {
-              <span id="mo-qty-error" class="hint error">{{ e }}</span>
-            }
+          <div class="pair">
+            <div class="field">
+              <label for="mo-ticker">Ticker</label>
+              <input
+                id="mo-ticker"
+                class="input ticker-input"
+                autocomplete="off"
+                autocapitalize="characters"
+                placeholder="AAPL.US"
+                [value]="tickerField()"
+                [attr.aria-invalid]="!!errors().ticker"
+                [attr.aria-describedby]="errors().ticker ? 'mo-ticker-error' : null"
+                (input)="edit(tickerField, $any($event.target).value.toUpperCase())"
+              />
+              @if (errors().ticker; as e) {
+                <span id="mo-ticker-error" class="hint error">{{ e }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="mo-qty">Quantity</label>
+              <input
+                id="mo-qty"
+                class="input num"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="any"
+                [value]="quantity()"
+                [attr.aria-invalid]="!!errors().quantity"
+                [attr.aria-describedby]="errors().quantity ? 'mo-qty-error' : null"
+                (input)="edit(quantity, $any($event.target).value)"
+              />
+              @if (errors().quantity; as e) {
+                <span id="mo-qty-error" class="hint error">{{ e }}</span>
+              }
+            </div>
           </div>
+          <app-earnings-warning [ticker]="tickerField()" />
 
           <div class="field">
             <span class="label">Order type</span>
             <app-segmented
               label="Order type"
-              emphasis="strong"
               [options]="types"
               [value]="orderType()"
               (valueChange)="edit(orderType, $any($event))"
@@ -257,9 +265,9 @@ export function orderLines(
             </div>
           }
 
-          <fieldset class="plan well">
-            <legend class="overline">Trade plan <span class="optional">(optional)</span></legend>
-            <div class="plan-grid">
+          <fieldset class="plan">
+            <legend>Trade plan <span class="optional">Optional</span></legend>
+            <div class="pair">
               <div class="field">
                 <label for="mo-stop">Stop</label>
                 <input
@@ -274,17 +282,6 @@ export function orderLines(
                   [attr.aria-describedby]="errors().stop ? 'mo-stop-error' : 'mo-stop-hint'"
                   (input)="edit(stop, $any($event.target).value)"
                 />
-                @if (errors().stop; as e) {
-                  <span id="mo-stop-error" class="hint error">{{ e }}</span>
-                } @else {
-                  <span id="mo-stop-hint" class="hint">
-                    @if (live()) {
-                      Your broker gets a stop order once the entry fills.
-                    } @else {
-                      Paper does not sell at your stop. It sets the size and goes in your journal.
-                    }
-                  </span>
-                }
               </div>
               <div class="field">
                 <label for="mo-target">Target</label>
@@ -300,11 +297,22 @@ export function orderLines(
                   [attr.aria-describedby]="errors().target ? 'mo-target-error' : null"
                   (input)="edit(target, $any($event.target).value)"
                 />
-                @if (errors().target; as e) {
-                  <span id="mo-target-error" class="hint error">{{ e }}</span>
-                }
               </div>
             </div>
+            @if (errors().stop; as e) {
+              <span id="mo-stop-error" class="hint error">{{ e }}</span>
+            } @else {
+              <span id="mo-stop-hint" class="hint">
+                @if (live()) {
+                  Your broker gets a stop order once the entry fills.
+                } @else {
+                  Paper does not sell at your stop. It sets the size and goes in your journal.
+                }
+              </span>
+            }
+            @if (errors().target; as e) {
+              <span id="mo-target-error" class="hint error">{{ e }}</span>
+            }
             <div class="field">
               <span class="label">Size from risk</span>
               <app-segmented
@@ -366,136 +374,241 @@ export function orderLines(
             }
           </div>
 
+          <!-- What the ticket says so far, in mono rows. -->
+          <dl class="preview" aria-label="Your order so far">
+            <div>
+              <dt>Order</dt>
+              @if (tickerField() && previewQty() !== '0') {
+                <dd>
+                  <app-side-tag [side]="sideField()" />
+                  <span class="num">{{ previewQty() }}</span>
+                  <strong>{{ tickerField() }}</strong>
+                </dd>
+              } @else {
+                <dd class="muted">Add a ticker and a quantity</dd>
+              }
+            </div>
+            <div>
+              <dt>Price</dt>
+              <dd [class.num]="orderType() === 'limit'">{{ previewPrice() }}</dd>
+            </div>
+            @if (previewValue(); as v) {
+              <div>
+                <dt>About</dt>
+                <dd class="num">{{ v }}</dd>
+              </div>
+            }
+          </dl>
+
           <div class="actions">
-            <button type="submit" class="btn btn-primary" [disabled]="busy() || !canTrade()">
+            <button
+              type="submit"
+              class="btn confirm"
+              [class.btn-live]="live()"
+              [class.btn-primary]="!live()"
+              [disabled]="busy() || !canTrade()"
+            >
               Review order
             </button>
             <app-permission-note permission="portfolio.trade" />
           </div>
         </form>
+
+        <aside class="result-area" aria-label="Order result">
+          <app-tax-preview [question]="taxQuestion()" />
+
+          @if (refusal(); as r) {
+            <app-order-refusal
+              [refusal]="r"
+              [allowReduce]="allowReduce()"
+              (allowReduceChange)="setAllowReduce($event)"
+            />
+          }
+          @if (failure(); as f) {
+            <p class="failure callout" data-tone="loss" role="alert">{{ f }}</p>
+          }
+
+          @if (placed(); as r) {
+            <div class="result callout" role="status">
+              <p class="result-head">
+                <app-side-tag [side]="r.side" />
+                <span class="num">{{ num(r.quantity) }} {{ r.ticker }}</span>
+                <app-order-status [status]="r.status" [reason]="r.reason ?? null" />
+              </p>
+              @if (r.fill_price !== null && r.fill_price !== undefined) {
+                <p class="num">Filled at {{ money(r.fill_price) }}</p>
+              }
+              @if (r.protective_stop) {
+                <p>Your stop at {{ money(r.stop_price ?? 0) }} is working at the broker.</p>
+              } @else if (r.stop_price && live()) {
+                <p>The stop goes to your broker once the entry fills.</p>
+              }
+              <a class="text-link" [routerLink]="['/trades/orders', r.client_id]">Open the order</a>
+            </div>
+          }
+        </aside>
       </section>
 
-      <aside class="side" aria-label="Order result">
-        <app-tax-preview [question]="taxQuestion()" />
-
-        @if (refusal(); as r) {
-          <app-order-refusal
-            [refusal]="r"
-            [allowReduce]="allowReduce()"
-            (allowReduceChange)="setAllowReduce($event)"
-          />
-        }
-        @if (failure(); as f) {
-          <p class="failure callout" data-tone="loss" role="alert">{{ f }}</p>
-        }
-
-        @if (placed(); as r) {
-          <div class="result panel" role="status">
-            <p class="result-head">
-              <app-side-tag [side]="r.side" />
-              <span class="num">{{ num(r.quantity) }} {{ r.ticker }}</span>
-              <app-order-status [status]="r.status" [reason]="r.reason ?? null" />
-            </p>
-            @if (r.fill_price !== null && r.fill_price !== undefined) {
-              <p class="num">Filled at {{ money(r.fill_price) }}</p>
-            }
-            @if (r.protective_stop) {
-              <p>Your stop at {{ money(r.stop_price ?? 0) }} is working at the broker.</p>
-            } @else if (r.stop_price && live()) {
-              <p>The stop goes to your broker once the entry fills.</p>
-            }
-            <a class="btn btn-ghost" [routerLink]="['/trades/orders', r.client_id]"
-              >Open the order</a
-            >
-          </div>
-        }
-      </aside>
+      <div class="history">
+        <app-manual-orders-list />
+      </div>
     </div>
-
-    <app-manual-orders-list />
   `,
   styles: `
     @use 'breakpoints' as bp;
 
     :host {
+      display: block;
+      min-width: 0;
+    }
+    /* Desktop: your orders by hand on the left, the ticket as a side sheet
+       on the right. Phones: the ticket first, as a bottom sheet. */
+    .layout {
+      display: grid;
+      gap: var(--section-gap) var(--column-gap);
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      @include bp.from-desktop {
+        grid-template-columns: minmax(0, 1fr) 440px;
+        grid-template-areas: 'history ticket';
+        .history {
+          grid-area: history;
+        }
+        .ticket-sheet {
+          grid-area: ticket;
+        }
+      }
+    }
+    .history {
+      min-width: 0;
+    }
+    .ticket-sheet {
+      display: grid;
+      gap: var(--space-5);
+      min-width: 0;
+      padding: var(--space-5);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-sheet);
+      background: var(--raise);
+      @include bp.from-desktop {
+        position: sticky;
+        top: calc(var(--header-h) + var(--space-4));
+      }
+    }
+    /* Real money: a brass edge on the ticket. */
+    .ticket-sheet.live {
+      border-color: var(--brass-fill);
+      box-shadow: inset 0 0 0 1px var(--brass-fill);
+    }
+    @include bp.phone {
+      .ticket-sheet {
+        margin-inline: calc(-1 * var(--gutter));
+        padding: var(--space-5) var(--gutter);
+        border-width: 1px 0 0;
+        border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+      }
+    }
+    .sheet-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid var(--rule);
+    }
+    .sheet-head h2 {
+      font-size: var(--text-section);
+      font-weight: var(--weight-bold);
+    }
+    .book {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: var(--text-sm);
+      overflow-wrap: anywhere;
+    }
+    .form {
       display: grid;
       gap: var(--space-5);
       min-width: 0;
     }
-    .layout {
-      display: grid;
-      gap: var(--space-4);
-      min-width: 0;
-      @include bp.from-desktop {
-        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-        align-items: start;
-      }
-    }
-    .form {
-      display: grid;
-      gap: var(--space-4);
-    }
     .lead {
-      max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .label {
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      color: var(--ink-2);
+      font-size: 0.8125rem;
+      font-weight: var(--weight-label);
     }
-    /* The words sit on the tag's line: one 20px line box, centred with the B or S. */
+    .pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-3);
+      align-items: start;
+    }
+    .ticker-input {
+      font-weight: var(--weight-semibold);
+      text-transform: uppercase;
+    }
+    .ticker-input::placeholder {
+      font-weight: var(--weight-regular);
+      text-transform: none;
+    }
+    /* Buy or Sell fills the whole width; the picked side takes the side tag's
+       soft green or red with a 1px edge. The solid fill is for the confirm step. */
+    .side-seg {
+      display: block;
+    }
+    .side-seg ::ng-deep .segment {
+      min-height: 40px;
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+    }
+    /* Doubled classes win over the segmented's strong emphasis. */
+    .side-seg ::ng-deep .segmented .segment.segment:nth-child(1)[aria-checked='true'] {
+      border-color: var(--up);
+      background: var(--up-soft);
+      color: var(--up);
+    }
+    .side-seg ::ng-deep .segmented .segment.segment:nth-child(2)[aria-checked='true'] {
+      border-color: var(--down);
+      background: var(--down-soft);
+      color: var(--down);
+    }
+    app-earnings-warning:not(:has(*)) {
+      display: none;
+    }
     .side-now {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
       min-height: 20px;
-      color: var(--color-ink);
+      color: var(--ink-2);
       font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
       line-height: 20px;
     }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-2);
-    }
-    .side {
-      display: grid;
-      gap: var(--space-3);
-      min-width: 0;
-    }
-    /* An inset well, not a box in a box. The legend floats so it sits
-       inside the well like any heading, not on its edge. */
+    /* The plan: a hairline and a title, no box inside the sheet. */
     .plan {
       display: grid;
       gap: var(--space-3);
-      margin: 0;
-      padding: var(--space-4);
-      border: 0;
       min-width: 0;
+      margin: 0;
+      padding: var(--space-4) 0 0;
+      border: 0;
+      border-top: 1px solid var(--rule);
     }
     .plan legend {
       float: left;
       width: 100%;
       padding: 0;
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
     }
     .plan .optional {
+      margin-left: var(--space-1);
+      color: var(--muted);
+      font-size: var(--text-xs);
       font-weight: var(--weight-regular);
-      letter-spacing: normal;
-      text-transform: none;
-    }
-    @include bp.phone {
-      .plan {
-        padding: var(--space-3);
-      }
-    }
-    .plan-grid {
-      display: grid;
-      align-items: start;
-      gap: var(--space-3);
-      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
     }
     .risk-row {
       display: flex;
@@ -506,6 +619,60 @@ export function orderLines(
       flex: 1 1 8rem;
       min-width: 0;
     }
+    .hint {
+      color: var(--muted);
+      font-size: var(--text-sm);
+    }
+    /* What the ticket says so far: mono rows on a sunk well. */
+    .preview {
+      display: grid;
+      margin: 0;
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
+    }
+    .preview > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      min-height: 36px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .preview > div:last-child {
+      border-bottom: 0;
+    }
+    .preview dt {
+      color: var(--muted);
+      font-size: var(--text-sm);
+    }
+    .preview dd {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-width: 0;
+      margin: 0;
+      font-size: var(--text-md);
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+    .actions {
+      display: grid;
+      gap: var(--space-2);
+    }
+    .confirm {
+      width: 100%;
+      min-height: var(--touch-min);
+      font-size: var(--text-body);
+    }
+    .result-area {
+      display: grid;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+    .result-area:empty {
+      display: none;
+    }
     .failure {
       overflow-wrap: anywhere;
     }
@@ -513,10 +680,6 @@ export function orderLines(
       display: grid;
       justify-items: start;
       gap: var(--space-2);
-      padding: var(--space-4);
-      @include bp.phone {
-        padding: var(--space-3);
-      }
     }
     .result-head {
       display: flex;
@@ -610,6 +773,24 @@ export class ManualTicketPage implements OnInit {
     const s = this.side();
     if (s === 'buy' || s === 'sell') this.sideField.set(s);
   }
+
+  /** The ticket so far, for the preview rows. */
+  protected readonly previewQty = computed(() => {
+    const qty = Number(this.quantity());
+    return qty > 0 ? formatNumber(qty) : '0';
+  });
+  protected readonly previewPrice = computed(() => {
+    if (this.orderType() === 'limit') {
+      const limit = Number(this.limit());
+      return limit > 0 ? `Limit ${this.money(limit)}` : 'Limit, no price yet';
+    }
+    return this.live() ? 'Market, at the next price' : 'Market, at the last close';
+  });
+  protected readonly previewValue = computed(() => {
+    const qty = Number(this.quantity());
+    const price = this.entryPrice();
+    return qty > 0 && price !== null ? this.money(qty * price) : null;
+  });
 
   protected readonly num = (v: number) => formatNumber(v);
   protected planLine(p: TradePlanView): string {

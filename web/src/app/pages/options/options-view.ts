@@ -6,7 +6,6 @@ import type {
   PayoffPointView,
 } from '../../api/models';
 import { formatDate, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
-import type { TableColumn } from '../../shared/ui/data-table/data-table';
 import { humanize } from '../../shared/ui/param-form/param-spec';
 
 /** Which side of the chain the table shows. */
@@ -49,46 +48,96 @@ function sideLabel(prefix: string, label: string): string {
   return `${prefix} ${label === label.toUpperCase() ? label : label.toLowerCase()}`;
 }
 
-function sideColumns(
-  side: 'call' | 'put',
-  prefix: string,
-  hideOnPhone: readonly Field[],
-): TableColumn<OptionChainRow>[] {
-  return FIELDS.map((f) => {
-    const pick = (row: OptionChainRow): number | null => {
+/** One quote column of the mirrored chain. */
+export interface ChainCell {
+  key: string;
+  side: 'call' | 'put';
+  /** "Call bid": the column's full name, read by screen readers. */
+  label: string;
+  /** "Call" or "Put" in front of the short name, or empty for one side. */
+  prefix: string;
+  /** "Bid", "IV": the visible header. */
+  short: string;
+  help: string | false;
+  /** Kept on phones: bid, ask and delta. */
+  phone: boolean;
+  show: (row: OptionChainRow) => string;
+  /** The raw number, for sorting by this column. */
+  value: (row: OptionChainRow) => number | null;
+}
+
+const PHONE_FIELDS: readonly Field[] = ['bid', 'ask', 'delta'];
+
+function chainCells(side: 'call' | 'put', prefix: string): ChainCell[] {
+  return FIELDS.map((f) => ({
+    key: `${side}:${f.key}`,
+    side,
+    label: sideLabel(prefix, f.label),
+    prefix,
+    short: f.label,
+    help: f.help,
+    phone: PHONE_FIELDS.includes(f.key),
+    show: (row: OptionChainRow) => {
+      const q: OptionQuoteView | null | undefined = row[side];
+      return f.show(q ? (q[f.key] ?? null) : null);
+    },
+    value: (row: OptionChainRow) => {
       const q: OptionQuoteView | null | undefined = row[side];
       return q ? (q[f.key] ?? null) : null;
-    };
-    return {
-      key: `${side}:${f.key}`,
-      label: sideLabel(prefix, f.label),
-      format: 'number',
-      help: f.help,
-      value: pick,
-      display: (row) => f.show(pick(row)),
-      mobile: hideOnPhone.includes(f.key) ? 'hide' : 'show',
-    } satisfies TableColumn<OptionChainRow>;
-  });
+    },
+  }));
 }
 
 /**
- * The chain table's columns: the strike (the card title on phones), then
- * bid, ask, IV and the Greeks for calls, puts or both. With both sides,
- * phones keep bid, ask and delta of each so a card stays short.
+ * The mirrored chain: calls on the left read outward from the strike (bid
+ * nearest it), the strike in the middle, puts on the right. One side shows
+ * its columns in the usual order after the strike.
  */
-export function chainColumns(side: ChainSide): TableColumn<OptionChainRow>[] {
-  const strike: TableColumn<OptionChainRow> = {
-    key: 'strike',
-    label: 'Strike',
-    format: 'number',
-    mobile: 'title',
-    help: false,
-    display: (row) => formatNumber(row.strike, { digits: 2 }),
-  };
-  if (side === 'calls') return [strike, ...sideColumns('call', '', [])];
-  if (side === 'puts') return [strike, ...sideColumns('put', '', [])];
-  const trim: Field[] = ['iv', 'gamma', 'theta', 'vega', 'open_interest'];
-  return [strike, ...sideColumns('call', 'Call', trim), ...sideColumns('put', 'Put', trim)];
+export function chainLayout(side: ChainSide): { calls: ChainCell[]; puts: ChainCell[] } {
+  if (side === 'calls') return { calls: [], puts: chainCells('call', '') };
+  if (side === 'puts') return { calls: [], puts: chainCells('put', '') };
+  return { calls: chainCells('call', 'Call').reverse(), puts: chainCells('put', 'Put') };
+}
+
+/** A chain sort: a column key (`strike` or `call:bid`) and a direction. */
+export interface ChainSort {
+  key: string;
+  dir: 'asc' | 'desc';
+}
+
+/**
+ * The chain's rows in the order picked from a column header, as the old
+ * sortable table could. Empty cells go last either way. With no sort, the
+ * rows keep the strike order the API sends.
+ */
+export function sortChainRows(
+  rows: readonly OptionChainRow[],
+  sort: ChainSort | null,
+  cells: readonly ChainCell[],
+): OptionChainRow[] {
+  if (!sort) return [...rows];
+  const cell = cells.find((c) => c.key === sort.key);
+  const value = sort.key === 'strike' ? (r: OptionChainRow) => r.strike : cell?.value;
+  if (!value) return [...rows];
+  const sign = sort.dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = value(a);
+    const y = value(b);
+    if (x === null && y === null) return a.strike - b.strike;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return (x - y) * sign || a.strike - b.strike;
+  });
+}
+
+/** In the money: a call below the price, a put above it. */
+export function inTheMoney(
+  side: 'call' | 'put',
+  strike: number,
+  spot: number | null | undefined,
+): boolean {
+  if (spot === null || spot === undefined) return false;
+  return side === 'call' ? strike < spot : strike > spot;
 }
 
 /** "Bull call spread" from `bull_call_spread`. */

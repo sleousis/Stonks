@@ -210,6 +210,18 @@ export class ScreenerPage {
     return `${matched} out of ${formatNumber(r.candidates)}, on ${formatDate(r.as_of)}.`;
   });
 
+  /** "2 saved screens. The last run found 37 matches out of 4,812." */
+  protected readonly standfirst = computed(() => {
+    const r = this.result();
+    if (r) {
+      const matched = r.matched === 1 ? '1 match' : `${formatNumber(r.matched)} matches`;
+      return `The last run found ${matched} out of ${formatNumber(r.candidates)} on ${formatDate(r.as_of)}.`;
+    }
+    const n = this.screens.hasValue() ? this.screens.value().length : 0;
+    const lead = n ? `${n} saved ${n === 1 ? 'screen' : 'screens'}. ` : '';
+    return `${lead}Filter on price and company numbers as they were on any date.`;
+  });
+
   // ---- the form ---------------------------------------------------------------------
 
   protected patch(change: Partial<ScreenForm>): void {

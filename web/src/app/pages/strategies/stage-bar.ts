@@ -38,7 +38,7 @@ interface NextStep {
   imports: [RouterLink, StatusPill],
   host: { '[class.compact]': 'compact()' },
   template: `
-    <section [class.panel]="!compact()" class="stage-bar" aria-labelledby="stage-title">
+    <section class="stage-bar" aria-labelledby="stage-title">
       <h2 id="stage-title" class="visually-hidden">Status</h2>
       <ol class="stages" aria-label="Status ladder">
         @for (s of stages; track s.id) {
@@ -104,6 +104,9 @@ interface NextStep {
   styles: `
     @use 'breakpoints' as bp;
 
+    /* A horizontal stepper: nodes on one 2px track, the current node in
+       accent, done nodes filled in ink. The next step sits under it as a
+       sentence with one action. */
     :host {
       display: block;
       min-width: 0;
@@ -111,79 +114,94 @@ interface NextStep {
     .stage-bar {
       display: grid;
       gap: var(--space-4);
-      padding: var(--space-4);
-    }
-    :host(.compact) .stage-bar {
-      padding: 0;
     }
     .stages {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: var(--space-4);
       margin: 0;
       padding: 0;
       list-style: none;
     }
     .stages li {
-      display: flex;
+      position: relative;
+      display: grid;
       gap: var(--space-2);
-      align-items: flex-start;
+      align-content: start;
       min-width: 0;
-      padding-top: var(--space-3);
-      border-top: 2px solid var(--color-border);
+      padding-right: var(--space-3);
     }
-    .stages li[data-state='done'] {
-      border-top-color: var(--color-ink-3);
+    /* The track: from this node to the next. */
+    .stages li::before {
+      content: '';
+      position: absolute;
+      top: 6px;
+      left: 14px;
+      right: 0;
+      height: 2px;
+      background: var(--rule);
     }
-    .stages li[data-state='current'] {
-      border-top-color: var(--color-accent);
+    .stages li:last-child::before {
+      display: none;
+    }
+    .stages li[data-state='done']::before {
+      background: var(--ink);
     }
     .dot {
-      flex: none;
-      width: 10px;
-      height: 10px;
-      margin-top: 4px;
-      border: 2px solid var(--color-ink-3);
+      position: relative;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--rule-control);
       border-radius: 50%;
+      background: var(--bg);
     }
     li[data-state='done'] .dot {
-      background: var(--color-ink-3);
+      border-color: var(--ink);
+      background: var(--ink);
     }
     li[data-state='current'] .dot {
-      border-color: var(--color-ink);
-      background: var(--color-ink);
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
     }
     .stage-text {
       display: grid;
+      gap: 2px;
       min-width: 0;
     }
     .stage-label {
-      font-size: var(--text-sm);
+      font-size: var(--text-md);
       font-weight: var(--weight-semibold);
     }
+    li[data-state='current'] .stage-label {
+      color: var(--accent);
+    }
     li[data-state='todo'] .stage-label {
-      color: var(--color-ink-2);
+      color: var(--muted);
+      font-weight: var(--weight-label);
     }
     .stage-detail {
-      margin-top: 2px;
+      max-width: 26ch;
+      color: var(--muted);
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      line-height: 1.4;
     }
     .next {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--space-2) var(--space-3);
+      gap: var(--space-2) var(--space-4);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--rule);
     }
     .next-text {
       flex: 1 1 16rem;
       min-width: 0;
-      max-width: 70ch;
-      color: var(--color-ink-2);
+      max-width: 68ch;
+      color: var(--ink-2);
+      font-size: var(--text-sm);
     }
     .checks {
-      border-top: 1px solid var(--color-border);
-      padding-top: var(--space-1);
+      border-top: 1px solid var(--rule);
     }
     .checks summary {
       display: flex;
@@ -195,9 +213,7 @@ interface NextStep {
       font-weight: var(--weight-semibold);
     }
     .check-list {
-      display: grid;
-      gap: var(--space-3);
-      margin: var(--space-2) 0 var(--space-1);
+      margin: 0 0 var(--space-2);
       padding: 0;
       list-style: none;
       font-size: var(--text-sm);
@@ -206,9 +222,14 @@ interface NextStep {
       display: grid;
       gap: 2px;
       min-width: 0;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .check-list li:last-child {
+      border-bottom: 0;
     }
     .check-detail {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .fix a {
@@ -216,14 +237,18 @@ interface NextStep {
       align-items: center;
       min-height: var(--touch-min);
     }
+    /* Phones: two by two, each stage keeping its detail line, as before the
+       redesign (old stage-bar.ts:219). The track runs only within a row. */
     @include bp.phone {
-      .stage-bar {
-        gap: var(--space-3);
-        padding: var(--space-3);
-      }
       .stages {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: var(--space-3);
+      }
+      .stages li:nth-child(2n)::before {
+        display: none;
+      }
+      .stage-label {
+        font-size: var(--text-sm);
       }
       .next .btn {
         width: 100%;

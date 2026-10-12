@@ -24,7 +24,15 @@ from typing import Any
 
 import pytest
 from axe_playwright_python.sync_playwright import Axe
-from playwright.sync_api import Browser, BrowserContext, ConsoleMessage, Page, Response, expect
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    ConsoleMessage,
+    Locator,
+    Page,
+    Response,
+    expect,
+)
 
 from tests.e2e.stack import DEFAULT_DIST, Person, Stack, build_stack, start_server, stop_server
 
@@ -192,16 +200,16 @@ class Visit:
                 headers["X-CSRF-Token"] = csrf
         return req.fetch(self.stack.base_url + path, method=method, headers=headers, **kwargs)
 
-    def open_nav(self) -> None:
-        """On phones the navigation sits behind the menu button. The rail's
-        folding groups (More, Advanced, System) open too, so every item a
-        journey clicks is on screen."""
+    def open_nav(self) -> Locator:
+        """Open the list of every page and return it: on desktop the
+        workspace switcher in the chrome bar (every workspace with its pages),
+        on phones the More sheet behind the bottom nav. Journeys click links
+        inside it, so a page's tab in the chrome bar never doubles a match."""
         if self.phone:
-            self.page.get_by_role("button", name="Open navigation").click()
-        nav = self.page.locator("#nav-drawer" if self.phone else "aside.sidebar")
-        folds = nav.locator("details.fold:not([open]) > summary")
-        for _ in range(folds.count()):
-            folds.nth(0).click()
+            self.page.locator("app-bottom-nav button[data-open-nav]").click()
+            return self.page.locator("#more-sheet")
+        self.page.locator("app-workspace-menu button[data-open-nav]").click()
+        return self.page.locator("#workspace-menu")
 
     def check_page(self, name: str) -> None:
         """What every page must pass: no sideways scroll on phones and no

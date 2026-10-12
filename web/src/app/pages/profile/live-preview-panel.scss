@@ -12,7 +12,7 @@
 h3 {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 p {
@@ -33,18 +33,29 @@ p {
 .figures {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--space-3);
   margin: 0;
+  border-top: 2px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
+  overflow: hidden;
+
+  > div {
+    margin-left: -1px;
+    padding: var(--space-3) var(--space-4);
+    border-left: 1px solid var(--rule);
+  }
 
   dt {
     font-size: var(--text-xs);
-    color: var(--color-ink-3);
+    color: var(--muted);
   }
 
   dd {
     margin: var(--space-1) 0 0;
-    font-size: var(--text-lg);
+    font-family: var(--font-mono);
+    font-size: var(--text-stat);
     font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums slashed-zero;
+    letter-spacing: -0.03em;
     overflow-wrap: anywhere;
   }
 }
@@ -54,7 +65,7 @@ p {
   gap: var(--space-1);
   margin: 0;
   padding-left: var(--space-4);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 

@@ -167,6 +167,10 @@ describe('GoingLivePage', () => {
     expect(state('preview')).toBe('Done');
     expect(el.querySelector('.progress')!.textContent).toContain('of 8');
     expect(el.querySelector('.progress')!.textContent).toContain('Broker paper');
+    // The steps done bar is back (old going-live.page.ts:105).
+    const bar = el.querySelector('[role="progressbar"][aria-label="Steps done"]')!;
+    expect(bar.getAttribute('aria-valuemax')).toBe('8');
+    expect(bar.getAttribute('aria-valuenow')).not.toBeNull();
     const profileLink = el.querySelector<HTMLAnchorElement>('li[data-step="profile"] a')!;
     expect(profileLink.getAttribute('href')).toBe('/profile/live/pf_b#account-profile');
     // The first step still yours is the primary action.

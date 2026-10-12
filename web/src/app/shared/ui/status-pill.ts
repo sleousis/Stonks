@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 import { STATUS_WORDS } from '../governance-labels';
-import { BrandMark } from './brand-mark';
 
 export type PillTone = 'positive' | 'negative' | 'info' | 'progress' | 'warn' | 'neutral';
 
@@ -9,14 +8,15 @@ export type PillTone = 'positive' | 'negative' | 'info' | 'progress' | 'warn' | 
  * How a status looks, by what kind of thing it describes, so a halted book,
  * a live strategy and a finished backtest never look alike:
  *
- * - `lamp`: a lifecycle state that lasts (active, shadow, retired). A round
- *   pill with a lamp dot.
+ * - `lamp`: a lifecycle state that lasts (active, shadow, retired);
  * - `receipt`: the outcome of something that finished (passed, filled,
- *   failed). A square outlined tag with a tick, cross or dash.
- * - `working`: something still going (queued, running). The brand mark
- *   drawing itself, no box.
- * - `alarm`: trading is stopped or broken (halted, unhealthy). A solid
- *   block that cannot be missed.
+ *   failed);
+ * - `working`: something still going (queued, running): a turning ring;
+ * - `alarm`: trading is stopped or broken (halted, unhealthy): solid red.
+ *
+ * Every form is a 22px pill in its tone's soft colour with a glyph: a check
+ * (approved, passed), a clock (on trial), a dash (retired), a cross
+ * (failed), a triangle (warning).
  */
 export type PillForm = 'lamp' | 'receipt' | 'working' | 'alarm';
 
@@ -120,139 +120,135 @@ export function pillForm(status: string | null | undefined, tone: PillTone): Pil
 @Component({
   selector: 'app-status-pill',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BrandMark],
   host: { '[attr.data-tone]': 'resolvedTone()', '[attr.data-form]': 'resolvedForm()' },
   template: `@if (resolvedForm() === 'working') {
-      <app-brand-mark class="spin" mode="loading" [size]="14" />
+      <span class="ring" aria-hidden="true"></span>
     } @else {
       <span class="mark" aria-hidden="true"></span>
     }
     {{ text() }}`,
   styles: `
+    /* A 22px pill with a 12px glyph: the glyph's shape carries the state, so
+       it never rests on colour alone. */
     :host {
-      --tone: var(--color-ink-2);
-      --tone-soft: var(--color-neutral-soft);
+      --tone: var(--muted);
+      --tone-soft: var(--sunk);
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: var(--text-xs);
-      font-weight: var(--weight-medium);
-      line-height: 18px;
-      /* Every form is 20px tall, so pills in one row share a baseline. */
-      height: 20px;
-      white-space: nowrap;
+      gap: 5px;
+      height: 22px;
+      padding: 0 9px 0 7px;
+      border-radius: var(--r-pill);
+      background: var(--tone-soft);
       color: var(--tone);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-label);
+      line-height: 1;
+      white-space: nowrap;
     }
     :host([data-tone='positive']) {
-      --tone: var(--color-gain);
-      --tone-soft: var(--color-gain-soft);
+      --tone: var(--up);
+      --tone-soft: var(--up-soft);
     }
     :host([data-tone='negative']) {
-      --tone: var(--color-loss);
-      --tone-soft: var(--color-loss-soft);
+      --tone: var(--down);
+      --tone-soft: var(--down-soft);
     }
-    :host([data-tone='info']) {
-      --tone: var(--color-info);
-      --tone-soft: var(--color-info-soft);
-    }
+    :host([data-tone='info']),
     :host([data-tone='progress']) {
-      --tone: var(--color-accent);
-      --tone-soft: var(--color-accent-soft);
+      --tone: var(--accent);
+      --tone-soft: var(--accent-soft);
     }
     :host([data-tone='warn']) {
-      --tone: var(--color-warn);
-      --tone-soft: var(--color-warn-soft);
+      --tone: var(--warn);
+      --tone-soft: var(--warn-soft);
     }
-    .mark {
-      flex: none;
-    }
-
-    /* Lamp: lifecycle. Round pill, a lamp dot (solid on, ring for shadow, a
-       dash when off). */
-    :host([data-form='lamp']) {
-      padding: 1px 9px 1px 7px;
-      border-radius: var(--radius-pill);
-      background: var(--tone-soft);
-    }
-    :host([data-form='lamp']) .mark {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: currentColor;
-      box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent);
-    }
-    :host([data-form='lamp'][data-tone='info']) .mark {
-      background: transparent;
-      border: 1.5px solid currentColor;
-      box-shadow: none;
-    }
-    :host([data-form='lamp'][data-tone='neutral']) .mark {
-      height: 2px;
-      border-radius: 1px;
-      box-shadow: none;
-    }
-
-    /* Receipt: an outcome. Square outlined tag with a tick, cross, dash or
-       bang drawn in CSS. */
-    :host([data-form='receipt']) {
-      padding: 0 7px 0 5px;
-      border: 1px solid currentColor;
-      border-radius: var(--radius-xs);
-      background: transparent;
-    }
-    /* Not yet, to do, optional: quiet, in the third ink. */
-    :host([data-form='receipt'][data-tone='neutral']) {
-      color: var(--color-ink-3);
-    }
-    :host([data-form='receipt']) .mark {
-      width: 9px;
-      height: 9px;
+    .mark,
+    .ring {
       position: relative;
+      flex: none;
+      width: 12px;
+      height: 12px;
     }
-    :host([data-form='receipt'][data-tone='positive']) .mark {
-      width: 5px;
-      height: 9px;
-      margin: 0 2px 2px;
-      border-right: 2px solid currentColor;
-      border-bottom: 2px solid currentColor;
+    /* Positive: a check. */
+    :host([data-tone='positive']) .mark::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 1.5px;
+      width: 3.5px;
+      height: 7px;
+      border-right: 1.75px solid currentColor;
+      border-bottom: 1.75px solid currentColor;
       transform: rotate(45deg);
     }
-    :host([data-form='receipt'][data-tone='negative']) .mark,
-    :host([data-form='receipt'][data-tone='neutral']) .mark {
-      background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+    /* Info (on trial, draft): a clock. */
+    :host([data-tone='info']) .mark {
+      border: 1.5px solid currentColor;
+      border-radius: 50%;
     }
-    :host([data-form='receipt'][data-tone='negative']) .mark {
-      transform: rotate(45deg);
-      background:
-        linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
-        linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+    :host([data-tone='info']) .mark::before {
+      content: '';
+      position: absolute;
+      left: 3.75px;
+      top: 1.5px;
+      width: 2.5px;
+      height: 3.25px;
+      border-left: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
     }
-    :host([data-form='receipt'][data-tone='warn']) .mark,
-    :host([data-form='receipt'][data-tone='info']) .mark,
-    :host([data-form='receipt'][data-tone='progress']) .mark {
-      width: 8px;
+    /* Neutral (retired, cancelled, to do): a dash. */
+    :host([data-tone='neutral']) .mark {
+      width: 9px;
+      height: 1.75px;
+      margin: 0 1.5px;
+      border-radius: 1px;
       background: currentColor;
-      clip-path: polygon(50% 0, 100% 100%, 0 100%);
     }
-
-    /* Working: no box, the mark draws itself. */
-    :host([data-form='working']) {
-      padding: 1px 0;
+    /* Negative: a cross. */
+    :host([data-tone='negative']) .mark {
+      background:
+        linear-gradient(currentColor, currentColor) center / 100% 1.75px no-repeat,
+        linear-gradient(currentColor, currentColor) center / 1.75px 100% no-repeat;
+      transform: rotate(45deg) scale(0.85);
     }
-
-    /* Alarm: a solid block. */
+    /* Warn and progress receipts: a small triangle. */
+    :host([data-tone='warn']) .mark,
+    :host([data-tone='progress']) .mark {
+      width: 11px;
+      background: currentColor;
+      clip-path: polygon(50% 5%, 100% 95%, 0 95%);
+    }
+    /* Working (running, queued): a three-quarter ring that turns. */
+    .ring {
+      border: 1.75px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: pill-spin 0.9s linear infinite;
+    }
+    @keyframes pill-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ring {
+        animation: none;
+      }
+    }
+    /* Alarm (halted, unhealthy): a solid red pill that cannot be missed. */
     :host([data-form='alarm']) {
-      padding: 1px 8px 1px 6px;
-      border-radius: var(--radius-xs);
-      background: var(--tone);
-      color: var(--color-surface);
+      background: var(--down);
+      color: var(--on-down);
       font-weight: var(--weight-bold);
     }
     :host([data-form='alarm']) .mark {
       width: 8px;
       height: 8px;
+      margin: 0 2px;
+      border-radius: 1px;
       background: currentColor;
-      transform: rotate(45deg);
+      transform: none;
     }
   `,
 })

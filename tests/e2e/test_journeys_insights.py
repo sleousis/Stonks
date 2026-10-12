@@ -68,8 +68,7 @@ def _investor(stack: Stack, viewport: str) -> Person:
 
 
 def _open(v: Visit, label: str) -> None:
-    v.open_nav()
-    v.page.get_by_role("link", name=label, exact=True).first.click()
+    v.open_nav().get_by_role("link", name=label, exact=True).first.click()
 
 
 def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):

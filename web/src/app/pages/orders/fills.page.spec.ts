@@ -61,6 +61,9 @@ describe('FillsPage', () => {
     expect(side?.querySelector('app-side-tag .tag')?.getAttribute('data-side')).toBe('buy');
     const price = [...el.querySelectorAll('td')].find((td) => td.dataset['label'] === 'Price');
     expect(price?.classList).toContain('num');
+    // The fee shows on phone cards too, as before the redesign.
+    const fee = [...el.querySelectorAll('td')].find((td) => td.dataset['label'] === 'Fee');
+    expect(fee?.classList).not.toContain('hide-phone');
   });
 
   it('explains when fills appear, without jargon', async () => {

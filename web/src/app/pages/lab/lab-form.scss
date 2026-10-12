@@ -11,21 +11,28 @@
   gap: var(--space-5);
 }
 
+.lab-form {
+  gap: var(--space-7);
+}
+
+// Field groups: a 15px title on the 2px ink rule, no box.
 .group {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-width: 0;
   margin: 0;
-  padding: var(--space-4) 0 0;
+  padding: 0;
   border: 0;
-  border-top: 1px solid var(--color-border);
 
-  // Section titles: 13px semibold, second ink, under a hairline.
   > legend {
-    padding: 0 var(--space-2) 0 0;
-    color: var(--color-ink-2);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semibold);
+    display: block;
+    width: 100%;
+    margin-bottom: var(--space-4);
+    padding: 0 0 var(--space-2);
+    border-bottom: 2px solid var(--rule-strong);
+    color: var(--ink);
+    font-size: var(--text-lead);
+    font-weight: var(--weight-bold);
   }
 }
 
@@ -33,7 +40,7 @@
   margin-left: var(--space-1);
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .grid-2 {
@@ -64,11 +71,9 @@
 .sub {
   display: grid;
   gap: var(--space-3);
-  margin-left: calc(16px + var(--space-2));
-  padding: var(--space-3);
-  border-left: 2px solid var(--color-border-strong);
-  background: var(--color-surface-2);
-  border-radius: var(--radius-sm);
+  margin-left: 7px;
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--accent-line);
 }
 
 .tests {
@@ -95,7 +100,7 @@
   display: block;
   margin: -4px 0 0 calc(16px + var(--space-2));
   font-size: var(--text-xs);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .reset {
@@ -116,7 +121,7 @@
     gap: var(--space-1) var(--space-2);
     justify-content: space-between;
     padding: var(--space-1) 0;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
   .pname {
@@ -124,32 +129,31 @@
   }
 }
 
-// An inset well, no border.
+// A callout: the one quiet box in the form.
 .register {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  padding: var(--space-4);
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
 }
 
 .register-when {
   margin-left: calc(16px + var(--space-2));
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
 }
 
 // Suite presets ---------------------------------------------------------------
 .suites {
   display: grid;
-  gap: var(--space-2);
+  gap: 0 var(--space-6);
 
   @include bp.from-tablet {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-// Suites: wells; the chosen one a surface chip with an accent rule.
+// Suites: radio rows with a hairline; the chosen one accent soft with a 3px
+// accent edge.
 .suite {
   display: flex;
   align-items: flex-start;
@@ -157,33 +161,31 @@
   min-width: 0;
   min-height: var(--touch-min);
   padding: var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--rule);
+  box-shadow: inset 3px 0 0 transparent;
   cursor: pointer;
   transition:
-    background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 
   input {
     margin-top: 2px;
-    accent-color: var(--color-accent);
+    accent-color: var(--accent);
     flex: none;
   }
 
   &:hover {
-    border-color: var(--color-border-strong);
+    background: var(--sunk);
   }
 
   &.chosen {
-    border-color: var(--color-accent);
-    background: var(--color-surface);
-    box-shadow: inset 2px 0 0 var(--color-accent);
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
 
   &:focus-within {
-    outline: 2px solid var(--color-focus);
-    outline-offset: 1px;
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
 }
 
@@ -200,7 +202,7 @@
 
 .suite-hint {
   font-size: var(--text-xs);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 .suite-list {
@@ -213,9 +215,9 @@
 
 .chip {
   padding: 1px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--sunk);
   font-size: var(--text-xs);
   line-height: 18px;
 }
@@ -242,7 +244,7 @@
 
 // The Advanced fold: hairlines above and below, no box inside the panel.
 .advanced {
-  border-block: 1px solid var(--color-border);
+  border-block: 1px solid var(--rule);
 
   > summary {
     display: flex;
@@ -297,7 +299,7 @@
   margin: 0;
   padding: var(--space-3);
   border: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--rule);
 
   &:first-of-type {
     border-top: 0;
@@ -331,12 +333,16 @@
   line-height: var(--leading-normal, 1.4);
 }
 
+// The run button: at the end of the form, and on phones a bar that stays
+// at the bottom of the screen above the bottom nav while the form scrolls.
 .form-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--rule-strong);
 
   .summary {
     flex: 1 1 12rem;
@@ -344,6 +350,15 @@
   }
 
   @include bp.phone {
+    position: sticky;
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    z-index: var(--z-sticky);
+    margin: 0 calc(-1 * var(--gutter));
+    padding: var(--space-3) var(--gutter);
+    border-top: 1px solid var(--rule);
+    background: var(--raise);
+    box-shadow: var(--shadow-overlay);
+
     .btn-primary {
       flex: 1 1 100%;
     }
@@ -351,8 +366,8 @@
 }
 
 .error {
-  font-size: var(--text-xs);
-  color: var(--color-loss);
+  font-size: var(--text-sm);
+  color: var(--down);
 }
 
 .summary {

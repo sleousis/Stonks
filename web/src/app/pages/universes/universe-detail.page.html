@@ -1,13 +1,25 @@
 @let u = universe.hasValue() ? universe.value() : null;
-<app-page-header [title]="u?.name || id()" [description]="u?.description ?? null">
-  <a actions class="btn btn-tertiary" routerLink="/universes">All universes</a>
-  <a actions class="btn btn-tertiary" routerLink="/lab" [queryParams]="{ universe: id() }"
-    >Test in the lab</a
-  >
+<app-page-header
+  [title]="u?.name || id()"
+  [description]="standfirst()"
+  backPath="/universes"
+  backLabel="Universes"
+>
   <button
     actions
     type="button"
-    class="btn"
+    class="btn btn-primary"
+    [disabled]="refreshing() || !u || !canRefresh()"
+    [attr.aria-busy]="refreshing()"
+    (click)="refresh()"
+  >
+    {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+  </button>
+  <a actions class="btn" routerLink="/lab" [queryParams]="{ universe: id() }">Test in the lab</a>
+  <button
+    actions
+    type="button"
+    class="btn btn-ghost"
     aria-controls="edit-panel"
     [attr.aria-expanded]="editing()"
     [disabled]="!u || !canRefresh()"
@@ -25,6 +37,7 @@
   >
     Delete
   </button>
+  <app-permission-note actions permission="lab.run" />
   <app-permission-note actions permission="strategy.promote" />
 </app-page-header>
 
@@ -33,18 +46,14 @@
 } @else if (!u) {
   <app-loading-state label="Loading the universe" [rows]="2" />
 } @else {
-  <dl class="facts" aria-label="Universe facts">
-    <div>
-      <dt>Id</dt>
-      <dd class="num">{{ u.id }}</dd>
-    </div>
-    <div>
+  <dl class="summary-strip facts" aria-label="Universe facts">
+    <div class="fact">
       <dt>Kind</dt>
       <dd>{{ kindLabel[u.kind] }}</dd>
     </div>
-    <div>
+    <div class="fact">
       <dt>Members</dt>
-      <dd class="num">
+      <dd class="num stat">
         {{
           u.member_count === null || u.member_count === undefined
             ? 'Not refreshed'
@@ -52,9 +61,13 @@
         }}
       </dd>
     </div>
-    <div>
+    <div class="fact">
       <dt>Last refresh</dt>
       <dd class="num">{{ u.refreshed_at ? (u.refreshed_at | dateTime) : 'Never' }}</dd>
+    </div>
+    <div class="fact">
+      <dt>Id</dt>
+      <dd class="num">{{ u.id }}</dd>
     </div>
   </dl>
   @if (stale()) {
@@ -62,215 +75,198 @@
       The definition changed after the last refresh. Refresh to rebuild the members from it.
     </p>
   }
-  <p class="muted lab-hint">Test in the lab opens the lab with it picked under Tickers to test.</p>
+  <p class="muted lab-hint">
+    Refresh turns the definition into dated membership rows. Rule universes read our price data, so
+    fetch the data first. Test in the lab opens the lab with it picked under Tickers to test.
+  </p>
 }
 
-<div class="page-grid">
+<div class="section-stack body">
   @if (editing() && u) {
-    <section id="edit-panel" class="panel span-12" aria-labelledby="edit-title">
-      <div class="panel-head">
-        <h2 id="edit-title">Edit {{ u.name || u.id }}</h2>
-      </div>
-      <div class="panel-body">
-        <app-universe-editor
-          mode="edit"
-          [universe]="u"
-          [universes]="allUniverses.hasValue() ? allUniverses.value() : []"
-          [advanced]="isAdmin()"
-          (saved)="edited($event)"
-          (cancelled)="editing.set(false)"
-        />
-      </div>
+    <section id="edit-panel" class="sheet-box edit" aria-labelledby="edit-title">
+      <h2 id="edit-title" class="edit-title">Edit {{ u.name || u.id }}</h2>
+      <app-universe-editor
+        mode="edit"
+        [universe]="u"
+        [universes]="allUniverses.hasValue() ? allUniverses.value() : []"
+        [advanced]="isAdmin()"
+        (saved)="edited($event)"
+        (cancelled)="editing.set(false)"
+      />
     </section>
   }
 
-  <!-- Members on a date --------------------------------------------------->
-  <section class="panel span-6" aria-labelledby="members-title">
-    <div class="panel-head">
-      <h2 id="members-title">Members on a date</h2>
-      @if (members.hasValue()) {
-        <span class="muted num"
-          >{{ members.value().count | num: { digits: 0 } }} on
-          {{ day(members.value().as_of) }}</span
-        >
+  @if (refreshRun() || refreshResult.value()) {
+    <section class="page-section" aria-labelledby="refresh-title">
+      <header class="section-head">
+        <h2 id="refresh-title">Last refresh</h2>
+      </header>
+      @if (refreshRun(); as run) {
+        <app-job-progress label="Refresh" [handle]="run" [result]="refreshResult" />
       }
-    </div>
-    <div class="panel-body date-row">
-      <div class="field">
-        <label for="m-date">Date</label>
-        <input
-          id="m-date"
-          class="input"
-          type="date"
-          [value]="asOf()"
-          (change)="asOf.set($any($event.target).value)"
-        />
-      </div>
-      <div class="field">
-        <label for="m-find">Find a ticker</label>
-        <input
-          id="m-find"
-          class="input"
-          type="search"
-          placeholder="e.g. AAPL"
-          autocapitalize="characters"
-          spellcheck="false"
-          [value]="find()"
-          (input)="find.set($any($event.target).value)"
-        />
-      </div>
-    </div>
-    @if (members.error(); as err) {
-      <app-error-state title="Could not load members" [error]="err" (retry)="members.reload()" />
-    } @else if (!members.hasValue()) {
-      <app-loading-state label="Loading members" [rows]="3" />
-    } @else if (members.value().tickers.length === 0) {
-      <app-empty-state
-        title="No members on this date"
-        message="Refresh the universe to build its membership, or pick a date inside its window."
-      />
-    } @else {
-      <app-data-table
-        caption="Members on this date"
-        [rows]="memberRows()"
-        [columns]="memberColumns"
-        [rowKey]="memberKey"
-        [pageSize]="membersPageSize"
-        emptyMessage="No member matches."
-      />
-    }
-  </section>
-
-  <!-- Refresh -------------------------------------------------------------->
-  <section class="panel span-6" aria-labelledby="refresh-title">
-    <div class="panel-head">
-      <h2 id="refresh-title">Refresh</h2>
-      <div class="head-action">
-        <button
-          type="button"
-          class="btn btn-primary"
-          [disabled]="refreshing() || !u || !canRefresh()"
-          [attr.aria-busy]="refreshing()"
-          (click)="refresh()"
-        >
-          {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
-        </button>
-        <app-permission-note permission="lab.run" />
-      </div>
-    </div>
-    @if (refreshRun(); as run) {
-      <app-job-progress label="Refresh" [handle]="run" [result]="refreshResult" />
-    }
-    <div class="panel-body">
       @if (refreshResult.value(); as r) {
-        <dl class="facts compact" aria-label="Refresh result">
-          <div>
+        <dl class="summary-strip facts result-strip" aria-label="Refresh result">
+          <div class="fact">
             <dt>Members today</dt>
-            <dd class="num">{{ r.current_members | num: { digits: 0 } }}</dd>
+            <dd class="num stat">{{ r.current_members | num: { digits: 0 } }}</dd>
           </div>
-          <div>
+          <div class="fact">
             <dt>Members ever</dt>
-            <dd class="num">{{ r.members | num: { digits: 0 } }}</dd>
+            <dd class="num stat">{{ r.members | num: { digits: 0 } }}</dd>
           </div>
-          <div>
+          <div class="fact">
             <dt>Spans</dt>
-            <dd class="num">{{ r.spans | num: { digits: 0 } }}</dd>
+            <dd class="num stat">{{ r.spans | num: { digits: 0 } }}</dd>
           </div>
         </dl>
         @if (r.warnings?.length) {
-          <ul class="warnings" aria-label="Refresh warnings">
+          <ul class="callout warnings" data-tone="warn" aria-label="Refresh warnings">
             @for (w of r.warnings; track $index) {
               <li>{{ w }}</li>
             }
           </ul>
         }
-      } @else {
-        <p class="muted">
-          Turns the definition into dated membership rows. Rule universes read our price data, so
-          fetch the data first.
-        </p>
       }
-    </div>
-  </section>
+    </section>
+  }
 
-  <!-- Membership history ------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="history-title">
-    <div class="panel-head">
-      <h2 id="history-title">Membership history</h2>
-      @if (history.hasValue()) {
-        <span class="muted num">{{ history.value().total | num: { digits: 0 } }} spans</span>
-      }
-    </div>
-    <div class="panel-body date-row">
-      <div class="field">
-        <label for="h-find">Find a ticker</label>
-        <input
-          id="h-find"
-          class="input"
-          type="search"
-          placeholder="e.g. AAPL"
-          autocapitalize="characters"
-          spellcheck="false"
-          aria-describedby="h-find-hint"
-          [value]="historyFind()"
-          (change)="findInHistory($any($event.target).value)"
-        />
-        <span id="h-find-hint" class="hint">Press Enter to search.</span>
+  <div class="cols">
+    <!-- Membership history ------------------------------------------------->
+    <section class="page-section section-flush history" aria-labelledby="history-title">
+      <div class="section-head">
+        <h2 id="history-title">Membership history</h2>
+        @if (history.hasValue()) {
+          <span class="muted num">{{ history.value().total | num: { digits: 0 } }} spans</span>
+        }
       </div>
-    </div>
-    @if (history.error(); as err) {
-      <app-error-state
-        title="Could not load the history"
-        [error]="err"
-        (retry)="history.reload()"
-      />
-    } @else if (!history.hasValue()) {
-      <app-loading-state label="Loading the history" [rows]="3" />
-    } @else if (history.value().items.length === 0) {
-      <app-empty-state
-        title="No history yet"
-        [message]="
-          historyFind() ? 'No ticker matches.' : 'Refresh the universe to build its membership.'
-        "
-      />
-    } @else {
-      @let h = history.value();
-      <p class="muted intro history-intro">
-        Latest change first. Each row is a stretch of membership: joined on the first day, gone from
-        the day it left.
-      </p>
-      <app-data-table
-        caption="Membership history"
-        [rows]="h.items"
-        [columns]="historyColumns"
-        [rowKey]="historyKey"
-      />
-      @if (h.items.length < h.total) {
-        <div class="panel-body more">
-          <button
-            type="button"
-            class="btn"
-            [disabled]="history.isLoading()"
-            [attr.aria-busy]="history.isLoading()"
-            (click)="moreHistory()"
-          >
-            Show more ({{ h.items.length | num: { digits: 0 } }} of
-            {{ h.total | num: { digits: 0 } }})
-          </button>
+      <div class="section-body date-row">
+        <div class="field">
+          <label for="h-find">Find a ticker</label>
+          <input
+            id="h-find"
+            class="input"
+            type="search"
+            placeholder="e.g. AAPL"
+            autocapitalize="characters"
+            spellcheck="false"
+            aria-describedby="h-find-hint"
+            [value]="historyFind()"
+            (change)="findInHistory($any($event.target).value)"
+          />
+          <span id="h-find-hint" class="hint">Press Enter to search.</span>
         </div>
+      </div>
+      @if (history.error(); as err) {
+        <app-error-state
+          title="Could not load the history"
+          [error]="err"
+          (retry)="history.reload()"
+        />
+      } @else if (!history.hasValue()) {
+        <app-loading-state label="Loading the history" [rows]="3" />
+      } @else if (history.value().items.length === 0) {
+        <app-empty-state
+          title="No history yet"
+          [message]="
+            historyFind() ? 'No ticker matches.' : 'Refresh the universe to build its membership.'
+          "
+        />
+      } @else {
+        @let h = history.value();
+        <p class="muted intro history-intro">
+          Latest change first. Each row is a stretch of membership: joined on the first day, gone
+          from the day it left.
+        </p>
+        <app-data-table
+          caption="Membership history"
+          [rows]="h.items"
+          [columns]="historyColumns"
+          [rowKey]="historyKey"
+        />
+        @if (h.items.length < h.total) {
+          <div class="section-body more">
+            <button
+              type="button"
+              class="btn"
+              [disabled]="history.isLoading()"
+              [attr.aria-busy]="history.isLoading()"
+              (click)="moreHistory()"
+            >
+              Show more ({{ h.items.length | num: { digits: 0 } }} of
+              {{ h.total | num: { digits: 0 } }})
+            </button>
+          </div>
+        }
       }
-    }
-  </section>
+    </section>
+
+    <!-- Members on a date --------------------------------------------------->
+    <section class="page-section section-flush members" aria-labelledby="members-title">
+      <div class="section-head">
+        <h2 id="members-title">Members on a date</h2>
+        @if (members.hasValue()) {
+          <span class="muted num"
+            >{{ members.value().count | num: { digits: 0 } }} on
+            {{ day(members.value().as_of) }}</span
+          >
+        }
+      </div>
+      <div class="section-body date-row">
+        <div class="field">
+          <label for="m-date">Date</label>
+          <input
+            id="m-date"
+            class="input"
+            type="date"
+            [value]="asOf()"
+            (change)="asOf.set($any($event.target).value)"
+          />
+        </div>
+        <div class="field">
+          <label for="m-find">Find a ticker</label>
+          <input
+            id="m-find"
+            class="input"
+            type="search"
+            placeholder="e.g. AAPL"
+            autocapitalize="characters"
+            spellcheck="false"
+            [value]="find()"
+            (input)="find.set($any($event.target).value)"
+          />
+        </div>
+      </div>
+      @if (members.error(); as err) {
+        <app-error-state title="Could not load members" [error]="err" (retry)="members.reload()" />
+      } @else if (!members.hasValue()) {
+        <app-loading-state label="Loading members" [rows]="3" />
+      } @else if (members.value().tickers.length === 0) {
+        <app-empty-state
+          title="No members on this date"
+          message="Refresh the universe to build its membership, or pick a date inside its window."
+        />
+      } @else {
+        <app-data-table
+          caption="Members on this date"
+          [rows]="memberRows()"
+          [columns]="memberColumns"
+          [rowKey]="memberKey"
+          [pageSize]="membersPageSize"
+          emptyMessage="No member matches."
+        />
+      }
+    </section>
+  </div>
 
   <!-- Ensure data ---------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="ensure-title">
-    <div class="panel-head">
+  <section class="page-section" aria-labelledby="ensure-title">
+    <div class="section-head">
       <h2 id="ensure-title">Fetch missing data</h2>
     </div>
     @if (ensureRun(); as run) {
       <app-job-progress label="Fetch missing data" [handle]="run" [result]="ensureResult" />
     }
-    <form class="panel-body" novalidate (submit)="$event.preventDefault(); ensure()">
+    <form class="section-body" novalidate (submit)="$event.preventDefault(); ensure()">
       <p class="muted intro">
         Fetches only the prices our data is missing for the members over the window. The free EODHD
         plan keeps one year of daily prices, so the start may move.
@@ -381,13 +377,13 @@
   </section>
 
   @if (u && isAdmin()) {
-    <details class="panel span-12 advanced" aria-labelledby="spec-title">
-      <summary class="panel-head">
+    <details class="page-section advanced" aria-labelledby="spec-title">
+      <summary class="section-head">
         <span class="disclosure-chev" aria-hidden="true"></span>
         <h2 id="spec-title">Definition</h2>
         <span class="muted">Advanced</span>
       </summary>
-      <pre class="panel-body spec">{{ specJson() }}</pre>
+      <pre class="section-body spec">{{ specJson() }}</pre>
     </details>
   }
 </div>

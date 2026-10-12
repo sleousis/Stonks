@@ -1,286 +1,362 @@
-import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { PortfolioService } from '../../api/portfolio.service';
-import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
+import {
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  splitMoney,
+  toneClass,
+} from '../../core/format/format';
 import {
   dayChangeFrom,
   dayChangeMoney,
   dayChangePercent,
-  sessionLabel,
+  sessionPhrase,
 } from '../../core/format/day-change';
-import { ModeStamp } from '../../shared/ui/mode-stamp';
-import { baseCurrencyLine } from '../../shared/base-currency';
-import { StatTile } from '../../shared/ui/stat-tile';
-import { autoRefresh } from '../../shared/auto-refresh';
-import { NoBook } from '../../shared/ui/no-book';
-import { isReadOnly } from '../../shared/ui/portfolio-picker';
-import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
+import { baseCurrencyLine } from '../../shared/base-currency';
+import { autoRefresh } from '../../shared/auto-refresh';
+import { countUp } from '../../shared/ui/count-up';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
+import { NoBook } from '../../shared/ui/no-book';
+import { isReadOnly } from '../../shared/ui/portfolio-picker';
+import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
+import { ErrorState, LoadingState } from '../../shared/ui/states';
+import { type EquityPoint, EquityArea } from '../../shared/chart/equity-area';
+import { HomeStore } from './home-store';
 
-const TOP_HOLDINGS = 8;
 /** A yearly rate means little before about three months of history (NB-14). */
 const YEARLY_AFTER_DAYS = 90;
+const DAY_MS = 86_400_000;
+/** The meter draws one tick per paper day up to this many. */
+const METER_MAX_TICKS = 30;
+
+export type Range = '1W' | '1M' | '3M' | '1Y' | 'All';
+const RANGE_DAYS: Record<Range, number | null> = {
+  '1W': 7,
+  '1M': 30,
+  '3M': 91,
+  '1Y': 365,
+  All: null,
+};
 
 /** Calendar days between the first and last day of a P&L series. */
 export function historyDays(rows: readonly { day: string }[]): number {
   if (rows.length < 2) return 0;
-  return (Date.parse(rows.at(-1)!.day) - Date.parse(rows[0].day)) / 86_400_000;
+  return (Date.parse(rows.at(-1)!.day) - Date.parse(rows[0].day)) / DAY_MS;
 }
 /** Moved to core/format/day-change.ts so every page names the day alike (M2). */
 export { sessionLabel } from '../../core/format/day-change';
 
-/** My portfolio: value, today's change and the biggest holdings. */
+/** The rows within `range` of the last day. */
+export function inRange<T extends { day: string }>(rows: readonly T[], range: Range): T[] {
+  const days = RANGE_DAYS[range];
+  if (days === null || rows.length === 0) return [...rows];
+  const from = Date.parse(rows.at(-1)!.day) - days * DAY_MS;
+  return rows.filter((r) => Date.parse(r.day) >= from);
+}
+
+export { splitMoney } from '../../core/format/format';
+
+/**
+ * My portfolio, the overview at the top of Today: the value as the one big
+ * figure, the last session's change, the value curve with a range picker,
+ * and beside it the facts (cash, invested, open orders, worst drop) and the
+ * paper-days meter. Live portfolios draw the figure and curve in brass.
+ */
 @Component({
   selector: 'app-portfolio-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatTile, ModeStamp, NoBook, LoadingState, EmptyState, ErrorState],
+  imports: [RouterLink, ModeStamp, NoBook, LoadingState, ErrorState, Segmented, EquityArea],
   template: `
-    <section class="panel" [class.live-frame]="live()" aria-labelledby="home-portfolio">
-      <div class="panel-head">
-        <h2 id="home-portfolio">My portfolio</h2>
-        <span class="head-end">
+    <section class="overview" aria-labelledby="home-portfolio">
+      <div class="main">
+        <header class="head">
+          <h2 id="home-portfolio">My portfolio</h2>
           @if (mode(); as m) {
             <app-mode-stamp [live]="m === 'live'" [stage]="stage()" [readOnly]="readOnly()" />
           }
           @if (hasBook()) {
-            <a routerLink="/insights" class="more">Details</a>
+            <a routerLink="/insights" class="text-link details">Details</a>
           }
-        </span>
-      </div>
-      @if (portfolio.error(); as err) {
-        <app-error-state
-          title="Could not load your portfolio"
-          [error]="err"
-          (retry)="portfolio.reload()"
-        />
-      } @else if (!portfolio.hasValue()) {
-        <app-loading-state label="Loading your portfolio" [rows]="4" />
-      } @else if (portfolio.value() === null) {
-        <app-no-book
-          message="You get signals from the strategies you follow. A paper portfolio lets them trade for you with pretend money."
-        />
-      } @else {
-        <div class="stat-strip tiles">
-          <app-stat-tile
-            bare
-            label="Value"
-            featured
-            [live]="live()"
-            [value]="value()"
-            [amount]="total()"
-            [format]="money"
-            [detail]="baseLine()"
-            [help]="false"
+        </header>
+        @if (store.portfolio.error(); as err) {
+          <app-error-state
+            title="Could not load your portfolio"
+            [error]="err"
+            (retry)="store.portfolio.reload()"
           />
-          <app-stat-tile
-            bare
-            [label]="dayLabel()"
-            [value]="dayChange() ?? 'No change yet'"
-            [detail]="dayReturn()"
-            [detailTone]="dayTone()"
-            [help]="false"
+        } @else if (!store.portfolio.hasValue()) {
+          <app-loading-state label="Loading your portfolio" [rows]="4" />
+        } @else if (store.portfolio.value() === null) {
+          <app-no-book
+            message="You get signals from the strategies you follow. A paper portfolio lets them trade for you with pretend money."
           />
-        </div>
-        <div class="panel-body body">
+        } @else {
+          <p class="headline-figure value" [class.brass]="live()">
+            <span class="visually-hidden">Value </span>{{ figure()[0]
+            }}<span class="minor">{{ figure()[1] }}</span>
+          </p>
+          @if (baseLine(); as line) {
+            <p class="base">{{ line }}</p>
+          }
+          <p class="change">
+            @if (dayChange(); as c) {
+              <span class="pill num" [attr.data-tone]="dayTone()">{{ c }}</span>
+              @if (dayReturn(); as r) {
+                <span class="num" [class]="dayTone()">{{ r }}</span>
+              }
+              <span class="when">{{ dayPhrase() }}</span>
+            } @else {
+              <span class="when">No change yet</span>
+            }
+          </p>
           @if (returnsLine(); as line) {
             <p class="returns">{{ line }}</p>
           }
-          @if (holdings().length === 0) {
-            <app-empty-state
-              compact
-              title="No holdings yet"
-              message="Holdings show here after your first paper or auto trade."
-            >
-              <a routerLink="/orders" class="btn">See orders</a>
-            </app-empty-state>
-          } @else {
-            <div class="holdings-wrap">
-              <p class="holdings-head" aria-hidden="true">
-                <span>Holding</span>
-                <span>Value</span>
-                <span>Return</span>
-              </p>
-              <ul class="holdings" aria-label="Holdings">
-                @for (h of holdings(); track h.ticker) {
-                  <li>
-                    <span class="ticker">{{ h.ticker }}</span>
-                    <span class="qty num muted">{{ h.quantity }}</span>
-                    <span class="value num">{{ h.value }}</span>
-                    <span class="pnl num" [class]="h.tone">{{ h.pnl }}</span>
-                  </li>
-                }
-              </ul>
+          @if (curve().length > 1) {
+            <div class="curve">
+              <app-segmented
+                class="range"
+                label="Range"
+                emphasis="strong"
+                [options]="ranges"
+                [(value)]="range"
+              />
+              <app-equity-area [points]="curve()" [live]="live()" [summary]="curveSummary()" />
             </div>
-            @if (more() > 0) {
-              <a routerLink="/insights" class="more">and {{ more() }} more</a>
-            }
+          } @else {
+            <p class="hint">The value curve starts once the portfolio has two days of history.</p>
           }
-        </div>
+        }
+      </div>
+
+      @if (hasBook()) {
+        <aside class="facts" aria-label="Portfolio facts">
+          <dl class="fact-list">
+            <div>
+              <dt>Cash</dt>
+              <dd>{{ cash() }}</dd>
+            </div>
+            <div>
+              <dt>Invested</dt>
+              <dd>{{ invested() }}</dd>
+            </div>
+            <div>
+              <dt>Open orders</dt>
+              <dd>{{ openOrders() }}</dd>
+            </div>
+            <div>
+              <dt>Worst drop</dt>
+              <dd [class.loss]="worstDropValue() < 0">{{ worstDrop() }}</dd>
+            </div>
+          </dl>
+          @if (meter(); as m) {
+            <div class="meter">
+              <p class="meter-head">
+                <span>Paper days</span>
+                <span class="num">{{ m.done }} of {{ m.required }}</span>
+              </p>
+              @if (m.ticks.length) {
+                <ol class="ticks" aria-hidden="true">
+                  @for (t of m.ticks; track $index) {
+                    <li [class.on]="t"></li>
+                  }
+                </ol>
+              }
+              <p class="meter-text">{{ m.text }}</p>
+            </div>
+          }
+        </aside>
       }
     </section>
   `,
   styles: `
+    @use 'breakpoints' as bp;
     :host {
       display: block;
       min-width: 0;
     }
-    .body {
+    /* The figure and curve, with a 320px facts column from desktop. */
+    .overview {
       display: grid;
-      gap: var(--space-3);
-    }
-    /* Value and today's change: one divided strip under the head, no card in a card. */
-    .tiles {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      border-bottom: 1px solid var(--color-border);
-    }
-    .tiles app-stat-tile {
-      padding: var(--space-4);
-    }
-    /* Phones: the headline figure gets the whole width. */
-    @media (max-width: 767.98px) {
-      .tiles app-stat-tile {
-        padding: var(--space-3);
-      }
-      .tiles .featured {
-        grid-column: 1 / -1;
+      gap: var(--space-6) var(--column-gap);
+      grid-template-columns: minmax(0, 1fr);
+
+      @include bp.from-desktop {
+        grid-template-columns: minmax(0, 1fr) 320px;
       }
     }
-    .head-end {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-3);
+    .main {
+      min-width: 0;
     }
-    .more {
-      display: inline-flex;
+    .head {
+      display: flex;
       align-items: center;
+      gap: var(--space-2) var(--space-3);
       min-height: var(--touch-min);
+    }
+    h2 {
+      font-size: var(--text-lead);
+      font-weight: var(--weight-semibold);
+    }
+    .details {
+      margin-left: auto;
+      font-size: var(--text-md);
+    }
+    .value {
+      margin-top: var(--space-1);
+
+      @include bp.phone {
+        font-size: clamp(1.75rem, 9.5vw, 2.5rem);
+      }
+    }
+    .base,
+    .hint {
+      margin-top: var(--space-1);
+      color: var(--muted);
       font-size: var(--text-sm);
+    }
+    .change {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+      margin-top: var(--space-3);
+      font-size: var(--text-md);
+    }
+    .pill {
+      padding: 2px var(--space-2);
+      border-radius: var(--r-pill);
+      background: var(--sunk);
+      font-weight: var(--weight-semibold);
+    }
+    .pill[data-tone='gain'] {
+      background: var(--up-soft);
+      color: var(--up);
+    }
+    .pill[data-tone='loss'] {
+      background: var(--down-soft);
+      color: var(--down);
+    }
+    .when,
+    .returns {
+      color: var(--ink-2);
     }
     .returns {
-      margin: 0;
-      max-width: 70ch;
-      color: var(--color-ink-2);
+      margin-top: var(--space-1);
       font-size: var(--text-sm);
     }
-    /* Holdings: value and return sit in fixed columns on one baseline. */
-    .holdings-wrap {
-      --holding-cols: minmax(0, 1fr) minmax(6.5rem, auto) 4.5rem;
-    }
-    .holdings-head {
+    .curve {
       display: grid;
-      grid-template-columns: var(--holding-cols);
-      column-gap: var(--space-3);
-      padding-bottom: var(--space-1);
-      border-bottom: 1px solid var(--color-border);
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
-      font-weight: 600;
+      margin-top: var(--space-4);
     }
-    .holdings-head span + span {
-      text-align: right;
+    .range {
+      justify-self: end;
+      margin-bottom: var(--space-3);
+
+      @include bp.phone {
+        justify-self: stretch;
+      }
     }
-    .holdings {
+    /* Facts: rows on hairlines, then the paper-days meter. */
+    .facts {
       display: grid;
+      align-content: start;
+      gap: var(--space-5);
+      min-width: 0;
+
+      @include bp.from-desktop {
+        padding-top: var(--touch-min);
+      }
+    }
+    .meter {
+      display: grid;
+      gap: var(--space-2);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--rule);
+    }
+    .meter-head {
+      display: flex;
+      justify-content: space-between;
+      font-weight: var(--weight-semibold);
+    }
+    .ticks {
+      display: flex;
+      gap: 3px;
       margin: 0;
       padding: 0;
       list-style: none;
     }
-    .holdings li {
-      display: grid;
-      grid-template-columns: var(--holding-cols);
-      grid-template-areas: 'ticker value pnl' 'qty value pnl';
-      column-gap: var(--space-3);
-      align-items: baseline;
-      padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-border);
+    .ticks li {
+      flex: 1 1 0;
+      max-width: 10px;
+      height: 14px;
+      border-radius: 2px;
+      background: var(--rule);
     }
-    .holdings li:last-child {
-      border-bottom: 0;
+    .ticks li.on {
+      background: var(--accent);
     }
-    .ticker {
-      grid-area: ticker;
-      font-weight: var(--weight-semibold);
-      overflow-wrap: anywhere;
-    }
-    .qty {
-      grid-area: qty;
-      font-size: var(--text-xs);
-    }
-    .value {
-      grid-area: value;
-      text-align: right;
-    }
-    .pnl {
-      grid-area: pnl;
-      text-align: right;
+    .meter-text {
+      color: var(--ink-2);
+      font-size: var(--text-sm);
     }
   `,
 })
 export class PortfolioCard {
-  private readonly api = inject(PortfolioService);
-
+  protected readonly store = inject(HomeStore);
   private readonly portfolioCtx = inject(PortfolioContextService);
 
-  /**
-   * Null when the person has no portfolio (they follow strategies for
-   * signals only): then nothing asks for holdings, so no 404 (BUG-3).
-   */
-  protected readonly portfolio = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
-    loader: () => this.ifBook(() => this.api.get()),
-  });
-  protected readonly pnl = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
-    loader: () => this.ifBook(() => this.api.pnl()),
-  });
-
-  private async ifBook<T>(read: () => Promise<T>): Promise<T | null> {
-    await this.portfolioCtx.load();
-    if (this.portfolioCtx.noBook()) return null;
-    return read();
+  constructor() {
+    this.store.need('portfolio', 'orders', 'follows');
   }
 
   /** The value moves during the session: every minute, and when a trading run starts (UX-12). */
-  protected readonly auto = autoRefresh(() => [this.portfolio, this.pnl], {
-    triggers: [inject(TradingDayService).runsPassed],
-  });
-
-  /** "Details" only when there is a portfolio to show details of. */
-  protected readonly hasBook = computed(
-    () => this.portfolio.hasValue() && this.portfolio.value() !== null,
+  protected readonly auto = autoRefresh(
+    () => [this.store.portfolio, this.store.pnl, this.store.orders],
+    { triggers: [inject(TradingDayService).runsPassed] },
   );
 
-  private readonly latest = computed(() =>
-    this.pnl.hasValue() ? (this.pnl.value()?.rows.at(-1) ?? null) : null,
+  protected readonly ranges: readonly SegmentOption<Range>[] = (
+    ['1W', '1M', '3M', '1Y', 'All'] as const
+  ).map((r) => ({ value: r, label: r }));
+  protected readonly range = signal<Range>('1M');
+
+  private readonly book = computed(() =>
+    this.store.portfolio.hasValue() ? this.store.portfolio.value() : null,
   );
+  private readonly series = computed(() =>
+    this.store.pnl.hasValue() ? this.store.pnl.value() : null,
+  );
+
+  /** "Details" and the facts only when there is a portfolio to show. */
+  protected readonly hasBook = computed(() => this.book() !== null);
 
   /** The portfolio's own currency, so the value reads the same here, on Dashboard and on Insights. */
-  private readonly currency = computed(() => {
-    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
-    return book?.currency ?? undefined;
-  });
+  private readonly currency = computed(() => this.book()?.currency ?? undefined);
   /**
    * The headline figure. A book that reports in its base currency shows the
    * base total: holdings in other currencies are converted into it.
    */
   protected readonly total = computed(() => {
-    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
+    const book = this.book();
     if (!book) return null;
     const base = book.base_currency ?? this.portfolioCtx.current()?.base_currency;
     return base && book.currency === base && book.total_value_base != null
       ? book.total_value_base
       : book.total_value;
   });
-  protected readonly value = computed(() => {
-    const total = this.total();
-    return total == null ? '' : formatMoney(total, { currency: this.currency() });
+  private readonly shown = countUp(() => this.total());
+  protected readonly figure = computed(() => {
+    const v = this.shown();
+    return splitMoney(v == null ? '' : formatMoney(v, { currency: this.currency() }));
   });
-  protected readonly money = (n: number) => formatMoney(n, { currency: this.currency() });
   /** The value in the base currency when it differs, or why it is missing. */
   protected readonly baseLine = computed(() => {
-    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
+    const book = this.book();
     if (!book) return null;
     return baseCurrencyLine(
       { ...book, currency: book.currency ?? 'USD' },
@@ -293,7 +369,7 @@ export class PortfolioCard {
    * would read as +48.5% a year (NB-14).
    */
   protected readonly returnsLine = computed(() => {
-    const series = this.pnl.hasValue() ? this.pnl.value() : null;
+    const series = this.series();
     if (!series) return null;
     const yearly = series.mwr != null && historyDays(series.rows) >= YEARLY_AFTER_DAYS;
     if (series.twr == null && !yearly) return null;
@@ -317,7 +393,7 @@ export class PortfolioCard {
   });
   /** The API's one headline change (`day_change`), the same as Dashboard and Insights (M2). */
   private readonly day = computed(() =>
-    dayChangeFrom(this.pnl.hasValue() ? this.pnl.value()?.day_change : null, this.latest()),
+    dayChangeFrom(this.series()?.day_change, this.series()?.rows.at(-1) ?? null),
   );
   protected readonly dayChange = computed(() => {
     const d = this.day();
@@ -328,29 +404,66 @@ export class PortfolioCard {
     return d?.pct == null ? null : dayChangePercent(d.pct);
   });
   protected readonly dayTone = computed(() => toneClass(this.day()?.change));
-  protected readonly dayLabel = computed(() => sessionLabel(this.day()?.day));
+  protected readonly dayPhrase = computed(() => sessionPhrase(this.day()?.day));
 
-  private readonly sorted = computed(() =>
-    this.portfolio.hasValue() && this.portfolio.value()
-      ? [...this.portfolio.value()!.positions].sort(
-          (a, b) => (b.market_value ?? 0) - (a.market_value ?? 0),
-        )
-      : [],
+  protected readonly curve = computed<EquityPoint[]>(() =>
+    inRange(this.series()?.rows ?? [], this.range()).map((r) => ({
+      day: r.day,
+      value: r.total_value,
+    })),
   );
-  protected readonly holdings = computed(() =>
-    this.sorted()
-      .slice(0, TOP_HOLDINGS)
-      .map((p) => ({
-        ticker: p.ticker,
-        quantity: `${formatNumber(p.quantity, { digits: 2 })} shares`,
-        value:
-          p.market_value == null
-            ? 'n/a'
-            : formatMoney(p.market_value, { currency: p.currency ?? this.currency() }),
-        pnl:
-          p.unrealized_pnl_pct == null ? '' : formatPercent(p.unrealized_pnl_pct, { signed: true }),
-        tone: toneClass(p.unrealized_pnl_pct),
-      })),
+  protected readonly curveSummary = computed(() => {
+    const c = this.curve();
+    if (c.length < 2) return '';
+    const from = formatMoney(c[0].value, { currency: this.currency() });
+    const to = formatMoney(c.at(-1)!.value, { currency: this.currency() });
+    return `Portfolio value over ${this.range() === 'All' ? 'all time' : this.range()}: from ${from} to ${to}.`;
+  });
+
+  protected readonly cash = computed(() =>
+    formatMoney(this.book()?.cash, { currency: this.currency() }),
   );
-  protected readonly more = computed(() => Math.max(0, this.sorted().length - TOP_HOLDINGS));
+  protected readonly invested = computed(() =>
+    formatMoney(this.book()?.positions_value, { currency: this.currency() }),
+  );
+  protected readonly openOrders = computed(() => {
+    const n = this.store.openOrders();
+    return n == null ? '' : formatNumber(n);
+  });
+  protected readonly worstDropValue = computed(() =>
+    Math.min(0, ...(this.series()?.rows ?? []).map((r) => r.drawdown)),
+  );
+  protected readonly worstDrop = computed(() =>
+    formatPercent(this.worstDropValue(), { signed: this.worstDropValue() < 0, digits: 2 }),
+  );
+
+  /**
+   * Paper days toward a broker account: the furthest follow in this
+   * portfolio. None for a live portfolio, which is past that point.
+   */
+  protected readonly meter = computed(() => {
+    if (this.live()) return null;
+    const id = this.portfolioCtx.selectedId();
+    const subs = this.store
+      .follows()
+      .filter(
+        (s) => s.paper_days_required > 0 && (!id || !s.portfolio_id || s.portfolio_id === id),
+      );
+    if (!subs.length) return null;
+    const best = subs.reduce((a, b) =>
+      b.paper_days_completed / b.paper_days_required >
+      a.paper_days_completed / a.paper_days_required
+        ? b
+        : a,
+    );
+    const required = best.paper_days_required;
+    const done = Math.min(best.paper_days_completed, required);
+    const ticks =
+      required <= METER_MAX_TICKS ? Array.from({ length: required }, (_, i) => i < done) : [];
+    const text =
+      done >= required
+        ? `A strategy has its ${required} paper days. It can trade a broker account now.`
+        : `After ${required} paper days you can let a strategy trade a broker account.`;
+    return { done, required, ticks, text };
+  });
 }

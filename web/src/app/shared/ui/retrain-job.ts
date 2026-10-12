@@ -140,7 +140,7 @@ export function retrainSummary(r: RetrainResultView): string {
       font-weight: var(--weight-medium);
     }
     .muted {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
   `,

@@ -1,5 +1,9 @@
 @use 'breakpoints' as bp;
 
+// The chrome bar, the rail and the bottom nav are styled in the global
+// partial styles/_chrome.scss, so the sheets that open from them keep the
+// page look. This file holds the frame itself.
+
 :host {
   display: block;
   min-height: 100dvh;
@@ -11,9 +15,9 @@
   top: var(--space-2);
   left: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  color: var(--color-primary-ink);
+  border-radius: var(--r-ctl);
+  background: var(--accent);
+  color: var(--on-accent);
   transform: translateY(-200%);
 
   &:focus {
@@ -21,237 +25,27 @@
   }
 }
 
-// The rail: sidebar, phone top bar and drawer share a slate slab in both
-// themes. Inside it the colour tokens are remapped, so every component that
-// sits there (nav, bell, buttons) reads light-on-slate without its own rules.
-@mixin rail-scope {
-  color-scheme: dark;
-  --color-surface: var(--color-rail);
-  --color-surface-2: var(--color-rail-2);
-  --color-surface-3: color-mix(in srgb, var(--color-rail-2) 70%, var(--color-rail-ink));
-  --color-border: color-mix(in srgb, var(--color-rail) 80%, var(--color-rail-ink));
-  --color-border-strong: color-mix(in srgb, var(--color-rail) 60%, var(--color-rail-ink));
-  --color-ink: var(--color-rail-ink);
-  --color-ink-2: var(--color-rail-ink-2);
-  --color-ink-3: var(--color-rail-ink-2);
-  --color-primary: var(--color-rail-accent);
-  --color-link: var(--color-rail-accent);
-  --color-primary-ink: var(--color-rail);
-  --color-primary-hover: color-mix(in srgb, var(--color-rail-accent) 85%, var(--color-rail-ink));
-  --color-hover: color-mix(in srgb, var(--color-rail-ink) 6%, transparent);
-  --color-pressed: color-mix(in srgb, var(--color-rail-ink) 10%, transparent);
-  --color-accent: var(--color-rail-accent);
-  --color-focus: var(--color-rail-accent);
-  background: var(--color-rail);
-  color: var(--color-rail-ink);
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-ink);
-  text-decoration: none;
-}
-
-.brand-mark {
-  flex: none;
-
-  path {
-    fill: none;
-    stroke: var(--color-accent);
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-}
-
-.wordmark {
-  font-family: var(--font-display);
-  font-stretch: var(--display-stretch);
-  font-size: 1.375rem;
-  font-weight: 800;
-  letter-spacing: -0.005em;
-  line-height: 1;
-}
-
-// Phone top bar: the wordmark steps down so five controls fit at 375px.
-.topbar .wordmark {
-  font-size: 1.25rem;
-}
-
-// Phone top bar ------------------------------------------------------------
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1);
-  padding: env(safe-area-inset-top) calc(var(--space-2) + env(safe-area-inset-right)) 0
-    calc(var(--space-2) + env(safe-area-inset-left));
-  min-height: calc(52px + env(safe-area-inset-top));
-  @include rail-scope;
-
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    flex: 0 1 auto;
-    min-width: 0;
-    min-height: var(--touch-min);
-    padding: 0 var(--space-2);
-  }
-
-  @include bp.from-tablet {
-    display: none;
-  }
-}
-
-// A kill switch is on: a red rule along the rail's edge, as the strip turns red.
-.topbar[data-tone='kill'] {
-  box-shadow: inset 0 -3px 0 var(--color-loss);
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-// Sidebar search: looks like a field, opens the command palette.
-.search-button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-h);
-  margin-bottom: var(--space-1);
-  padding: 0 var(--space-2) 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
-  color: var(--color-ink-2);
-  font: inherit;
-  font-size: var(--text-sm);
-  text-align: start;
-  cursor: pointer;
-  transition:
-    border-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
-
-  &:hover {
-    border-color: var(--color-border-strong);
-    color: var(--color-ink);
-  }
-
-  .search-label {
-    flex: 1;
-  }
-
-  kbd {
-    padding: 0 var(--space-1);
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-xs);
-    background: var(--color-surface);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-ink-3);
-  }
-
-  @include bp.coarse {
-    min-height: var(--touch-min);
-
-    kbd {
-      display: none;
-    }
-  }
-}
-
-// Frame ---------------------------------------------------------------------
-.frame {
-  display: block;
-
-  @include bp.from-tablet {
-    display: grid;
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-    min-height: 100dvh;
-    // Keep the sidebar colour running the full page height, with a hairline
-    // at its edge where rail and page are close in tone (dark theme, m7).
-    background: linear-gradient(
-      to right,
-      var(--color-rail) calc(var(--sidebar-w) - 1px),
-      color-mix(in srgb, var(--color-rail) 84%, var(--color-rail-ink)) 0 var(--sidebar-w),
-      transparent 0
-    );
-  }
-}
-
-.sidebar {
-  display: none;
-
-  @include bp.from-tablet {
-    position: sticky;
-    top: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    height: 100dvh;
-    overflow: hidden;
-    padding: var(--space-4) var(--space-3) var(--space-3);
-    padding-left: calc(var(--space-3) + env(safe-area-inset-left));
-    @include rail-scope;
-    // The same hairline as the frame below it (m7).
-    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--color-rail) 84%, var(--color-rail-ink));
-
-    > .sidebar-head > .brand {
-      padding: var(--space-1) var(--space-3) var(--space-2);
-    }
-
-    &[data-tone='kill'] {
-      box-shadow: inset -3px 0 0 var(--color-loss);
-    }
-  }
-}
-
-// The nav scrolls between the search box and the pinned account menu, so
-// the menu never falls below the fold (M1). Shadows at the top and bottom
-// edges appear only while there is more to scroll to: the covers scroll
-// with the content, the shadows stay put.
-.rail-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin: 0 calc(-1 * var(--space-1));
-  padding: 0 var(--space-1);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  background:
-    linear-gradient(var(--color-rail) 30%, transparent) top / 100% 24px no-repeat local,
-    linear-gradient(transparent, var(--color-rail) 70%) bottom / 100% 24px no-repeat local,
-    radial-gradient(
-        farthest-side at 50% 0,
-        color-mix(in srgb, var(--color-rail-ink) 22%, transparent),
-        transparent
-      )
-      top / 100% 10px no-repeat scroll,
-    radial-gradient(
-        farthest-side at 50% 100%,
-        color-mix(in srgb, var(--color-rail-ink) 22%, transparent),
-        transparent
-      )
-      bottom / 100% 10px no-repeat scroll;
+// A kill switch is on: a red rule under the chrome bar while the rail turns red.
+.chrome[data-tone='kill'] .chrome-bar {
+  box-shadow: inset 0 -1px 0 var(--halt-rule);
 }
 
 main {
   min-width: 0;
   max-width: var(--content-max);
-  padding: var(--space-5) var(--gutter) calc(var(--space-7) + env(safe-area-inset-bottom));
+  margin: 0 auto;
+  padding: 28px var(--gutter) calc(var(--space-10) + env(safe-area-inset-bottom));
   padding-left: calc(var(--gutter) + env(safe-area-inset-left));
   padding-right: calc(var(--gutter) + env(safe-area-inset-right));
   outline: none;
 
+  // Route enter: a short rise of the page, off under reduced motion.
+  > :not(router-outlet) {
+    animation: page-enter var(--dur-page) var(--ease-out) both;
+  }
+
   @include bp.phone {
-    padding-top: var(--space-4);
+    padding-top: var(--space-5);
   }
 }
 
@@ -259,72 +53,8 @@ main {
 main.bare {
   max-width: none;
   padding: 0;
-}
 
-.sidebar-foot {
-  display: grid;
-  flex: none;
-  gap: var(--space-1);
-  margin-top: auto;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
-}
-
-.theme-toggle {
-  justify-content: flex-start;
-  padding: 0 var(--space-3);
-  color: var(--color-ink-2);
-}
-
-// Phone drawer ------------------------------------------------------------
-.drawer {
-  width: min(320px, 86vw);
-  max-width: none;
-  height: 100dvh;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  @include rail-scope;
-  box-shadow: var(--shadow-overlay);
-  z-index: var(--z-drawer);
-
-  &::backdrop {
-    background: var(--color-scrim);
+  > :not(router-outlet) {
+    animation: none;
   }
-
-  &[open] {
-    animation: slide-in var(--dur) var(--ease-out);
-  }
-}
-
-.drawer-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  height: 100%;
-  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-3)
-    calc(var(--space-4) + env(safe-area-inset-bottom))
-    calc(var(--space-3) + env(safe-area-inset-left));
-}
-
-.drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-left: var(--space-3);
-}
-
-@keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(-100%);
-  }
-}
-
-.sidebar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
 }

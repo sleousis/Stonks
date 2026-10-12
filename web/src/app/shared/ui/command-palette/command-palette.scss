@@ -1,70 +1,80 @@
 @use 'breakpoints' as bp;
 
+// A 640px sheet at 12vh: the field on top, results grouped under small
+// muted headings, the selected row in accent soft. Full screen on phones.
 .palette {
-  width: min(620px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
   max-height: min(560px, calc(100dvh - 20vh));
   margin: 12vh auto auto;
   padding: 0;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  color: var(--color-ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sheet);
+  background: var(--raise);
+  color: var(--ink);
   box-shadow: var(--shadow-overlay);
   overflow: hidden;
 
   &[open] {
     display: flex;
     flex-direction: column;
-    animation: palette-in var(--dur) var(--ease-out);
+    animation: menu-in var(--dur-menu) var(--ease-out);
   }
 
   &::backdrop {
-    background: var(--color-scrim);
+    background: var(--scrim);
   }
 }
 
 .search {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-3);
+  height: 52px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border-bottom: 1px solid var(--rule);
 }
 
 .glass {
   flex: none;
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 .query {
   flex: 1;
   min-width: 0;
-  height: var(--touch-min);
+  height: 100%;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-ink);
+  color: var(--ink);
   // 16px keeps iOS Safari from zooming into the field.
   font: inherit;
   font-size: var(--text-lg);
 
   &::placeholder {
-    color: var(--color-ink-3);
+    color: var(--muted);
   }
 
-  // The dialog frame already shows where focus is; the ring sits on the row.
+  // The sheet already shows where focus is; the ring sits on the row.
   &:focus-visible {
     outline: none;
   }
 }
 
 .search:focus-within {
-  box-shadow: inset 0 -2px 0 var(--color-focus);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .close {
+  display: inline-grid;
   flex: none;
-  font-size: var(--text-sm);
+  place-items: center;
+  min-width: var(--touch-min);
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
 }
 
 .results {
@@ -75,32 +85,23 @@
   padding: var(--space-1) 0 var(--space-2);
 }
 
-.section + .section {
-  border-top: 1px solid var(--color-border);
-}
-
-// Group labels: the shared overline.
+// Group headings: 12px muted, sentence case.
 .section-title {
   padding: var(--space-3) var(--space-4) var(--space-1);
-  color: var(--color-ink-3);
+  color: var(--muted);
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: var(--tracking-overline);
-  text-transform: uppercase;
+  font-weight: var(--weight-medium);
 }
 
 .option {
-  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   min-height: 40px;
   margin: 0 var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--r-ctl);
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease);
 
   @include bp.phone {
     min-height: var(--touch-min);
@@ -110,55 +111,40 @@
     min-height: var(--touch-min);
   }
 
-  // The selected row: a quiet well with the accent bar at its edge.
   &.active {
-    background: var(--color-pressed);
+    background: var(--accent-soft);
 
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 8px;
-      bottom: 8px;
-      width: 3px;
-      border-radius: var(--radius-xs);
-      background: var(--color-accent);
+    .option-icon {
+      color: var(--accent);
     }
   }
 }
 
+.option-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
 .option-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--space-2);
+  flex: 1;
   min-width: 0;
 }
 
 .option-label {
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
   overflow-wrap: anywhere;
 }
 
 .option-detail {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--muted);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
-  overflow-wrap: anywhere;
-}
-
-// Key hints: small mono chips.
-kbd {
-  display: inline-block;
-  min-width: 1.6em;
-  padding: 0 var(--space-1);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  color: var(--color-ink-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -171,8 +157,8 @@ kbd {
 }
 
 .empty {
-  padding: var(--space-5) var(--space-4);
-  color: var(--color-ink-2);
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-2);
 }
 
 .foot {
@@ -182,14 +168,13 @@ kbd {
   justify-content: space-between;
   gap: var(--space-1) var(--space-3);
   padding: var(--space-2) var(--space-4);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface-2);
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
   font-size: var(--text-xs);
-  color: var(--color-ink-2);
 }
 
 .status {
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 
   &:not(.visible) {
     display: none;
@@ -221,7 +206,9 @@ kbd {
   }
 
   .search {
-    padding-top: calc(var(--space-2) + env(safe-area-inset-top));
+    height: auto;
+    min-height: 52px;
+    padding-top: env(safe-area-inset-top);
   }
 
   .foot {
@@ -230,12 +217,5 @@ kbd {
 
   .foot:not(:has(.status.visible)) {
     display: none;
-  }
-}
-
-@keyframes palette-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
   }
 }

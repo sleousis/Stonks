@@ -1,8 +1,4 @@
-<app-page-header
-  title="Universes"
-  description="Saved lists of tickers a strategy may trade or be tested on. Each keeps who was a member on every past date, failed companies too, so tests stay honest."
->
-  <a actions class="btn btn-tertiary" routerLink="/data">Data</a>
+<app-page-header title="Universes" [description]="standfirst()">
   @if (canEdit()) {
     <button
       actions
@@ -20,84 +16,118 @@
       <app-permission-note permission="lab.run" />
     </ng-container>
   }
+  <a actions class="btn btn-ghost" routerLink="/data">Data</a>
 </app-page-header>
 
-<div class="page-grid">
+<div class="section-stack">
   @if (creating() && canEdit()) {
-    <section id="create-panel" class="panel span-12" aria-labelledby="create-title">
-      <div class="panel-head">
-        <h2 id="create-title">New universe</h2>
-      </div>
-      <div class="panel-body">
-        <app-universe-editor
-          mode="create"
-          [universes]="universes.hasValue() ? universes.value() : []"
-          [advanced]="isAdmin()"
-          (saved)="created($event)"
-          (cancelled)="creating.set(false)"
-        />
-      </div>
+    <section id="create-panel" class="sheet-box create" aria-labelledby="create-title">
+      <h2 id="create-title" class="create-title">New universe</h2>
+      <app-universe-editor
+        mode="create"
+        [universes]="universes.hasValue() ? universes.value() : []"
+        [advanced]="isAdmin()"
+        (saved)="created($event)"
+        (cancelled)="creating.set(false)"
+      />
     </section>
   }
 
-  <!-- List ------------------------------------------------------------------>
-  <section class="panel panel-flush span-12" aria-labelledby="list-title">
-    <div class="panel-head">
-      <h2 id="list-title">Stored universes</h2>
-      @if (universes.hasValue()) {
-        <span class="count muted num">{{ universes.value().length }} stored</span>
+  @if (universes.hasValue() && universes.value().length) {
+    @let s = summary();
+    <div class="summary-strip">
+      <app-stat-tile label="Stored" [value]="'' + s.count" />
+      <app-stat-tile label="Members in all" [value]="s.members | num" />
+      <app-stat-tile
+        label="Need a refresh"
+        [value]="'' + s.behind"
+        [detail]="s.behind ? 'changed or never filled' : 'all up to date'"
+      />
+      <app-stat-tile label="Last refresh" [value]="s.last" />
+    </div>
+  }
+
+  <section class="page-section section-flush" aria-labelledby="list-title">
+    <header class="section-head">
+      <h2 id="list-title">
+        Stored universes
+        @if (universes.hasValue()) {
+          <span class="count">{{ universes.value().length }}</span>
+        }
+      </h2>
+      @if (universes.hasValue() && universes.value().length) {
+        <div class="filter-pills" role="group" aria-label="Show universes of kind">
+          @for (k of kinds(); track k.value) {
+            <button
+              type="button"
+              class="filter-pill"
+              [attr.aria-pressed]="kindFilter() === k.value"
+              [disabled]="!k.count && k.value !== 'all'"
+              (click)="kindFilter.set(k.value)"
+            >
+              {{ k.label }} <span class="count">{{ k.count }}</span>
+            </button>
+          }
+        </div>
+      }
+    </header>
+    <div class="section-body">
+      @if (universes.error(); as err) {
+        <app-error-state
+          title="Could not load universes"
+          [error]="err"
+          (retry)="universes.reload()"
+        />
+      } @else if (!universes.hasValue()) {
+        <app-loading-state label="Loading universes" [rows]="4" />
+      } @else if (universes.value().length === 0) {
+        <app-empty-state
+          icon="doc"
+          title="No universes yet"
+          message="Create one with New universe. Lab runs and the daily trading run can then use it."
+        />
+      } @else {
+        @let rows = shown();
+        <app-data-table
+          caption="Stored universes"
+          [rows]="rows"
+          [columns]="columns"
+          [rowKey]="universeKey"
+          [initialSort]="{ key: 'name', dir: 'asc' }"
+        >
+          <ng-template appCell="name" [appCellOf]="rows" let-u>
+            <a class="cell-link name-link" [routerLink]="['/universes', u.id]">{{
+              u.name || u.id
+            }}</a>
+            <span class="name-meta num">{{ u.id }}</span>
+          </ng-template>
+          <ng-template appCell="kind" [appCellOf]="rows" let-u>
+            <span class="kind-chip" [attr.data-kind]="u.kind">{{ kindLabel[u.kind] }}</span>
+          </ng-template>
+          <ng-template appCell="refreshed_at" [appCellOf]="rows" let-u>
+            @if (!u.refreshed_at) {
+              <span class="muted">Never</span>
+            } @else {
+              <span class="num">{{ u.refreshed_at | dateTime }}</span>
+              @if (stale(u)) {
+                <span class="stale">Changed since</span>
+              }
+            }
+          </ng-template>
+        </app-data-table>
       }
     </div>
-    @if (universes.error(); as err) {
-      <app-error-state
-        title="Could not load universes"
-        [error]="err"
-        (retry)="universes.reload()"
-      />
-    } @else if (!universes.hasValue()) {
-      <app-loading-state label="Loading universes" [rows]="4" />
-    } @else if (universes.value().length === 0) {
-      <app-empty-state
-        title="No universes yet"
-        message="Create one with New universe. Lab runs and the daily trading run can then use it."
-      />
-    } @else {
-      @let rows = universes.value();
-      <app-data-table
-        caption="Stored universes"
-        [rows]="rows"
-        [columns]="columns"
-        [rowKey]="universeKey"
-        [initialSort]="{ key: 'name', dir: 'asc' }"
-      >
-        <ng-template appCell="name" [appCellOf]="rows" let-u>
-          <a class="cell-link name-link" [routerLink]="['/universes', u.id]">{{
-            u.name || u.id
-          }}</a>
-        </ng-template>
-        <ng-template appCell="refreshed_at" [appCellOf]="rows" let-u>
-          @if (!u.refreshed_at) {
-            <span class="muted">Never</span>
-          } @else {
-            <span class="num">{{ u.refreshed_at | dateTime }}</span>
-            @if (stale(u)) {
-              <span class="stale">Changed since</span>
-            }
-          }
-        </ng-template>
-      </app-data-table>
-    }
   </section>
 
   <!-- Index history (admins, Advanced) ---------------------------------------->
   @if (isAdmin()) {
-    <details class="panel span-12 advanced" aria-labelledby="index-title">
-      <summary class="panel-head">
+    <details class="page-section advanced" aria-labelledby="index-title">
+      <summary class="section-head">
         <span class="disclosure-chev" aria-hidden="true"></span>
         <h2 id="index-title">Index history</h2>
         <span class="muted">Advanced, for index universes</span>
       </summary>
-      <form class="panel-body" novalidate (submit)="$event.preventDefault(); importHistory()">
+      <form class="section-body" novalidate (submit)="$event.preventDefault(); importHistory()">
         <p class="muted intro">
           A member snapshot plus dated additions and removals. CSV columns: date, ticker, action
           (member, add or remove).

@@ -12,15 +12,39 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import type { ShadowPnlSummary, StrategyStatus, StrategySummary } from '../../api/models';
 import { ShadowService } from '../../api/shadow.service';
 import { StrategiesService } from '../../api/strategies.service';
+import { SubscriptionsService, type SubscriptionView } from '../../api/subscriptions.service';
+import { formatPercent, isoDay } from '../../core/format/format';
+import { mapSettledLimit } from '../../core/http/map-limit';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { STATUS_WORDS, modeLabel } from '../../shared/governance-labels';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
+import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { STATUS_WORDS } from '../../shared/governance-labels';
+import { DaysRing } from '../../shared/ui/days-ring';
+import { Sparkline } from '../../shared/chart/sparkline';
 import { STATUS_FILTERS, asStatus, strategyDisplayName, strategyKindName } from './strategy-format';
 
-/** Enough for any realistic registry; search and paging then run in the browser. */
+/** Enough for any realistic registry; filters, search and paging then run in the browser. */
 const FETCH_LIMIT = 500;
+/** Trend lines drawn at most: one small read per strategy with a test book. */
+export const SPARK_MAX = 40;
+/** Days the trend line covers. */
+export const SPARK_DAYS = 60;
+/** Calendar days to ask for, enough for SPARK_DAYS trading days. */
+const SPARK_SINCE_DAYS = 92;
+/** History reads in flight at once. */
+const SPARK_CONCURRENCY = 6;
+
+/** How you follow a strategy, for the Following column. */
+export interface Following {
+  /** "Alerts only", "Paper", "Approve each trade", "Automatic" or "Paused". */
+  words: string;
+  /** null: no stamp (alerts only, paused); else whether real money moves. */
+  live: boolean | null;
+}
 
 /** A registry row with its trial result, when it has a test book. */
 export interface StrategyRow extends StrategySummary {
@@ -32,6 +56,9 @@ export interface StrategyRow extends StrategySummary {
   paper_return: number | null;
   max_drawdown: number | null;
   paper_days: number | null;
+  /** The last 60 days of its test book value, for the trend line. */
+  curve: number[] | null;
+  following: Following | null;
 }
 
 /** Join the registry with the paper P&L summaries by strategy id. */
@@ -50,19 +77,99 @@ export function withPerformance(
       paper_return: p?.cumulative_return ?? null,
       max_drawdown: p?.max_drawdown ?? null,
       paper_days: p ? p.days : null,
+      curve: null,
+      following: null,
     };
   });
 }
 
+/**
+ * How you follow each strategy: the subscription in the picked portfolio
+ * first, else any. Automatic and Approve each trade carry the LIVE stamp
+ * only when that portfolio trades real money.
+ */
+export function followingByStrategy(
+  subs: readonly SubscriptionView[],
+  pickedId: string | null,
+  isLive: (portfolioId: string | null) => boolean,
+): Map<string, Following> {
+  const best = new Map<string, SubscriptionView>();
+  for (const s of subs) {
+    const prev = best.get(s.strategy_id);
+    const picked = (x: SubscriptionView) => x.portfolio_id === pickedId;
+    if (!prev || (!picked(prev) && picked(s)) || (!prev.enabled && s.enabled)) {
+      best.set(s.strategy_id, s);
+    }
+  }
+  const out = new Map<string, Following>();
+  for (const [id, s] of best) {
+    if (!s.enabled) out.set(id, { words: 'Paused', live: null });
+    else if (s.mode === 'notify') out.set(id, { words: modeLabel('notify'), live: null });
+    else if (s.mode === 'paper') out.set(id, { words: modeLabel('paper'), live: false });
+    else out.set(id, { words: modeLabel(s.mode), live: isLive(s.portfolio_id) });
+  }
+  return out;
+}
+
+/**
+ * The standfirst, from the data: "3 approved, 2 on trial. Quant value leads
+ * at +8.42%." Retired strategies are counted only when nothing else is.
+ */
+export function strategiesStandfirst(rows: readonly StrategyRow[]): string {
+  if (!rows.length) return 'No strategies yet. Build one in Studio or test one in Lab.';
+  const count = (s: StrategyStatus) => rows.filter((r) => r.status === s).length;
+  const parts = [
+    count('active') ? `${count('active')} approved` : null,
+    count('shadow') ? `${count('shadow')} on trial` : null,
+  ].filter((p): p is string => p !== null);
+  const head = parts.length ? parts.join(', ') : `${count('retired')} retired`;
+  const leader = bestReturn(rows);
+  return leader && (leader.paper_return ?? 0) > 0
+    ? `${capitalise(head)}. ${leader.name} leads at ${formatPercent(leader.paper_return, { signed: true })}.`
+    : `${capitalise(head)}.`;
+}
+
+/** The strategy with the best trial return, retired ones left out. */
+export function bestReturn(rows: readonly StrategyRow[]): StrategyRow | null {
+  return (
+    rows
+      .filter((r) => r.status !== 'retired' && r.paper_return !== null)
+      .sort((a, b) => b.paper_return! - a.paper_return!)[0] ?? null
+  );
+}
+
+/** The strategy with the worst drop on trial, retired ones left out. */
+export function worstDrop(rows: readonly StrategyRow[]): StrategyRow | null {
+  return (
+    rows
+      .filter((r) => r.status !== 'retired' && r.max_drawdown !== null)
+      .sort((a, b) => a.max_drawdown! - b.max_drawdown!)[0] ?? null
+  );
+}
+
+function capitalise(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * The Strategies page (`/strategies`), the reference table page: a summary
+ * strip, filter pills with counts, a search, and one row per strategy with
+ * its status, trial return, a 60-day trend line, worst drop, days on trial
+ * and how you follow it. On phones each row is a list item.
+ */
 @Component({
   selector: 'app-strategies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
     PageHeader,
+    StatTile,
     DataTable,
     TableCell,
     StatusPill,
+    ModeStamp,
+    Sparkline,
+    DaysRing,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -73,6 +180,8 @@ export function withPerformance(
 export class StrategiesPage {
   private readonly strategiesApi = inject(StrategiesService);
   private readonly shadowApi = inject(ShadowService);
+  private readonly subscriptionsApi = inject(SubscriptionsService);
+  private readonly portfolioCtx = inject(PortfolioContextService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -86,10 +195,24 @@ export class StrategiesPage {
   protected readonly search = linkedSignal(() => this.q() ?? '');
   protected readonly filters = STATUS_FILTERS;
 
+  /** Every strategy in one read: the pills count them and filter in the browser. */
   protected readonly strategies = resource({
-    params: () => ({ status: this.statusFilter() }),
-    loader: ({ params }) =>
-      this.strategiesApi.list({ status: params.status ?? undefined, limit: FETCH_LIMIT }),
+    loader: () => this.strategiesApi.list({ limit: FETCH_LIMIT }),
+  });
+
+  /**
+   * When the one read was cut off at FETCH_LIMIT, a picked status is read
+   * on its own, as before the redesign, so the cap counts per status and
+   * no strategy of that status goes missing.
+   */
+  protected readonly byStatus = resource({
+    params: () => {
+      const status = this.statusFilter();
+      if (!status || !this.strategies.hasValue()) return undefined;
+      const all = this.strategies.value();
+      return all.total > all.items.length ? { status } : undefined;
+    },
+    loader: ({ params }) => this.strategiesApi.list({ status: params.status, limit: FETCH_LIMIT }),
   });
 
   /**
@@ -100,14 +223,91 @@ export class StrategiesPage {
     loader: () => this.shadowApi.pnlSummaries({ limit: FETCH_LIMIT }),
   });
 
+  /** Your subscriptions, for the Following column. A failure leaves it empty. */
+  protected readonly subscriptions = resource({
+    loader: () => this.subscriptionsApi.list(),
+  });
+
+  /** The strategies worth a trend line: those with a test book, most days first. */
+  private readonly sparkIds = computed(
+    () =>
+      this.paper.hasValue()
+        ? [...this.paper.value().items]
+            .filter((p) => p.days > 1)
+            .sort((a, b) => b.days - a.days)
+            .slice(0, SPARK_MAX)
+            .map((p) => p.strategy_id)
+        : undefined,
+    { equal: (a, b) => a?.join() === b?.join() },
+  );
+
+  /** Each test book's last 60 values, settled one by one: a failed read draws no line. */
+  protected readonly curves = resource({
+    params: () => (this.sparkIds()?.length ? { ids: this.sparkIds()! } : undefined),
+    loader: async ({ params }) => {
+      // About 60 trading days back, six reads at a time.
+      const since = isoDay(new Date(Date.now() - SPARK_SINCE_DAYS * 86_400_000));
+      const settled = await mapSettledLimit(params.ids, SPARK_CONCURRENCY, (id) =>
+        this.shadowApi.pnl(id, { since }),
+      );
+      const out = new Map<string, number[]>();
+      settled.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          out.set(
+            params.ids[i],
+            r.value.rows.slice(-SPARK_DAYS).map((row) => row.total_value),
+          );
+        }
+      });
+      return out;
+    },
+  });
+
+  private readonly following = computed(() => {
+    if (!this.subscriptions.hasValue()) return new Map<string, Following>();
+    const portfolios = this.portfolioCtx.options();
+    return followingByStrategy(
+      this.subscriptions.value(),
+      this.portfolioCtx.selectedId(),
+      (id) => portfolios.find((p) => p.id === id)?.trading === 'live',
+    );
+  });
+
   private readonly rows = computed<StrategyRow[]>(() => {
     if (!this.strategies.hasValue()) return [];
     const paper = this.paper.hasValue() ? this.paper.value().items : [];
-    return withPerformance(this.strategies.value().items, paper);
+    const curves = this.curves.hasValue() ? this.curves.value() : null;
+    const following = this.following();
+    const status = this.statusFilter();
+    const own = this.byStatus.hasValue() ? this.byStatus.value() : null;
+    // The status read, while it answers for the picked status, adds the
+    // rows the cut-off read left out.
+    const items = this.strategies.value().items;
+    const merged =
+      own && status && own.items.every((s) => s.status === status)
+        ? [...items.filter((s) => s.status !== status), ...own.items]
+        : items;
+    return withPerformance(merged, paper).map((r) => ({
+      ...r,
+      curve: curves?.get(r.id) ?? null,
+      following: following.get(r.id) ?? null,
+    }));
   });
 
+  /** How many strategies each pill holds. */
+  protected readonly counts = computed(() => {
+    const rows = this.rows();
+    const n = (s: StrategyStatus) => rows.filter((r) => r.status === s).length;
+    return { all: rows.length, active: n('active'), shadow: n('shadow'), retired: n('retired') };
+  });
+  protected countOf(value: StrategyStatus | null): number {
+    const c = this.counts();
+    return value ? c[value] : c.all;
+  }
+
   protected readonly visible = computed<StrategyRow[]>(() => {
-    const items = this.rows();
+    const status = this.statusFilter();
+    const items = status ? this.rows().filter((r) => r.status === status) : this.rows();
     const q = this.search().trim().toLowerCase();
     if (!q) return items;
     return items.filter(
@@ -123,21 +323,67 @@ export class StrategiesPage {
 
   protected readonly countLabel = computed(() => {
     if (!this.strategies.hasValue()) return null;
-    const total = this.strategies.value().total;
+    const total = this.rows().length;
     const shown = this.visible().length;
     const noun = total === 1 ? 'strategy' : 'strategies';
     return shown === total ? `${total} ${noun}` : `${shown} of ${total} ${noun}`;
   });
 
+  protected readonly standfirst = computed(() =>
+    this.strategies.hasValue()
+      ? strategiesStandfirst(this.rows())
+      : 'Every strategy, its status and how it does on trial.',
+  );
+
+  // Summary strip --------------------------------------------------------------
+  protected readonly best = computed(() => bestReturn(this.rows()));
+  protected readonly worst = computed(() => worstDrop(this.rows()));
+  protected readonly trialDays = computed(() => {
+    const days = this.rows()
+      .filter((r) => r.status === 'shadow' && r.paper_days !== null)
+      .map((r) => r.paper_days!)
+      .sort((a, b) => a - b);
+    if (!days.length) return null;
+    return days.length === 1 ? `day ${days[0]}` : `day ${days[0]} to day ${days[days.length - 1]}`;
+  });
+  protected readonly approvedDetail = computed(() => {
+    const following = this.rows().filter((r) => r.status === 'active' && r.following).length;
+    return following ? `you follow ${following}` : null;
+  });
+  protected pct(value: number | null | undefined, signed = false): string {
+    return formatPercent(value ?? null, { signed });
+  }
+
   protected readonly columns: TableColumn<StrategyRow>[] = [
-    { key: 'id', label: 'Strategy', mobile: 'title', wrap: true, value: (s) => s.name },
-    { key: 'status', label: 'Status' },
-    { key: 'paper_return', label: 'Trial return', format: 'signedPercent', tone: true },
-    { key: 'max_drawdown', label: 'Worst drop', format: 'percent' },
+    { key: 'id', label: 'Strategy', mobile: 'title', value: (s) => s.name, help: false },
+    { key: 'status', label: 'Status', mobile: 'inline', value: (s) => STATUS_WORDS[s.status] },
+    {
+      key: 'paper_return',
+      label: 'Trial return',
+      format: 'signedPercent',
+      tone: true,
+      mobile: 'figure',
+    },
+    {
+      key: 'curve',
+      label: 'Last 60 days',
+      sortable: false,
+      mobile: 'figure',
+      help: false,
+      value: (s) => (s.curve ? s.curve.length : null),
+    },
+    { key: 'max_drawdown', label: 'Worst drop', format: 'percent', tone: true },
     { key: 'paper_days', label: 'Days on trial', format: 'number' },
-    // Asset classes sit in search only, so the table fits at 1440 px (NB-16).
-    { key: 'kind', label: 'Kind', mobile: 'hide' },
+    {
+      key: 'following',
+      label: 'Following',
+      mobile: 'inline',
+      help: false,
+      value: (s) => s.following?.words ?? null,
+    },
+    { key: 'kind', label: 'Kind', mobile: 'hide', help: false },
     { key: 'created_at', label: 'Added', format: 'date', mobile: 'hide' },
+    { key: 'open', label: 'Open', sortable: false, mobile: 'hide', help: false },
   ];
   protected readonly strategyKey = (s: StrategyRow) => s.id;
 
@@ -146,6 +392,13 @@ export class StrategiesPage {
     const status = this.statusFilter();
     return status ? STATUS_WORDS[status].toLowerCase() : '';
   });
+
+  protected refresh(): void {
+    this.strategies.reload();
+    this.byStatus.reload();
+    this.paper.reload();
+    this.subscriptions.reload();
+  }
 
   protected setStatus(value: StrategyStatus | null): void {
     this.statusFilter.set(value);

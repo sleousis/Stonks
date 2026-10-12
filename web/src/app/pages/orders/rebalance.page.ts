@@ -306,7 +306,11 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
           }
         </ul>
       } @else if (parents.hasValue()) {
-        <app-empty-state title="No sliced orders" message="Parent orders Stonks works show here." />
+        <app-empty-state
+          icon="orders"
+          title="No sliced orders"
+          message="Parent orders Stonks works show here."
+        />
       }
     </section>
   `,
@@ -346,8 +350,8 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
       flex-wrap: wrap;
       gap: var(--space-3) var(--space-5);
       padding: var(--space-3) var(--space-4);
-      border-block: 1px solid var(--color-border);
-      background: var(--color-surface-2);
+      border-block: 1px solid var(--rule);
+      background: var(--sunk);
     }
     .summary p {
       display: grid;
@@ -363,7 +367,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
       max-width: 70ch;
       padding: 0 var(--space-4) var(--space-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .summary + .note,
@@ -376,7 +380,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
     }
     h3.body {
       padding-bottom: 0;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }

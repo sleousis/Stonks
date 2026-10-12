@@ -43,20 +43,20 @@ export function barTime(timestamp: string, interval: string): string {
   imports: [DataTable, TableCell, StatusPill, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss'],
   template: `
-    <section class="panel panel-flush" aria-labelledby="coverage-title">
-      <div class="panel-head">
+    <section class="page-section section-flush" aria-labelledby="coverage-title">
+      <div class="section-head">
         <h2 id="coverage-title">
           Coverage
           @if (ticker(); as t) {
-            <span class="muted">· {{ t }}</span>
+            <span class="count">{{ t }}</span>
           }
         </h2>
         @if (ticker()) {
-          <button type="button" class="btn btn-tertiary" (click)="cleared.emit()">
+          <button type="button" class="btn btn-ghost" (click)="cleared.emit()">
             Show all tickers
           </button>
         } @else if (page(); as p) {
-          <span class="muted num count">{{ p.total }} series</span>
+          <span class="muted num">{{ p.total }} series</span>
         }
       </div>
       @if (list.error(); as err) {
@@ -144,7 +144,7 @@ export class CoveragePanel {
 
   protected readonly columns: TableColumn<CoverageView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'interval', label: 'Interval' },
+    { key: 'interval', label: 'Interval', mobile: 'inline' },
     {
       key: 'first_bar',
       label: 'First price',
@@ -162,7 +162,7 @@ export class CoveragePanel {
       display: (r) => barTime(r.last_bar, r.interval),
     },
     { key: 'rows', label: 'Prices', format: 'number' },
-    { key: 'freshness', label: 'Freshness', value: (r) => RANK[r.freshness] },
+    { key: 'freshness', label: 'Freshness', mobile: 'inline', value: (r) => RANK[r.freshness] },
   ];
   protected readonly key = (r: CoverageView) => `${r.ticker}|${r.interval}`;
 }

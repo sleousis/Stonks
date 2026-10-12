@@ -113,7 +113,7 @@ export function notableItems(c: PriceCheckView): PriceCheckItemView[] {
       overflow-wrap: anywhere;
     }
     .items li.gap strong {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .key {
       margin-right: var(--space-2);

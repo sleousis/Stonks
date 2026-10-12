@@ -197,6 +197,11 @@ describe('DashboardPage', () => {
     const text = el.textContent ?? '';
 
     expect(el.querySelector('h1')?.textContent).toContain('Dashboard');
+    // The standfirst is built from the data.
+    expect(el.querySelector('.standfirst')?.textContent).toBe(
+      '1 of 4 checks failed. 3 approved, 2 on trial.',
+    );
+    expect(el.querySelector('.health-figure')?.textContent).toContain('3');
     expect(text).toContain('$76,750.00');
     expect(text).toContain('$25,000.00');
     expect(text).toContain('32.6% of value');
@@ -222,7 +227,8 @@ describe('DashboardPage', () => {
     expect(tickSection?.textContent).toContain('2026-09-25');
 
     const health = el.querySelector('section[aria-labelledby="health-title"]');
-    expect(health?.textContent).toContain('1 of 4 checks failed');
+    expect(health?.textContent).toMatch(/3\s*of 4\s*checks passed/);
+    expect(health?.textContent).toContain('Needs a look');
     expect(health?.textContent).toContain('Price data is up to date');
     expect(health?.textContent).toContain('1 of 2 tickers have a recent price.');
     expect(health?.textContent).toContain('Lab workers');

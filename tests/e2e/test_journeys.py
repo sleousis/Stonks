@@ -69,9 +69,8 @@ def test_first_sign_in_enrols_totp_then_signs_in_with_a_code(browse, stack, view
 
 
 def sign_out(v: Visit) -> None:
-    """Sign out sits in the account menu by the user's name (UX-10)."""
-    v.open_nav()
-    v.page.locator("app-account-menu summary:visible").click()
+    """Sign out sits in the account menu behind the avatar (UX-10)."""
+    v.page.locator("button[data-account-button]").click()
     v.page.get_by_role("button", name="Sign out").click()
 
 
@@ -97,7 +96,7 @@ def test_trader_home_shows_portfolio_signals_and_strategies(browse, stack, viewp
     expect(page.get_by_role("heading", name="My portfolio")).to_be_visible()
     expect(page.locator("app-portfolio-card")).to_contain_text("$4,321.00")
     expect(page.locator("app-signals-card")).to_contain_text(title)
-    expect(page.get_by_role("heading", name="My strategies")).to_be_visible()
+    expect(page.get_by_role("heading", name="Strategies I follow")).to_be_visible()
     v.check_page("home-trader")
 
 
@@ -178,6 +177,10 @@ def test_lab_opens_on_a_simple_test_in_plain_words(browse, stack, viewport):
     # Plain names and summaries, never code docstrings or class names.
     expect(simple).not_to_contain_text(":meth:")
     expect(simple).not_to_contain_text("BuyAndHold")
+    # Six strategies show first; Show all opens the rest of the catalog.
+    more = simple.get_by_role("button", name=re.compile(r"^Show all \d+ strategies"))
+    if more.count():
+        more.click()
     expect(simple.get_by_role("radio", name=re.compile(r"^Moving average trend\b"))).to_be_visible()
     # One button; a missing choice is named in plain words.
     simple.get_by_role("button", name="Test it").click()
@@ -192,6 +195,10 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     page.get_by_role("tab", name="Lab run").click()
     form = page.locator("#lab-panel-lab_run")
     expect(form).to_be_visible()
+    # The picker shows six strategies first; open the rest when it offers to.
+    more = form.get_by_role("button", name=re.compile(r"^Show all \d+ strategies"))
+    if more.count():
+        more.click()
     form.get_by_role("radio", name=re.compile(r"^Momentum\b")).check()
     page.locator("#lr-tickers").fill("AAA.US,BBB.US,CCC.US")
     start = stack.market_end.replace(year=stack.market_end.year - 1)

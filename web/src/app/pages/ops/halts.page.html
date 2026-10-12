@@ -1,8 +1,4 @@
-<app-page-header
-  title="Halts"
-  description="Halts stop new orders before they reach the broker. Stop trading is the one you turn on yourself."
-  [class.kill-on]="killOn()"
->
+<app-page-header title="Halts" [description]="standfirst()" [class.kill-on]="killOn()">
   <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
@@ -16,11 +12,17 @@
   </button>
 </app-page-header>
 
-<div class="page-grid">
-  <!-- Active ---------------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="active-title">
-    <div class="panel-head">
-      <h2 id="active-title">Active halts <app-help-tip term="Circuit breaker" /></h2>
+<div class="section-stack">
+  <!-- Active: each halt in the halt colour, with its way out -------------->
+  <section class="page-section" aria-labelledby="active-title">
+    <div class="section-head">
+      <h2 id="active-title">
+        Active halts
+        @if (halts.hasValue()) {
+          <span class="count">{{ active().length }}</span>
+        }
+        <app-help-tip term="Circuit breaker" />
+      </h2>
       @if (halts.hasValue()) {
         @if (killOn()) {
           <app-status-pill status="halted" label="Trading stopped" />
@@ -37,85 +39,125 @@
       <app-loading-state label="Loading halts" [rows]="2" />
     } @else if (active().length === 0) {
       <app-empty-state
+        icon="check"
+        tone="good"
         compact
         title="Trading is not halted"
         message="Halts appear here when someone uses Stop trading, a circuit breaker trips, or health finds stale data."
       />
     } @else {
-      <app-data-table
-        caption="Active halts"
-        [rows]="active()"
-        [columns]="activeColumns"
-        [rowKey]="haltKey"
-        [initialSort]="{ key: 'tripped_at', dir: 'desc' }"
-      >
-        <ng-template appCell="kind" [appCellOf]="active()" let-h>
-          <app-status-pill
-            status="halted"
-            [tone]="h.kind === 'kill' ? 'negative' : 'warn'"
-            [label]="kindLabel[h.kind]"
-          />
-        </ng-template>
-        <ng-template appCell="action" [appCellOf]="active()" let-h>
-          <div class="cell-action">
-            @if (action(h) === 'resume') {
-              <button
-                type="button"
-                class="btn"
-                [disabled]="busyId() === h.id || !session.can(endPermission(h))"
-                [attr.aria-busy]="busyId() === h.id"
-                (click)="resume(h)"
-              >
-                Resume trading
-              </button>
-            } @else {
-              <button
-                type="button"
-                class="btn"
-                [disabled]="busyId() === h.id || !session.can(endPermission(h))"
-                [attr.aria-busy]="busyId() === h.id"
-                (click)="clear(h)"
-              >
-                Clear
-              </button>
+      @if (active().length > 1) {
+        <div class="field halt-sort">
+          <label for="halt-sort">Sort by</label>
+          <select id="halt-sort" class="input" (change)="activeSort.set($any($event.target).value)">
+            @for (o of sortOptions; track o.value) {
+              <option [value]="o.value" [selected]="activeSort() === o.value">{{ o.label }}</option>
             }
-            <app-permission-note [permission]="endPermission(h)" />
-          </div>
-        </ng-template>
-      </app-data-table>
+          </select>
+        </div>
+      }
+      <ul class="halt-list" aria-label="Active halts">
+        @for (h of active(); track h.id) {
+          <li class="halt" [attr.data-kind]="h.kind">
+            <svg class="halt-glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path
+                d="M10 2.8 18 17H2L10 2.8Z"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+              <path d="M10 8v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <circle cx="10" cy="14.4" r="0.9" fill="currentColor" />
+            </svg>
+            <div class="halt-text">
+              <p class="halt-title">
+                <app-status-pill
+                  status="halted"
+                  [tone]="h.kind === 'kill' ? 'negative' : 'warn'"
+                  [label]="kindLabel[h.kind]"
+                />
+                <span class="halt-scope">{{ scopeText(h) }}</span>
+              </p>
+              <dl class="halt-facts">
+                <div>
+                  <dt>Stops</dt>
+                  <dd>{{ stopsLabel[h.halt] }}</dd>
+                </div>
+                <div>
+                  <dt>Reason</dt>
+                  <dd>{{ h.reason }}</dd>
+                </div>
+                <div>
+                  <dt>Started</dt>
+                  <dd class="started">{{ started(h) }}</dd>
+                </div>
+              </dl>
+            </div>
+            <div class="cell-action">
+              @if (action(h) === 'resume') {
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  [disabled]="busyId() === h.id || !session.can(endPermission(h))"
+                  [attr.aria-busy]="busyId() === h.id"
+                  (click)="resume(h)"
+                >
+                  Resume trading
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="btn"
+                  [disabled]="busyId() === h.id || !session.can(endPermission(h))"
+                  [attr.aria-busy]="busyId() === h.id"
+                  (click)="clear(h)"
+                >
+                  Clear
+                </button>
+              }
+              <app-permission-note [permission]="endPermission(h)" />
+            </div>
+          </li>
+        }
+      </ul>
     }
   </section>
 
   <!-- Stop trading: the same sheet as the session strip (M7) ------------->
   @if (killHere()) {
     <!-- Already stopped here: Resume above is the one big action (AO-18). -->
-    <p class="span-12 kill-more">
-      <button type="button" class="btn btn-tertiary" [disabled]="!canKill()" (click)="stop()">
+    <p class="kill-more">
+      <button type="button" class="btn btn-ghost" [disabled]="!canKill()" (click)="stop()">
         Stop trading…
       </button>
       <span class="muted">Stop another portfolio, or every order.</span>
       <app-permission-note permission="killswitch.user" />
     </p>
   } @else {
-    <section class="panel span-12 kill" [class.live]="anyLive()" aria-labelledby="kill-title">
-      <div class="panel-head">
+    <section class="page-section kill" [class.live]="anyLive()" aria-labelledby="kill-title">
+      <div class="section-head">
         <h2 id="kill-title">Stop trading <app-help-tip term="Stop trading" /></h2>
       </div>
-      <div class="panel-body">
-        <p class="muted intro">
-          Stops new orders at once. No position is closed. Approved tickets not yet sent are held,
-          and orders still working at your broker are cancelled.
-        </p>
-        <p class="muted intro">
-          It starts on <strong>{{ onScreen() }}</strong
-          >. You pick the scope, what stops and the reason.
-          @if (anyLive()) {
-            Resuming real money needs the typed words <strong>RESUME TRADING</strong> and a fresh
-            code.
-          }
-        </p>
+      <div class="kill-body">
+        <div class="kill-text">
+          <p class="intro">
+            Stops new orders at once. No position is closed. Approved tickets not yet sent are held,
+            and orders still working at your broker are cancelled.
+          </p>
+          <p class="intro">
+            It starts on <strong>{{ onScreen() }}</strong
+            >. You pick the scope, what stops and the reason.
+            @if (anyLive()) {
+              Resuming real money needs the typed words <strong>RESUME TRADING</strong> and a fresh
+              code.
+            }
+          </p>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-danger" [disabled]="!canKill()" (click)="stop()">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor" />
+            </svg>
             Stop trading…
           </button>
           <app-permission-note permission="killswitch.user" />
@@ -125,16 +167,22 @@
   }
 
   <!-- Past ------------------------------------------------------------------>
-  <section class="panel span-12" aria-labelledby="past-title">
-    <div class="panel-head">
-      <h2 id="past-title">Past halts</h2>
+  <section class="page-section" aria-labelledby="past-title">
+    <div class="section-head">
+      <h2 id="past-title">
+        Past halts
+        @if (halts.hasValue()) {
+          <span class="count">{{ past().length }}</span>
+        }
+      </h2>
     </div>
     @if (halts.error()) {
-      <p class="panel-body muted">Past halts show once the list loads.</p>
+      <p class="muted past-note">Past halts show once the list loads.</p>
     } @else if (!halts.hasValue()) {
       <app-loading-state label="Loading past halts" [rows]="3" />
     } @else if (past().length === 0) {
       <app-empty-state
+        icon="pause"
         compact
         title="No past halts"
         message="Halts that were resumed, cleared or expired are listed here."

@@ -71,12 +71,19 @@ describe('Shell', () => {
     await settle();
   });
 
-  it('frames the page: sidebar nav, account menu, session strip and main', () => {
-    expect(el.querySelector('aside.sidebar app-nav')).not.toBeNull();
-    expect(el.querySelector('aside.sidebar app-account-menu summary')!.textContent).toContain(
-      'Ann',
+  it('frames the page: chrome bar, workspace tabs, account menu, session rail and main', () => {
+    const chrome = el.querySelector('header.chrome')!;
+    expect(chrome.querySelector('app-workspace-menu button[data-open-nav]')).not.toBeNull();
+    expect(chrome.querySelector('app-workspace-tabs nav')!.getAttribute('aria-label')).toBe(
+      'Trade pages',
     );
-    expect(el.querySelector('main#main app-session-strip')).not.toBeNull();
+    expect(
+      chrome
+        .querySelector('app-account-menu button[data-account-button]')!
+        .getAttribute('aria-label'),
+    ).toContain('Ann');
+    expect(chrome.querySelector('app-session-strip')).not.toBeNull();
+    expect(el.querySelector('app-bottom-nav nav.bottom-nav')).not.toBeNull();
     expect(el.querySelector('main#main h1')!.textContent).toBe('Today');
   });
 
@@ -84,19 +91,20 @@ describe('Shell', () => {
     await router.navigateByUrl('/login');
     await settle();
     expect(el.querySelector('main.bare')).not.toBeNull();
-    expect(el.querySelector('aside.sidebar')).toBeNull();
+    expect(el.querySelector('header.chrome')).toBeNull();
+    expect(el.querySelector('app-bottom-nav')).toBeNull();
     expect(el.querySelector('app-session-strip')).toBeNull();
   });
 
-  it('opens the drawer from the menu button and closes it on navigation', async () => {
-    const menu = el.querySelector<HTMLButtonElement>('button[aria-label="Open navigation"]')!;
-    menu.click();
+  it('opens the More sheet from the bottom nav and closes it when a page is picked', async () => {
+    const more = el.querySelector<HTMLButtonElement>('app-bottom-nav button[data-open-nav]')!;
+    more.click();
     fixture.detectChanges();
-    expect(menu.getAttribute('aria-expanded')).toBe('true');
-    expect(el.querySelector('#nav-drawer app-nav')).not.toBeNull();
-    await router.navigateByUrl('/orders');
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    expect(el.querySelector('#more-sheet app-nav')).not.toBeNull();
+    el.querySelector<HTMLAnchorElement>('#more-sheet a[href="/orders"]')!.click();
     await settle();
-    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
   });
 
   it("moves focus to the new page's heading after navigation", async () => {
@@ -134,7 +142,7 @@ describe('Shell', () => {
   });
 
   it('turns the rail red while a kill switch is on (UX-51)', () => {
-    expect(el.querySelector('.topbar')!.hasAttribute('data-tone')).toBe(false);
+    expect(el.querySelector('header.chrome')!.hasAttribute('data-tone')).toBe(false);
     TestBed.inject(HaltStateService).add({
       id: 1,
       kind: 'kill',
@@ -143,7 +151,6 @@ describe('Shell', () => {
       active: true,
     } as HaltView);
     fixture.detectChanges();
-    expect(el.querySelector('.topbar')!.getAttribute('data-tone')).toBe('kill');
-    expect(el.querySelector('aside.sidebar')!.getAttribute('data-tone')).toBe('kill');
+    expect(el.querySelector('header.chrome')!.getAttribute('data-tone')).toBe('kill');
   });
 });

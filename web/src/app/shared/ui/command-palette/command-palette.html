@@ -33,8 +33,8 @@
       (input)="onInput($any($event.target).value)"
       (keydown)="onKeydown($event)"
     />
-    <button type="button" class="btn btn-ghost close" (click)="close()">
-      Close<span class="visually-hidden"> search</span>
+    <button type="button" class="close" (click)="close()">
+      <kbd aria-hidden="true">Esc</kbd><span class="visually-hidden">Close search</span>
     </button>
   </div>
 
@@ -56,12 +56,40 @@
             (click)="choose(item)"
             (mousemove)="active.set(item.index)"
           >
+            <svg
+              class="option-icon"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              aria-hidden="true"
+            >
+              @switch (section.group) {
+                @case ('Actions') {
+                  <path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z" stroke-linejoin="round" />
+                }
+                @case ('Strategies') {
+                  <path d="M2 11.5 6 7.5l3 3 5-6" stroke-linecap="round" stroke-linejoin="round" />
+                }
+                @case ('Tickers') {
+                  <path d="M3 13V8M6.5 13V4M10 13V9M13.5 13V6" stroke-linecap="round" />
+                }
+                @case ('Recent jobs') {
+                  <circle cx="8" cy="8" r="5.5" />
+                  <path d="M8 5v3.2l2 1.3" stroke-linecap="round" />
+                }
+                @default {
+                  <path d="M4 2h5.5L12 4.5V14H4z" stroke-linejoin="round" />
+                  <path d="M6 8h4M6 10.5h4" stroke-linecap="round" />
+                }
+              }
+            </svg>
             <span class="option-main">
               <span class="option-label">{{ item.label }}</span>
-              @if (item.detail) {
-                <span class="option-detail">{{ item.detail }}</span>
-              }
             </span>
+            @if (item.detail) {
+              <span class="option-detail">{{ item.detail }}</span>
+            }
             @if (item.hint) {
               <kbd class="option-hint" aria-hidden="true">{{ item.hint }}</kbd>
             }

@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import type { PnlSeries, PortfolioView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
+import { formatLongDay } from '../../core/format/format';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { AUTO_REFRESH_MS } from '../../shared/auto-refresh';
 import { ADMIN, TRADER, UNAUTHORIZED, problem } from '../../../testing/auth-fixtures';
@@ -145,13 +146,19 @@ describe('HomePage', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
 
-    expect(el.querySelector('h1')?.textContent).toContain('Hello, Ann');
+    // The greeting and the long date are back (old home.page.ts:172-178).
+    expect(el.querySelector('h1')?.textContent).toBe('Hello, Ann');
+    expect(el.querySelector('.standfirst')?.textContent).toContain(
+      `${formatLongDay(new Date())}. Your paper portfolio fell 1.60% last session.`,
+    );
     expect(el.querySelector('app-fills-tape')?.textContent).toContain('No fills this week');
     const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
     expect(headings).toEqual([
       'My portfolio',
-      "Today's signals and runs",
-      'My strategies',
+      'Fills',
+      'Strategies I follow',
+      'Holdings 2',
+      'Signals and runs',
       'Market breadth',
     ]);
     expect(el.textContent).toContain('$76,750.00');
@@ -187,8 +194,10 @@ describe('HomePage', () => {
     expect(headings).toEqual([
       'My portfolio',
       'All traders',
-      "Today's signals and runs",
-      'My strategies',
+      'Fills',
+      'Strategies I follow',
+      'Holdings 2',
+      'Signals and runs',
       'Market breadth',
     ]);
     expect(el.textContent).toContain('$76,750.00');
@@ -213,7 +222,8 @@ describe('HomePage', () => {
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('h1')?.textContent).toContain('Today');
+    // No name to greet: the title falls back to Today.
+    expect(el.querySelector('h1')?.textContent).toBe('Today');
     expect(el.querySelector('.banner a')?.getAttribute('href')).toBe('/login');
   });
 

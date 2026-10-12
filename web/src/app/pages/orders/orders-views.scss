@@ -6,120 +6,123 @@
   min-width: 0;
 }
 
-// Filters -------------------------------------------------------------------
-// An inset band under the panel head: one column on phones, two from tablet
-// (the .form-grid-2 rhythm), one row on a desktop.
-.filters {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: minmax(0, 1fr);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-2);
-  align-items: end;
-
-  @include bp.from-tablet {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  @include bp.from-desktop {
-    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-  }
-
-  @include bp.phone {
-    padding: var(--space-3);
-  }
-
-  .filter-actions {
-    display: flex;
-    gap: var(--space-2);
-
-    @include bp.phone {
-      grid-column: 1 / -1;
-
-      .btn {
-        flex: 1;
-      }
-    }
-  }
-}
-
-select.input {
-  padding-right: var(--space-6);
-}
-
-// The phone Filter button and the run chip (PO-09) ---------------------------
-.filter-bar {
+// Toolbar --------------------------------------------------------------------
+// Status pills on the left, the other filters on the right, on one line
+// from tablet. On phones the pills scroll inside themselves and the other
+// filters fold behind the Filter button.
+.toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-6);
 
-  @include bp.phone {
-    padding: var(--space-3) var(--space-3) 0;
+  .filter-pills {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: center;
   }
 
-  &:not(:has(.chip)) {
-    @include bp.from-tablet {
-      display: none;
+  @include bp.phone {
+    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: var(--space-5);
+
+    .filter-pills {
+      align-self: stretch;
     }
   }
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-left: auto;
+
+  .field {
+    width: 12rem;
+  }
+
+  @include bp.phone {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-left: 0;
+
+    .field {
+      width: auto;
+    }
+  }
+}
+
+.clear {
+  align-self: flex-end;
+}
+
+// The phone Filter button: folds the ticker and strategy fields.
 .filter-toggle {
-  @include bp.from-tablet {
-    display: none;
+  display: none;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @include bp.phone {
+    display: inline-flex;
+    align-self: flex-start;
   }
 }
 
-.filters:not(.open) {
+.filters:not(.open):not(.always) {
   @include bp.phone {
     display: none;
   }
 }
 
-// The Filter button row sits above the folded form on phones.
-.filter-bar + .filters.open {
-  @include bp.phone {
-    margin-top: var(--space-3);
-    border-top: 1px solid var(--color-border);
-  }
-}
-
+// The run chip (PO-09): a pill with a clear button.
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  height: 28px;
   padding-left: var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill, 999px);
-  font-size: var(--text-sm);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-label);
 }
 
 .chip-clear {
-  min-width: var(--touch-min);
-  min-height: var(--touch-min);
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   border: 0;
+  border-radius: var(--r-pill);
   background: none;
-  color: var(--color-ink-2);
-  font-size: var(--text-md);
+  color: inherit;
   cursor: pointer;
 
-  @include bp.from-desktop {
-    min-width: 2rem;
-    min-height: 2rem;
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  @include bp.phone {
+    width: var(--touch-min);
+    height: var(--touch-min);
   }
 }
 
 .head-link {
   margin-left: auto;
-  font-size: var(--text-sm);
-  display: inline-flex;
-  align-items: center;
   min-height: var(--touch-min);
 }
-
 // Cells ---------------------------------------------------------------------
 .mono {
   font-family: var(--font-mono);
@@ -129,7 +132,7 @@ select.input {
 }
 
 .id {
-  color: var(--color-ink-2);
+  color: var(--ink-2);
 }
 
 .cell-link {
@@ -157,13 +160,13 @@ select.input {
   max-width: 36ch;
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   white-space: normal;
   overflow-wrap: anywhere;
 
   strong {
-    color: var(--color-ink);
-    font-weight: 600;
+    color: var(--ink);
+    font-weight: var(--weight-semibold);
   }
 }
 
@@ -179,18 +182,18 @@ select.input {
 
   &[data-side='buy']::before {
     content: '▲ ';
-    color: var(--color-gain);
+    color: var(--up);
   }
 
   &[data-side='sell']::before {
     content: '▼ ';
-    color: var(--color-loss);
+    color: var(--down);
   }
 }
 
 .count {
   font-size: var(--text-xs);
-  color: var(--color-ink-3);
+  color: var(--muted);
 }
 
 // Panels --------------------------------------------------------------------
@@ -203,8 +206,8 @@ select.input {
 .panel-note {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
-  border-bottom: 1px solid var(--color-border);
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--rule);
 }
 
 // A note inside a panel, set in from its edges (the tone is a .callout).
@@ -274,7 +277,7 @@ select.input {
 
   dt {
     font-size: var(--text-xs);
-    color: var(--color-ink-3);
+    color: var(--muted);
   }
 
   dd {
@@ -333,9 +336,19 @@ select.input {
       grid-column: 2 / -1;
     }
 
+    // The time reads on one line under the figures.
+    > td[data-label='Created'] {
+      grid-column: 1 / -1;
+    }
+
     > td[data-label='Side']::before,
     > td[data-label='Status']::before {
       content: none;
     }
   }
+}
+
+// Fills: no pills, so the filters start on the left.
+.toolbar > .filters:only-child {
+  margin-left: 0;
 }

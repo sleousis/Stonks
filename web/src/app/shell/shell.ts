@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,6 +5,7 @@ import {
   type ElementRef,
   Injector,
   afterNextRender,
+  afterRenderEffect,
   inject,
   signal,
   viewChild,
@@ -27,7 +27,6 @@ import { StepUpDialog } from '../core/auth/step-up-dialog';
 import { StepUpService } from '../core/auth/step-up.service';
 import { ShortcutsService } from '../core/commands/shortcuts.service';
 import { HaltStateService } from '../core/halts/halt-state.service';
-import { PrivacyService } from '../core/privacy/privacy.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { NotificationBell } from '../shared/ui/notification-bell';
@@ -38,26 +37,31 @@ import { SessionStrip } from '../shared/ui/session-strip';
 import { ShortcutHelp } from '../shared/ui/shortcut-help';
 import { ToastOutlet } from '../shared/ui/toast-outlet';
 import { AccountMenu } from './account-menu';
-import { Nav } from './nav';
+import { BottomNav } from './bottom-nav';
 import { registerShellCommands } from './shell-commands';
+import { WorkspaceMenu } from './workspace-menu';
+import { WorkspaceTabs } from './workspace-tabs';
 
 /**
- * App frame: sidebar navigation from tablet width up; on phones a top bar
- * with a menu button that opens the navigation in a drawer. Also hosts the
- * confirm dialog, toasts, the command palette (Ctrl+K) and the shortcut cheat
- * sheet (?), forwards key presses to ShortcutsService, and moves focus to
- * the page heading after each navigation. The palette, the cheat sheet and
- * the step-up prompt load on first use (`@defer`), so the first screen
- * ships less code. The rail turns red while a kill switch is on.
+ * App frame: an ink chrome bar across the top (the brand, the workspace
+ * switcher, the workspace's page tabs, search, the bell, the theme and the
+ * account menu), the session rail under it, and on phones a bottom nav with
+ * a More sheet. Also hosts the confirm dialog, toasts, the command palette
+ * (Ctrl+K) and the shortcut cheat sheet (?), forwards key presses to
+ * ShortcutsService, and moves focus to the page heading after each
+ * navigation. The palette, the cheat sheet and the step-up prompt load on
+ * first use (`@defer`), so the first screen ships less code. The rail turns
+ * red while a kill switch is on.
  */
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    NgTemplateOutlet,
     RouterOutlet,
     RouterLink,
-    Nav,
+    WorkspaceMenu,
+    WorkspaceTabs,
+    BottomNav,
     AccountMenu,
     ConfirmDialog,
     ToastOutlet,
@@ -71,12 +75,13 @@ import { registerShellCommands } from './shell-commands';
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
-  host: { '(document:keydown)': 'onKeydown($event)' },
+  host: {
+    '(document:keydown)': 'onKeydown($event)',
+    '[class.has-bottom-nav]': '!bare()',
+  },
 })
 export class Shell {
   protected readonly theme = inject(ThemeService);
-  /** Privacy mode (23.17): one switch hides money amounts on this device. */
-  protected readonly privacy = inject(PrivacyService);
   protected readonly auth = inject(AuthTokenService);
   protected readonly session = inject(SessionService);
   /** The halt state: the rail turns red while a kill switch is on (UX-51). */
@@ -87,10 +92,10 @@ export class Shell {
   protected readonly connectivity = inject(ConnectivityService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
-  private readonly drawer = viewChild.required<ElementRef<HTMLDialogElement>>('drawer');
-  private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
+  private readonly main = viewChild<ElementRef<HTMLElement>>('main');
+  private readonly chrome = viewChild<ElementRef<HTMLElement>>('chrome');
+  private readonly chromeBar = viewChild<ElementRef<HTMLElement>>('bar');
 
-  protected readonly drawerOpen = signal(false);
   /** Pages with `data: { bare: true }` (sign-in) render without the app frame. */
   protected readonly bare = signal(false);
   protected readonly modKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')
@@ -99,7 +104,8 @@ export class Shell {
 
   constructor() {
     registerShellCommands();
-    // ops: keep the halt state in the session strip current
+    this.publishHeaderHeight();
+    // ops: keep the halt state in the session rail current
     this.halts.watch(inject(DestroyRef));
     // The deepest route's data decides, before its component is created.
     this.router.events
@@ -115,26 +121,8 @@ export class Shell {
         takeUntilDestroyed(),
       )
       .subscribe(() => {
-        this.closeDrawer();
         afterNextRender(() => this.focusPage(), { injector: this.injector });
       });
-  }
-
-  protected openDrawer(): void {
-    const el = this.drawer().nativeElement;
-    if (!el.open) el.showModal?.();
-    this.drawerOpen.set(true);
-  }
-
-  protected closeDrawer(): void {
-    const el = this.drawer().nativeElement;
-    if (el.open) el.close();
-    this.drawerOpen.set(false);
-  }
-
-  /** Close when the backdrop (the dialog element itself) is clicked. */
-  protected onDrawerClick(event: MouseEvent): void {
-    if (event.target === this.drawer().nativeElement) this.closeDrawer();
   }
 
   protected onKeydown(event: KeyboardEvent): void {
@@ -142,19 +130,60 @@ export class Shell {
   }
 
   protected openPalette(): void {
-    this.closeDrawer();
     this.shortcuts.openPalette();
   }
 
   protected async signOut(): Promise<void> {
-    this.closeDrawer();
     // logout() loads /login afresh, so no user's state outlives the session (UX-07).
     await this.session.logout();
   }
 
+  /**
+   * Publishes the pinned header's real height as --header-h on the root, for
+   * scroll-padding-top and every sticky top: the bar and rail on wider
+   * screens, the bar alone on phones (where the rail scrolls away), and the
+   * halt band too while it shows (WCAG 2.4.11).
+   */
+  private publishHeaderHeight(): void {
+    const root = globalThis.document?.documentElement;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+    const phone = globalThis.matchMedia?.('(max-width: 767.98px)');
+    const publish = () => {
+      const header = this.chrome()?.nativeElement;
+      const bar = this.chromeBar()?.nativeElement;
+      const pinned = phone?.matches ? bar : header;
+      if (!pinned) {
+        root.style.removeProperty('--header-h');
+        return;
+      }
+      root.style.setProperty(
+        '--header-h',
+        `${Math.round(pinned.getBoundingClientRect().height)}px`,
+      );
+    };
+    const resize = new ResizeObserver(publish);
+    phone?.addEventListener?.('change', publish);
+    let watched: HTMLElement[] = [];
+    inject(DestroyRef).onDestroy(() => {
+      resize.disconnect();
+      phone?.removeEventListener?.('change', publish);
+    });
+    afterRenderEffect(() => {
+      const next = [this.chrome()?.nativeElement, this.chromeBar()?.nativeElement].filter(
+        (el): el is HTMLElement => !!el,
+      );
+      if (next.length === watched.length && next.every((el, i) => el === watched[i])) return;
+      resize.disconnect();
+      next.forEach((el) => resize.observe(el));
+      watched = next;
+      publish();
+    });
+  }
+
   private focusPage(): void {
     if (this.bare()) return;
-    const main = this.main().nativeElement;
+    const main = this.main()?.nativeElement;
+    if (!main) return;
     const heading = main.querySelector<HTMLElement>('h1');
     (heading ?? main).focus({ preventScroll: false });
   }

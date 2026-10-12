@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import type { ConfirmItem } from './chat-model';
 import { argLabel, argValue, isDangerTool, resultText, toolLabel } from './tool-labels';
@@ -27,6 +28,7 @@ export function previewLines(preview: unknown): string[] {
 @Component({
   selector: 'app-confirm-step',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   template: `
     @let c = item();
     <section class="ticket confirm" [class.danger]="danger()" [attr.aria-labelledby]="titleId()">
@@ -60,6 +62,12 @@ export function previewLines(preview: unknown): string[] {
           <pre class="num" tabindex="0" aria-label="The tool's preview">{{ previewText() }}</pre>
         </details>
       }
+      @if (isOrderDraft()) {
+        <p class="order-note">
+          This only drafts the order. You approve the order itself in
+          <a routerLink="/tickets">Approvals</a>, with a fresh code.
+        </p>
+      }
       @if (c.state === 'pending') {
         <p class="hint">Nothing runs until you approve it.</p>
         <div class="actions">
@@ -87,22 +95,36 @@ export function previewLines(preview: unknown): string[] {
       display: block;
       min-width: 0;
     }
+    /* A write it wants to run: a sheet, red-edged when it is risky. */
+    .confirm {
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      background: var(--raise);
+      box-shadow: var(--shadow-overlay);
+    }
     .confirm.danger {
-      border-color: var(--color-loss);
+      border-left: 3px solid var(--down);
     }
     h3 {
-      font-size: var(--text-panel);
-      font-weight: var(--weight-semibold);
+      font-size: var(--text-section);
+      font-weight: var(--weight-bold);
       overflow-wrap: anywhere;
+    }
+    .order-note {
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--r-sheet);
+      background: var(--sunk);
+      color: var(--ink-2);
+      font-size: var(--text-sm);
     }
     .decided {
       font-size: var(--text-xs);
       font-weight: var(--weight-semibold);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .about {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       white-space: pre-line;
       overflow-wrap: anywhere;
@@ -124,7 +146,7 @@ export function previewLines(preview: unknown): string[] {
       display: inline-flex;
       align-items: center;
       min-height: var(--control-h);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       cursor: pointer;
       @include bp.phone {
@@ -132,7 +154,7 @@ export function previewLines(preview: unknown): string[] {
       }
     }
     .hint {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .actions {
@@ -158,6 +180,8 @@ export class ConfirmStep {
   protected readonly titleId = computed(() => `confirm-${this.item().actionId}`);
   protected readonly label = computed(() => toolLabel(this.item().tool));
   protected readonly danger = computed(() => isDangerTool(this.item().tool));
+  /** An order the assistant drafts: approved later, on Approvals. */
+  protected readonly isOrderDraft = computed(() => this.item().tool === 'draft_order');
   protected readonly argRows = computed(() =>
     Object.entries(this.item().args).map(([name, value]) => ({
       name: argLabel(name),

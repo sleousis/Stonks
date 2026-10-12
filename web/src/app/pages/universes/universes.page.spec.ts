@@ -77,7 +77,9 @@ describe('UniversesPage', () => {
 
   it('lists universes with kind, members and last refresh', () => {
     const list = el.querySelector('[aria-labelledby="list-title"]')!;
-    expect(list.textContent).toContain('2 stored');
+    expect(list.querySelector('#list-title .count')?.textContent?.trim()).toBe('2');
+    // The strip sums the members and counts the universes behind.
+    expect(el.querySelector('.summary-strip')?.textContent).toContain('Need a refresh');
     expect(list.textContent).toContain('Rule');
     expect(list.textContent).toContain('480');
     expect(list.textContent).toContain('Never');
@@ -86,6 +88,9 @@ describe('UniversesPage', () => {
     // Changed after its last refresh: the members are behind.
     expect(list.textContent).toContain('Changed since');
     expect(el.querySelector('a[href="/data"]')).not.toBeNull();
+    // The Id column is back and sortable, as before the redesign.
+    const id = [...list.querySelectorAll('thead th')].find((th) => th.textContent?.includes('Id'))!;
+    expect(id.querySelector('button.sort')).not.toBeNull();
   });
 
   it('creates a universe from its fields and opens it', async () => {

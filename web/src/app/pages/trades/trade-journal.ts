@@ -29,52 +29,60 @@ export const JOURNAL_PAGE_SIZE = 25;
   ],
   styleUrl: './trades.scss',
   template: `
-    <section class="panel panel-flush" aria-labelledby="journal-title">
-      <div class="panel-head">
-        <h2 id="journal-title">Trade journal</h2>
-        @if (latest(); as p) {
-          @if (p.total > 0) {
-            <span class="muted num">{{ p.total }} {{ p.total === 1 ? 'order' : 'orders' }}</span>
+    <section class="page-section section-flush" aria-labelledby="journal-title">
+      <header class="section-head">
+        <h2 id="journal-title">
+          Trade journal
+          @if (latest(); as p) {
+            @if (p.total > 0) {
+              <span class="count">{{ p.total }} {{ p.total === 1 ? 'order' : 'orders' }}</span>
+            }
           }
+        </h2>
+        <a class="text-link" routerLink="/orders">See orders</a>
+      </header>
+      <div class="section-body">
+        @let page = latest();
+        @if (journal.error(); as err) {
+          <app-error-state
+            title="Could not load the journal"
+            [error]="err"
+            (retry)="journal.reload()"
+          />
+        } @else if (!page) {
+          <app-loading-state label="Loading the journal" [rows]="6" />
+        } @else if (page.items.length === 0) {
+          <app-empty-state
+            icon="orders"
+            title="No trades yet"
+            message="Costs appear after the first filled order."
+          >
+            <a class="btn" routerLink="/orders">See orders</a>
+          </app-empty-state>
+        } @else {
+          <app-data-table
+            caption="Trade journal, newest first. Open an order for its costs and notes."
+            [rows]="page.items"
+            [columns]="columns"
+            [rowKey]="rowKey"
+            [total]="page.total"
+            [offset]="page.offset"
+            [pageSize]="pageSize"
+            [busy]="journal.isLoading()"
+            (pageChange)="offset.set($event.offset)"
+          >
+            <ng-template appCell="ticker" [appCellOf]="page.items" let-o>
+              <span class="ticker-cell">
+                <app-side-tag [side]="o.side" />
+                <a [routerLink]="['/trades/orders', o.client_id]">{{ o.ticker }}</a>
+              </span>
+            </ng-template>
+            <ng-template appCell="status" [appCellOf]="page.items" let-o>
+              <app-status-pill [status]="o.status" />
+            </ng-template>
+          </app-data-table>
         }
       </div>
-
-      @let page = latest();
-      @if (journal.error(); as err) {
-        <app-error-state
-          title="Could not load the journal"
-          [error]="err"
-          (retry)="journal.reload()"
-        />
-      } @else if (!page) {
-        <app-loading-state label="Loading the journal" [rows]="6" />
-      } @else if (page.items.length === 0) {
-        <app-empty-state title="No trades yet" message="Costs appear after the first filled order.">
-          <a class="btn" routerLink="/orders">See orders</a>
-        </app-empty-state>
-      } @else {
-        <app-data-table
-          caption="Trade journal, newest first. Open an order for its costs and notes."
-          [rows]="page.items"
-          [columns]="columns"
-          [rowKey]="rowKey"
-          [total]="page.total"
-          [offset]="page.offset"
-          [pageSize]="pageSize"
-          [busy]="journal.isLoading()"
-          (pageChange)="offset.set($event.offset)"
-        >
-          <ng-template appCell="ticker" [appCellOf]="page.items" let-o>
-            <span class="ticker-cell">
-              <app-side-tag [side]="o.side" />
-              <a [routerLink]="['/trades/orders', o.client_id]">{{ o.ticker }}</a>
-            </span>
-          </ng-template>
-          <ng-template appCell="status" [appCellOf]="page.items" let-o>
-            <app-status-pill [status]="o.status" />
-          </ng-template>
-        </app-data-table>
-      }
     </section>
   `,
 })

@@ -105,14 +105,14 @@ export function signalIcEmptyText(r: Pick<SignalIcView, 'note' | 'n_tickers'>): 
     }
     .note {
       padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-2);
+      border-radius: var(--r-sheet);
+      background: var(--sunk);
     }
     .foot {
       font-size: var(--text-xs);
     }
     .na {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .buckets {
       white-space: normal;

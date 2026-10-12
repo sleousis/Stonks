@@ -222,7 +222,7 @@ export function ruleReason(a: RiskAdjustmentView): string | null {
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 2px var(--space-3);
       padding-top: var(--space-2);
-      border-top: 1px solid color-mix(in srgb, var(--color-loss) 25%, transparent);
+      border-top: 1px solid color-mix(in srgb, var(--down) 25%, transparent);
     }
     .rule {
       font-weight: var(--weight-semibold);
@@ -230,7 +230,7 @@ export function ruleReason(a: RiskAdjustmentView): string | null {
     }
     .why {
       grid-column: 1 / -1;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
   `,

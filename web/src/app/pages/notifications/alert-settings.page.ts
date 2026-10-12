@@ -33,7 +33,7 @@ import { TelegramLink } from './telegram-link';
   template: `
     <app-page-header
       title="Alert settings"
-      description="What reaches you, where and when. Everything always shows in the Feed. These choose what else reaches you."
+      description="What reaches you, where and when. Everything always shows in the Inbox."
     />
     <app-notifications-tabs />
 
@@ -52,10 +52,10 @@ import { TelegramLink } from './telegram-link';
         @if (briefingsOn()) {
           <app-briefing-prefs />
         }
-        <section class="panel" aria-labelledby="price-alerts-title">
-          <div class="panel-head">
+        <section class="page-section" aria-labelledby="price-alerts-title">
+          <header class="section-head">
             <h3 id="price-alerts-title">Price alerts</h3>
-          </div>
+          </header>
           <div class="panel-body body">
             <p class="lead">
               Your own rules on a ticker's price. They check each day's closing price after the
@@ -75,10 +75,13 @@ import { TelegramLink } from './telegram-link';
       display: block;
       min-width: 0;
     }
-    /* Two groups 24px apart, panels 16px apart inside (12px on phones). */
+    app-notifications-tabs {
+      margin-bottom: var(--space-6);
+    }
+    /* Two groups side by side from desktop, 56px apart, sections 40px apart inside. */
     .layout {
       display: grid;
-      gap: var(--space-5);
+      gap: var(--section-gap) var(--column-gap);
       min-width: 0;
       @include bp.from-desktop {
         grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
@@ -87,15 +90,15 @@ import { TelegramLink } from './telegram-link';
     }
     .group {
       display: grid;
-      gap: var(--space-4);
+      gap: var(--section-gap);
       min-width: 0;
-      @include bp.phone {
-        gap: var(--space-3);
-      }
     }
+    /* A group title over its sections: larger than a section title, no rule of its own. */
     .group-title {
-      font-size: var(--text-lg);
-      font-weight: var(--weight-semibold);
+      color: var(--ink);
+      font-size: 1.25rem;
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--tracking-section);
     }
     .body {
       display: grid;
@@ -104,7 +107,7 @@ import { TelegramLink } from './telegram-link';
     }
     .lead {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
   `,

@@ -2,11 +2,31 @@
 
 :host {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--section-gap);
+}
 
-  @include bp.phone {
-    gap: var(--space-3);
+// Add a person: a form edited in place, so a sheet.
+.add {
+  display: grid;
+  gap: var(--space-5);
+  animation: menu-in var(--dur-menu) var(--ease-out);
+}
+
+.add-head {
+  display: grid;
+  gap: 2px;
+
+  h2 {
+    font-size: var(--text-section);
   }
+
+  p {
+    font-size: var(--text-sm);
+  }
+}
+
+.add .form-grid {
+  max-width: none;
 }
 
 .actions {
@@ -31,100 +51,236 @@
   gap: var(--space-2);
 }
 
+// People: a table with a squircle avatar, role chips and an overflow panel.
 .people {
-  display: grid;
-  margin: 0;
-  padding: 0 var(--space-4);
-  list-style: none;
-
-  @include bp.phone {
-    padding: 0 var(--space-3);
+  td {
+    height: var(--row-h-2);
   }
 
-  li {
-    display: grid;
-    gap: var(--space-2) var(--space-4);
-    padding: var(--space-3) 0;
-    border-bottom: 1px solid var(--color-border);
-
-    @include bp.from-desktop {
-      grid-template-columns: minmax(0, 1fr) auto auto;
-      align-items: center;
-    }
-
-    @include bp.phone {
-      gap: var(--space-3);
-    }
+  .who {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
   }
 
-  li:last-child {
-    border-bottom: 0;
+  .seen {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .more {
+    position: relative;
+    width: 1%;
+    text-align: right;
+  }
+
+  tr.open td {
+    background: var(--sunk);
   }
 }
 
-.who {
+.avatar {
   display: grid;
-  gap: 2px;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--sunk);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+tr:hover .avatar,
+tr.open .avatar {
+  background: var(--raise);
+}
+
+.who-text {
+  display: grid;
   min-width: 0;
 }
 
 .name {
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   overflow-wrap: anywhere;
 }
 
 .email {
-  color: var(--color-ink-2);
+  color: var(--muted);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
-.seen {
-  font-size: var(--text-xs);
-}
-
-.pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-// Role, then one secondary action, then the quiet ones. On phones the
-// four sit in an equal two-column grid.
-.controls {
-  display: flex;
-  flex-wrap: wrap;
+// Role chips: admins in ink, traders in accent, viewers quiet.
+.role-chip {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--r-pill);
+  background: var(--sunk);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
 
-  @include bp.phone {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  &[data-role='trader'] {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 
-    .btn {
-      width: 100%;
-      white-space: normal;
-      text-align: center;
-      line-height: var(--leading-tight);
-    }
+  &[data-role='admin'] {
+    background: var(--ink);
+    color: var(--bg);
   }
 }
 
-.role {
-  width: auto;
-  min-width: 7.5rem;
+.more-button svg {
+  width: 16px;
+  height: 16px;
+}
 
-  @include bp.phone {
-    width: 100%;
-    min-width: 0;
+// The overflow panel: a small sheet under the button.
+.row-menu {
+  position: absolute;
+  top: calc(100% - 6px);
+  right: 0;
+  z-index: var(--z-menu);
+  display: grid;
+  gap: var(--space-3);
+  width: 260px;
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sheet);
+  background: var(--raise);
+  box-shadow: var(--shadow-overlay);
+  text-align: left;
+  transform-origin: top right;
+  animation: menu-in var(--dur-menu) var(--ease-out);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.menu-actions {
+  display: grid;
+  margin: 0 calc(-1 * var(--space-2));
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+
+  &:hover:not(:disabled) {
+    background: var(--sunk);
+  }
+
+  &.danger {
+    color: var(--down);
+  }
+
+  &:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
+// Phones: each person is a list item. Avatar, name and email on the left,
+// the overflow button on the right, the chips and last sign-in below.
+@include bp.phone {
+  .people {
+    thead {
+      display: none;
+    }
+
+    tbody {
+      display: block;
+    }
+
+    tr {
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    td {
+      display: block;
+      height: auto;
+      padding: 0;
+      border: 0;
+    }
+
+    tbody tr:hover td,
+    tr.open td {
+      background: none;
+    }
+
+    .who {
+      display: flex;
+      flex: 1 1 calc(100% - var(--touch-min) - var(--space-4));
+      min-width: 0;
+    }
+
+    // The overflow button sits beside the name, the chips wrap below.
+    .more {
+      position: static;
+      flex: none;
+      order: 1;
+      width: auto;
+    }
+
+    .role-cell,
+    .status-cell,
+    .mfa-cell,
+    .seen {
+      order: 2;
+    }
+
+    .role-cell {
+      margin-left: calc(32px + var(--space-1));
+    }
+
+    .seen {
+      width: 100%;
+      padding-left: calc(32px + var(--space-3));
+    }
+  }
+
+  .row-menu {
+    top: 56px;
+    right: 0;
+    left: 0;
+    width: auto;
   }
 }
 
 // First run: only the admin exists yet, say how to add the next person.
 .first-run {
-  margin: 0 var(--space-4) var(--space-4);
-
-  @include bp.phone {
-    margin: 0 var(--space-3) var(--space-3);
-  }
+  margin-top: var(--space-5);
 }

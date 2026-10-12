@@ -2,10 +2,10 @@
 @use 'breakpoints' as bp;
 
 .panel-link {
-  font-size: var(--text-sm);
   display: inline-flex;
   align-items: center;
   min-height: var(--control-h);
+  font-size: var(--text-md);
 
   @include bp.coarse {
     min-height: var(--touch-min);
@@ -16,26 +16,34 @@
   }
 }
 
+.head-note {
+  font-size: var(--text-sm);
+}
+
+// Figures as a grid of label-over-value cells, values in mono.
 .figures {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: var(--space-3);
-  margin: 0 0 var(--space-3);
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
 
   dt {
+    color: var(--muted);
     font-size: var(--text-xs);
-    color: var(--color-ink-3);
+    font-weight: var(--weight-medium);
   }
 
   > div {
     min-width: 0;
   }
 
-  // Values: mono figures, 4px under the label.
   dd {
     min-width: 0;
     margin: var(--space-1) 0 0;
-    font-size: var(--text-lg);
+    font-family: var(--font-mono);
+    font-size: var(--text-lead);
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
 
@@ -43,6 +51,44 @@
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
   }
+}
+
+// Fact rows: the label on the left, the mono figure on the right, a
+// hairline between rows. For a narrow column of figures.
+.figures.fact-rows {
+  display: block;
+  margin: 0 0 var(--space-4);
+
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-4);
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  > div:last-child {
+    border-bottom: 0;
+  }
+
+  dt {
+    color: var(--ink-2);
+    font-size: var(--text-md);
+    font-weight: var(--weight-regular);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+  }
+}
+
+.hint {
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 // .touch-link is global (styles.scss).

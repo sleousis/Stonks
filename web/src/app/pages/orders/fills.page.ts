@@ -23,10 +23,16 @@ const PAGE_SIZE = 50;
 /** Columns shared with the tick drill-down. */
 export const FILL_COLUMNS: TableColumn<FillView>[] = [
   { key: 'ticker', label: 'Ticker', mobile: 'title' },
-  { key: 'side', label: 'Side' },
+  { key: 'side', label: 'Side', mobile: 'inline' },
   { key: 'quantity', label: 'Qty', format: 'number' },
   { key: 'price', label: 'Price', format: 'money' },
-  { key: 'value', label: 'Value', format: 'money', value: (f) => f.quantity * f.price },
+  {
+    key: 'value',
+    label: 'Value',
+    format: 'money',
+    mobile: 'figure',
+    value: (f) => f.quantity * f.price,
+  },
   { key: 'fee', label: 'Fee', format: 'money' },
   { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
   { key: 'order_client_id', label: 'Order', sortable: false, mobile: 'hide' },
@@ -39,57 +45,61 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, DataTable, TableCell, LoadingState, EmptyState, ErrorState, SideTag],
   template: `
-    <section class="panel panel-flush" aria-labelledby="fills-title">
-      <div class="panel-head">
-        <h2 id="fills-title">Fills</h2>
-        @if (page(); as p) {
-          <span class="count num">{{ p.total }} matching</span>
-        }
+    <section class="page-section section-flush" aria-labelledby="fills-title">
+      <div class="toolbar">
+        <form
+          class="filters always"
+          role="search"
+          aria-label="Filter fills"
+          (submit)="$event.preventDefault()"
+        >
+          <div class="field">
+            <label for="ff-ticker">Ticker</label>
+            <input
+              id="ff-ticker"
+              class="input"
+              placeholder="AAPL.US"
+              autocapitalize="characters"
+              [value]="ticker() ?? ''"
+              (change)="setFilter('ticker', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="ff-tick">Trading run</label>
+            <input
+              id="ff-tick"
+              class="input"
+              placeholder="Any run"
+              [value]="tick() ?? ''"
+              (change)="setFilter('tick', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="ff-order">Order</label>
+            <input
+              id="ff-order"
+              class="input"
+              placeholder="Any order"
+              [value]="order() ?? ''"
+              (change)="setFilter('order', $any($event.target).value)"
+            />
+          </div>
+          @if (hasFilters()) {
+            <button type="button" class="btn btn-ghost clear" (click)="clearFilters()">
+              Clear filters
+            </button>
+          }
+        </form>
       </div>
 
-      <form
-        class="filters"
-        role="search"
-        aria-label="Filter fills"
-        (submit)="$event.preventDefault()"
-      >
-        <div class="field">
-          <label for="ff-ticker">Ticker</label>
-          <input
-            id="ff-ticker"
-            class="input"
-            placeholder="AAPL.US"
-            autocapitalize="characters"
-            [value]="ticker() ?? ''"
-            (change)="setFilter('ticker', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="ff-tick">Trading run</label>
-          <input
-            id="ff-tick"
-            class="input"
-            placeholder="Any run"
-            [value]="tick() ?? ''"
-            (change)="setFilter('tick', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="ff-order">Order</label>
-          <input
-            id="ff-order"
-            class="input"
-            placeholder="Any order"
-            [value]="order() ?? ''"
-            (change)="setFilter('order', $any($event.target).value)"
-          />
-        </div>
-        <div class="filter-actions">
-          <button type="button" class="btn" [disabled]="!hasFilters()" (click)="clearFilters()">
-            Clear filters
-          </button>
-        </div>
-      </form>
+      <header class="section-head">
+        <h2 id="fills-title">
+          Fills
+          @if (page(); as p) {
+            <span class="count">{{ p.total }} matching</span>
+          }
+        </h2>
+      </header>
 
       @let p = page();
       @if (fills.error(); as err) {
@@ -98,6 +108,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
         <app-loading-state label="Loading fills" [rows]="6" />
       } @else if (p.items.length === 0) {
         <app-empty-state
+          icon="orders"
           [title]="hasFilters() ? 'No fills match these filters' : 'No fills yet'"
           [message]="
             hasFilters()

@@ -85,7 +85,7 @@ interface Group {
   template: `
     <app-page-header
       title="Approvals"
-      description="Orders waiting for your OK: trades from strategies you follow with Approve each trade, and orders the assistant suggested. Nothing goes out until you approve it."
+      description="Orders that wait for your OK, from strategies and the assistant. Nothing goes out until you approve it."
     >
       <app-updated-ago [at]="auto.updatedAt()" />
     </app-page-header>
@@ -116,32 +116,39 @@ interface Group {
       } @else if (view() === 'waiting') {
         @if (waitingCount() === 0) {
           <app-empty-state
+            icon="check"
+            tone="good"
             title="Nothing waits for you"
             message="Orders appear here after a trading run when a strategy you follow uses Approve each trade, and when the assistant suggests an order."
           >
             <a routerLink="/" class="btn">Back to Today</a>
           </app-empty-state>
         } @else {
-          <p class="lead">
+          <p class="standfirst lead">
             {{ waitingCount() }} {{ waitingCount() === 1 ? 'order waits' : 'orders wait' }} for you.
             Approving asks for a code from your authenticator app.
             <app-help-tip term="Approve each trade" />
           </p>
           @if (groups().length) {
-            <section class="source-group" aria-labelledby="from-strategies">
-              <h2 id="from-strategies" class="source-title">
-                From strategies you follow
-                <span class="muted">{{ waiting().length }}</span>
-              </h2>
-              <p class="muted">
-                Each ticket goes to your broker in the window before the next open.
-              </p>
+            <section class="page-section source-group" aria-labelledby="from-strategies">
+              <header class="section-head">
+                <h2 id="from-strategies">
+                  From strategies you follow
+                  <span class="count">{{ waiting().length }}</span>
+                </h2>
+                <span class="head-note"
+                  >Each ticket goes to your broker in the window before the next open.</span
+                >
+              </header>
               @for (group of groups(); track group.key) {
                 <section class="run" [attr.aria-labelledby]="'run-' + group.key">
                   <div class="run-head">
                     <div class="run-title">
-                      <h3 [id]="'run-' + group.key">{{ group.portfolioName }}</h3>
-                      <p class="muted">
+                      <h3 [id]="'run-' + group.key">
+                        {{ group.portfolioName }}
+                        <app-mode-stamp size="sm" [live]="group.live" [stage]="group.stage" />
+                      </h3>
+                      <p class="meta">
                         Decided {{ date(group.asOf) }}. Send by
                         <span class="num">{{ dateTime(group.expiresAt) }}</span
                         >, unapproved tickets then expire.
@@ -150,13 +157,21 @@ interface Group {
                     @if (group.tickets.length > 1) {
                       <button
                         type="button"
-                        class="btn btn-primary"
+                        class="btn btn-compact"
+                        [class.btn-live]="group.live"
+                        [class.btn-primary]="!group.live"
                         [disabled]="!canApprove() || busyGroup() === group.key"
                         (click)="approveAll(group)"
                       >
                         Approve all {{ group.tickets.length }}
                       </button>
                     }
+                  </div>
+                  <div class="inbox-head" aria-hidden="true">
+                    <span>Order</span>
+                    <span class="end">Price</span>
+                    <span class="end">About</span>
+                    <span></span>
                   </div>
                   <ul class="tickets">
                     @for (t of group.tickets; track t.id) {
@@ -166,78 +181,78 @@ interface Group {
                           [class.live]="group.live"
                           [attr.aria-labelledby]="'ticket-' + t.id"
                         >
-                          <p class="ticket-head">
-                            <app-side-tag [side]="t.side" />
-                            <span class="ticket-kind" [id]="'ticket-' + t.id">
-                              <span class="verb">{{ t.side === 'buy' ? 'Buy' : 'Sell' }}</span>
-                              <span class="num">{{ qty(t.quantity) }}</span>
-                              <strong class="num">{{ t.ticker }}</strong>
-                            </span>
-                            <app-mode-stamp [live]="group.live" [stage]="group.stage" />
+                          <div class="order">
+                            <p class="order-line">
+                              <app-side-tag [side]="t.side" />
+                              <span class="ticket-kind" [id]="'ticket-' + t.id">
+                                <span class="verb">{{ t.side === 'buy' ? 'Buy' : 'Sell' }}</span>
+                                <span class="num">{{ qty(t.quantity) }}</span>
+                                <strong>{{ t.ticker }}</strong>
+                              </span>
+                              <app-mode-stamp
+                                class="row-stamp"
+                                size="sm"
+                                [live]="group.live"
+                                [stage]="group.stage"
+                              />
+                            </p>
+                            <p class="meta">
+                              @if (t.strategy_id) {
+                                <span>{{ strategyName(t) }}</span>
+                              }
+                              <span
+                                >Decided at
+                                <span class="num">{{ money(t.reference_price, t) }}</span></span
+                              >
+                              @if (scoreText(t); as s) {
+                                <span
+                                  >Signal score <span class="num">{{ s }}</span>
+                                  <app-help-tip term="Signal score"
+                                /></span>
+                              }
+                              @if (commission(t); as fee) {
+                                <span
+                                  >Commission <span class="num">{{ money(fee, t) }}</span></span
+                                >
+                              }
+                            </p>
+                            @if (hold(t); as why) {
+                              @if (t.hold === 'runaway') {
+                                <p class="hold alarm callout" data-tone="warn">{{ why }}</p>
+                              } @else {
+                                <p class="hold">{{ why }}</p>
+                              }
+                            }
+                            @if (rules(t); as lines) {
+                              @if (lines.length) {
+                                <details class="rules">
+                                  <summary>
+                                    <span class="disclosure-chev" aria-hidden="true"></span>
+                                    Checked by {{ lines.length }} rule{{
+                                      lines.length === 1 ? '' : 's'
+                                    }}
+                                  </summary>
+                                  <ul>
+                                    @for (line of lines; track $index) {
+                                      <li>{{ line }}</li>
+                                    }
+                                  </ul>
+                                </details>
+                              }
+                            }
+                          </div>
+                          <p class="price num">
+                            <span class="cell-label">Price</span>
+                            {{ t.limit_price ? 'Limit ' + money(t.limit_price, t) : 'At the open' }}
                           </p>
-                          @if (hold(t); as why) {
-                            @if (t.hold === 'runaway') {
-                              <p class="hold alarm callout" data-tone="warn">{{ why }}</p>
-                            } @else {
-                              <p class="hold well">{{ why }}</p>
-                            }
-                          }
-                          <dl class="ticket-lines">
-                            <div>
-                              <dt>Price</dt>
-                              <dd>
-                                {{
-                                  t.limit_price ? 'Limit ' + money(t.limit_price, t) : 'At the open'
-                                }}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt>Decided at</dt>
-                              <dd>{{ money(t.reference_price, t) }}</dd>
-                            </div>
-                            <div>
-                              <dt>About</dt>
-                              <dd>{{ money(t.notional, t) }}</dd>
-                            </div>
-                            @if (t.strategy_id) {
-                              <div>
-                                <dt>Strategy</dt>
-                                <dd>{{ strategyName(t) }}</dd>
-                              </div>
-                            }
-                            @if (scoreText(t); as s) {
-                              <div>
-                                <dt>Signal score <app-help-tip term="Signal score" /></dt>
-                                <dd>{{ s }}</dd>
-                              </div>
-                            }
-                            @if (commission(t); as fee) {
-                              <div>
-                                <dt>Commission</dt>
-                                <dd>{{ money(fee, t) }}</dd>
-                              </div>
-                            }
-                          </dl>
-                          @if (rules(t); as lines) {
-                            @if (lines.length) {
-                              <details class="rules">
-                                <summary>
-                                  Checked by {{ lines.length }} rule{{
-                                    lines.length === 1 ? '' : 's'
-                                  }}
-                                </summary>
-                                <ul>
-                                  @for (line of lines; track $index) {
-                                    <li>{{ line }}</li>
-                                  }
-                                </ul>
-                              </details>
-                            }
-                          }
+                          <p class="about num" [class.brass]="group.live">
+                            <span class="cell-label">About</span>
+                            {{ money(t.notional, t) }}
+                          </p>
                           <div class="actions">
                             <button
                               type="button"
-                              class="btn"
+                              class="btn btn-compact btn-ghost"
                               [disabled]="!canReject() || busy().has(t.id)"
                               (click)="reject(t)"
                             >
@@ -245,7 +260,7 @@ interface Group {
                             </button>
                             <button
                               type="button"
-                              class="btn btn-primary"
+                              class="btn btn-compact"
                               [disabled]="!canApprove() || busy().has(t.id)"
                               (click)="approve(group, [t])"
                             >
@@ -261,11 +276,13 @@ interface Group {
             </section>
           }
           @if (pendingDrafts().length) {
-            <section class="source-group" aria-labelledby="suggested">
-              <h2 id="suggested" class="source-title">
-                Suggested orders <span class="muted">{{ pendingDrafts().length }}</span>
-              </h2>
-              <p class="muted">
+            <section class="page-section source-group" aria-labelledby="suggested">
+              <header class="section-head">
+                <h2 id="suggested">
+                  Suggested orders <span class="count">{{ pendingDrafts().length }}</span>
+                </h2>
+              </header>
+              <p class="head-note">
                 Orders the assistant proposed. Approving places one through every check, like an
                 order you place by hand.
               </p>
@@ -275,15 +292,18 @@ interface Group {
           <app-permission-note permission="orders.approve" />
         }
       } @else {
-        <section class="source-group" aria-labelledby="history-strategies">
-          <h2 id="history-strategies" class="source-title">From strategies you follow</h2>
+        <section class="page-section source-group" aria-labelledby="history-strategies">
+          <header class="section-head">
+            <h2 id="history-strategies">From strategies you follow</h2>
+          </header>
           @if (history().length === 0) {
             <app-empty-state
+              icon="orders"
               title="No tickets yet"
               message="Every order a strategy you follow with Approve each trade decides is kept here, with what became of it."
             />
           } @else {
-            <div class="panel panel-flush">
+            <div>
               <app-data-table
                 caption="Your order tickets, newest first"
                 [rows]="history()"
@@ -291,7 +311,7 @@ interface Group {
                 [rowKey]="key"
               >
                 <ng-template appCell="ticker" [appCellOf]="history()" let-t>
-                  <span class="order"
+                  <span class="order-cell"
                     ><app-side-tag [side]="t.side" /> <span class="num">{{ t.ticker }}</span></span
                   >
                 </ng-template>
@@ -308,8 +328,10 @@ interface Group {
           }
         </section>
         @if (pastDrafts().length) {
-          <section class="source-group" aria-labelledby="history-suggested">
-            <h2 id="history-suggested" class="source-title">Suggested orders</h2>
+          <section class="page-section source-group" aria-labelledby="history-suggested">
+            <header class="section-head">
+              <h2 id="history-suggested">Suggested orders</h2>
+            </header>
             <app-suggested-orders [drafts]="pastDrafts()" (changed)="drafts.reload()" />
           </section>
         }
@@ -321,153 +343,243 @@ interface Group {
     @use 'breakpoints' as bp;
 
     :host {
-      display: grid;
-      gap: var(--space-4);
+      display: block;
       min-width: 0;
-    }
-    .lead {
-      max-width: 70ch;
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
     }
     .view {
       display: grid;
-      gap: var(--space-5);
+      gap: var(--section-gap);
       min-width: 0;
+      margin-top: var(--space-6);
+    }
+    .lead {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-1) var(--space-2);
     }
     .source-group {
       display: grid;
-      gap: var(--space-3);
+      gap: 0;
       min-width: 0;
     }
-    .source-title {
-      display: flex;
-      align-items: baseline;
-      gap: var(--space-2);
-      font-size: var(--text-panel);
-      font-weight: var(--weight-semibold);
-    }
-    .source-title .muted {
-      font-family: var(--font-mono);
+    .head-note {
+      color: var(--muted);
       font-size: var(--text-sm);
-      font-variant-numeric: tabular-nums slashed-zero;
-      font-weight: var(--weight-regular);
     }
+    p.head-note {
+      padding-top: var(--space-3);
+    }
+    /* A run: its portfolio, the deadline and Approve all, then the rows. */
     .run {
-      display: grid;
-      gap: var(--space-3);
       min-width: 0;
     }
     .run-head {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: var(--space-2) var(--space-4);
-    }
-    .run-title {
-      min-width: 0;
-      flex: 1 1 16rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+      padding: var(--space-4) 0 var(--space-3);
     }
     .run-title h3 {
-      font-size: var(--text-md);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
-    .run-title p {
-      margin-top: var(--space-1);
-    }
-    .muted {
-      color: var(--color-ink-2);
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px var(--space-3);
+      color: var(--muted);
       font-size: var(--text-sm);
     }
-    .tickets {
+    .run-title .meta {
+      margin-top: 2px;
+    }
+    /* The inbox: a header row, then one row per ticket with 1px rules. */
+    .inbox-head,
+    .ticket {
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: var(--space-4);
+      grid-template-columns: minmax(0, 1fr) 9rem 8rem auto;
+      gap: var(--space-3);
+      align-items: start;
+    }
+    .inbox-head {
+      align-items: center;
+      height: 36px;
+      border-bottom: 1px solid var(--rule);
+      color: var(--muted);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
+    }
+    .end {
+      text-align: right;
+    }
+    .tickets {
       margin: 0;
       padding: 0;
       list-style: none;
-
-      @include bp.phone {
-        gap: var(--space-3);
-      }
-
-      @include bp.from-tablet {
-        grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-      }
     }
-    /* Each ticket fills its grid cell, so Approve lines up along a row. */
-    .tickets > li {
-      display: grid;
-    }
-    /* A column, so the Reject and Approve row sits at the foot of every
-       ticket in a grid row. */
+    /* A row, not a box: override the global ticket look. */
     .tickets .ticket {
+      position: static;
+      padding: 14px 0;
+      border: 0;
+      border-bottom: 1px solid var(--rule);
+      border-radius: 0;
+      background: none;
+      transition: background-color var(--dur-fast) var(--ease-out);
+    }
+    .tickets .ticket:hover {
+      background: var(--sunk);
+    }
+    .order {
+      display: grid;
+      gap: var(--space-1);
+      min-width: 0;
+    }
+    .order-line {
       display: flex;
-      flex-direction: column;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
     }
     .ticket-kind {
       display: inline-flex;
       flex-wrap: wrap;
       align-items: baseline;
       gap: var(--space-1) var(--space-2);
-      color: var(--color-ink);
-      font-size: var(--text-md);
+      font-size: var(--text-body);
       min-width: 0;
       overflow-wrap: anywhere;
     }
-    /* Why it waits: an inset well on the ticket, not a bordered box. */
+    .ticket-kind strong {
+      font-weight: var(--weight-bold);
+    }
+    .verb {
+      color: var(--ink-2);
+    }
+    .price,
+    .about {
+      padding-top: 1px;
+      font-size: var(--text-md);
+      text-align: right;
+      white-space: normal;
+    }
+    .about {
+      font-weight: var(--weight-semibold);
+    }
+    .cell-label {
+      display: none;
+    }
     .hold {
+      max-width: 68ch;
+      color: var(--ink-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
       overflow-wrap: anywhere;
     }
-    .hold.well {
-      padding: var(--space-2) var(--space-3);
-      background: var(--color-surface-3);
-    }
-    .hold.alarm {
-      color: var(--color-ink);
-    }
     .rules summary {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      min-height: var(--touch-min);
-      color: var(--color-ink-2);
+      gap: var(--space-1);
+      min-height: 28px;
+      color: var(--ink-2);
       font-size: var(--text-sm);
       cursor: pointer;
+      list-style: none;
+    }
+    .rules summary::-webkit-details-marker {
+      display: none;
     }
     .rules ul {
       margin: 0 0 var(--space-2);
-      padding-left: var(--space-4);
+      padding-left: var(--space-5);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
     .actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-2);
-      margin-top: auto;
-      padding-top: var(--space-3);
-      border-top: 1px dashed var(--color-border-strong);
+      display: flex;
+      gap: var(--space-1);
+      justify-content: flex-end;
     }
-    .actions .btn {
-      min-height: var(--touch-min);
-      justify-content: center;
-    }
-    .run-head .btn {
-      min-height: var(--touch-min);
-
-      @include bp.phone {
-        width: 100%;
-        justify-content: center;
-      }
-    }
-    .order {
+    .order-cell {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
+    }
+    /* Tablet: price and about stack in one column. */
+    @media (max-width: 1099.98px) {
+      .inbox-head,
+      .ticket {
+        grid-template-columns: minmax(0, 1fr) 8rem auto;
+      }
+      .inbox-head > :nth-child(2) {
+        display: none;
+      }
+      .price {
+        grid-column: 2;
+        grid-row: 2;
+        padding-top: 0;
+        color: var(--muted);
+        font-size: var(--text-sm);
+      }
+      .about {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .actions {
+        grid-column: 3;
+        grid-row: 1;
+      }
+    }
+    /* Phones: list items. Name and meta on the left, about on the right,
+       the actions on their own line. */
+    @include bp.phone {
+      .inbox-head {
+        display: none;
+      }
+      .run-head {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .run-head .btn {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+      .tickets .ticket {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: var(--space-2);
+      }
+      .order {
+        grid-column: 1 / -1;
+        grid-row: 1;
+      }
+      .row-stamp {
+        display: none;
+      }
+      .about {
+        grid-column: 2;
+        grid-row: 2;
+        font-size: var(--text-lead);
+      }
+      .price {
+        grid-column: 1;
+        grid-row: 2;
+        text-align: left;
+      }
+      .actions {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .actions .btn {
+        min-height: var(--touch-min);
+      }
     }
   `,
 })

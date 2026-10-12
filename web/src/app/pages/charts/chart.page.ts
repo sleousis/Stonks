@@ -20,8 +20,10 @@ import { WatchlistContextService } from '../../core/watchlists/watchlist-context
 import { PriceChart } from '../../shared/chart/price-chart';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { PctPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
 import { rowStrategyName } from '../../shared/strategy-names';
+import { activeFormat, formatPercent } from '../../core/format/format';
 import { SideTag } from '../../shared/ui/side-tag';
 import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -81,6 +83,7 @@ const SIGNAL_WORDS: Record<string, string> = {
     EmptyState,
     ErrorState,
     NoBook,
+    PctPipe,
   ],
   templateUrl: './chart.page.html',
   styleUrl: './chart.page.scss',
@@ -186,6 +189,46 @@ export class ChartPage {
     const d = this.data();
     return d ? chartSummary(this.symbol(), d) : null;
   });
+  /** The last close, the day's change and the change over the range. */
+  protected readonly quote = computed(() => {
+    const candles = this.data()?.candles ?? [];
+    const last = candles.at(-1);
+    if (!last) return null;
+    const prev = candles.at(-2);
+    const first = candles[0];
+    const text = last.close.toLocaleString(activeFormat().locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const [whole, cents] = text.split(/([.,]\d+)$/);
+    return {
+      whole,
+      cents: cents ?? '',
+      day: prev && prev.close > 0 ? last.close / prev.close - 1 : null,
+      range: first.close > 0 ? last.close / first.close - 1 : null,
+    };
+  });
+  protected readonly rangeLabel = computed(
+    () => RANGES.find((r) => r.id === this.range())?.label ?? '',
+  );
+
+  /** "Up 12.40% over 1Y, with 3 of your fills and 2 strategy signals marked." */
+  protected readonly standfirst = computed(() => {
+    const q = this.quote();
+    const d = this.data();
+    if (!this.symbol() || !q || !d || q.range === null) {
+      return 'Daily candles with volume, moving averages, your fills and strategy signals.';
+    }
+    const dir = q.range >= 0 ? 'Up' : 'Down';
+    const move = `${dir} ${formatPercent(Math.abs(q.range))} over ${this.rangeLabel()}`;
+    const fills = d.markers.filter((m) => m.kind === 'buy' || m.kind === 'sell').length;
+    const signals = d.markers.length - fills;
+    const marks: string[] = [];
+    if (fills) marks.push(`${fills} of your ${fills === 1 ? 'fill' : 'fills'}`);
+    if (signals) marks.push(`${signals} strategy ${signals === 1 ? 'signal' : 'signals'}`);
+    return marks.length ? `${move}, with ${marks.join(' and ')} marked.` : `${move}.`;
+  });
+
   protected readonly fills = computed<ChartFillView[]>(() =>
     this.chart.hasValue() ? [...this.chart.value().fills].reverse() : [],
   );
@@ -195,6 +238,10 @@ export class ChartPage {
 
   /** Tickers of the picked watchlist, to jump between charts. */
   protected readonly listTickers = computed(() => this.watch.selected()?.tickers ?? []);
+  /** For the empty page: the tickers on your watchlists, at most twelve, as links. */
+  protected readonly quickTickers = computed(() =>
+    [...new Set(this.watch.lists().flatMap((l) => l.tickers))].slice(0, 12),
+  );
 
   // ---- ticker search ------------------------------------------------------------
   protected readonly query = linkedSignal(() => this.symbol());

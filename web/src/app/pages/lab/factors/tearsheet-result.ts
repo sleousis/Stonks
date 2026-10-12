@@ -301,7 +301,7 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
     /* Section titles: 13px semibold, second ink. */
     h3 {
       margin: 0;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }
@@ -314,7 +314,7 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       font-size: var(--text-sm);
     }
     .na {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .sr-only {
       position: absolute;
@@ -336,7 +336,7 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
         text-align: left;
         font-weight: var(--weight-regular);
         font-size: var(--text-sm);
-        color: var(--color-ink-2);
+        color: var(--ink-2);
         white-space: nowrap;
       }
       td {
@@ -350,17 +350,17 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       position: relative;
       flex: 1 1 auto;
       height: 14px;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       overflow: hidden;
     }
     .bar {
       display: block;
       height: 100%;
-      background: var(--color-gain);
+      background: var(--up);
     }
     .bar.neg {
-      background: var(--color-loss);
+      background: var(--down);
     }
     .value {
       flex: 0 0 5rem;
@@ -376,18 +376,18 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       display: inline-block;
       width: 12px;
       height: 3px;
-      border-radius: var(--radius-xs);
+      border-radius: var(--r-tag);
       &.gain {
-        background: var(--color-gain);
+        background: var(--up);
       }
       &.loss {
-        background: var(--color-loss);
+        background: var(--down);
       }
       &.primary {
-        background: var(--color-accent);
+        background: var(--accent);
       }
       &.muted {
-        background: var(--color-ink-3);
+        background: var(--muted);
       }
     }
     .groups {
@@ -408,14 +408,14 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       th {
         padding: var(--space-1);
         font-weight: var(--weight-medium);
-        color: var(--color-ink-2);
+        color: var(--ink-2);
       }
       td {
         min-width: 3rem;
         padding: var(--space-1);
         text-align: center;
-        border-radius: var(--radius-sm);
-        background: var(--color-surface-2);
+        border-radius: var(--r-ctl);
+        background: var(--sunk);
       }
     }
     .facts {
@@ -425,7 +425,7 @@ function bucketColor(i: number, n: number): ChartSeries['color'] {
       margin: 0;
       dt {
         font-size: var(--text-xs);
-        color: var(--color-ink-3);
+        color: var(--muted);
       }
       dd {
         margin: 0;

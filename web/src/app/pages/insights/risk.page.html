@@ -1,7 +1,4 @@
-<app-page-header
-  title="Risk"
-  description="How close your portfolio is to its limits, how much it could lose on a bad day, and whether the risk model has been right."
->
+<app-page-header title="Risk" [description]="standfirst()">
   <app-updated-ago [at]="auto.updatedAt()" />
 </app-page-header>
 
@@ -10,165 +7,183 @@
 @if (book() === 'none') {
   <app-no-book message="How close your portfolio is to its limits shows here once you have one." />
 } @else {
-  <div class="page-grid">
-    <!-- Limits -------------------------------------------------------------->
-    <section class="panel span-12" aria-labelledby="limits-title">
-      <div class="panel-head">
-        <h2 id="limits-title">Against the limits</h2>
-      </div>
-      @if (policy.error(); as err) {
-        <app-error-state
-          title="Could not load the limits"
-          [error]="err"
-          (retry)="policy.reload()"
-        />
-      } @else if (limitsLoading()) {
-        <app-loading-state label="Loading the limits" [rows]="6" />
-      } @else {
-        @if (limited().length) {
-          <ul class="limits" aria-label="Each measure against its limit">
-            @for (r of limited(); track r.key) {
-              <li [class]="'limit limit-' + r.status">
-                <span class="limit-label">
-                  {{ r.label }}
-                  @if (r.help) {
-                    <app-help-tip [term]="r.help" />
-                  }
-                  @if (r.yours) {
-                    <span class="yours">Your limit</span>
-                  }
-                </span>
-                <span class="limit-figures num">
-                  <span class="visually-hidden">Now </span>{{ r.now }}
-                  <span class="muted"> of {{ r.limit }}</span>
-                </span>
-                <span class="meter" aria-hidden="true">
-                  <span [style.width]="meterWidth(r)"></span>
-                </span>
-                <span class="limit-status">{{ statusText[r.status] }}</span>
-              </li>
+  <div class="cols risk-cols">
+    <div class="section-stack">
+      <!-- Limits -------------------------------------------------------------->
+      <section class="page-section" aria-labelledby="limits-title">
+        <header class="section-head">
+          <h2 id="limits-title">
+            Against the limits
+            @if (limited().length) {
+              <span class="count">{{ limited().length }}</span>
             }
-          </ul>
-        }
-        <p class="panel-body hint">
-          @if (noLimit(); as text) {
-            {{ text }}
-          }
-          @if (anyYours()) {
-            Rows marked Your limit follow your own risk limits, stricter than the system's. The
-            others are the system limits every portfolio trades under.
-          } @else {
-            The system limits every portfolio trades under. You have set none of your own that are
-            stricter.
-          }
-          @if (smallestOrder(); as min) {
-            Buys worth less than {{ min }} are skipped.
-          }
-          @if (mine.error()) {
-            Your own limits could not load, so only the system limits show.
-          }
-          @if (insights.error() || live.error()) {
-            Some readings are missing because a panel below failed to load.
-          }
-          <a class="touch-link" routerLink="/settings" [queryParams]="{ tab: 'risk' }"
-            >Change your risk limits</a
-          >
-        </p>
-      }
-    </section>
-
-    <!-- Today --------------------------------------------------------------->
-    <section class="panel span-5" aria-labelledby="today-title">
-      <div class="panel-head">
-        <h2 id="today-title">On a bad day</h2>
-        @if (live.hasValue() && live.value().as_of) {
-          <span class="muted num">{{ live.value().as_of }}</span>
-        }
-      </div>
-      <div class="panel-body">
-        @if (live.error(); as err) {
-          <app-error-state title="Could not load live risk" [error]="err" (retry)="live.reload()" />
-        } @else if (!live.hasValue()) {
-          <app-loading-state label="Loading live risk" [rows]="4" />
-        } @else if (!live.value().portfolio) {
-          <app-empty-state
-            title="No risk readings yet"
-            message="Each trading run measures the portfolio. Readings appear after the first one."
-          >
-            <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
-          </app-empty-state>
+          </h2>
+        </header>
+        @if (policy.error(); as err) {
+          <app-error-state
+            title="Could not load the limits"
+            [error]="err"
+            (retry)="policy.reload()"
+          />
+        } @else if (limitsLoading()) {
+          <app-loading-state label="Loading the limits" [rows]="6" />
         } @else {
-          @let b = live.value().portfolio!;
-          <dl class="figures">
-            <div>
-              <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
-              <dd class="num">Could lose {{ loss(b.var_95) }}</dd>
-            </div>
-            <div>
-              <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
-              <dd class="num">Could lose {{ loss(b.es_95) }}</dd>
-            </div>
-          </dl>
-          <p class="hint">
-            One-day losses as a share of value, {{ money(b.value) }} today. On 19 days out of 20 the
-            loss should be smaller than the first figure.
-          </p>
-          <p class="misses">
-            Over the last {{ b.window_days }} days:
-            {{ violationText(b.violations_95, b.violation_ratio_95, b.kupiec_p_95) }}
-            <app-help-tip term="violation_ratio" />
-          </p>
-          @if (b.ratio_out_of_band) {
-            <p class="callout warning" data-tone="warn" role="note">
-              The model misses far more or far less often than it should. Treat these numbers with
-              care.
-            </p>
+          @if (limited().length) {
+            <ul class="limits" aria-label="Each measure against its limit">
+              @for (r of limited(); track r.key) {
+                <li [class]="'limit limit-' + r.status">
+                  <span class="limit-label">
+                    {{ r.label }}
+                    @if (r.help) {
+                      <app-help-tip [term]="r.help" />
+                    }
+                    @if (r.yours) {
+                      <span class="yours">Your limit</span>
+                    }
+                  </span>
+                  <span class="limit-figures num">
+                    <span class="visually-hidden">Now </span>{{ r.now }}
+                    <span class="muted"> of {{ r.limit }}</span>
+                  </span>
+                  <span class="meter" aria-hidden="true">
+                    <span [style.width]="meterWidth(r)"></span>
+                  </span>
+                  <span class="limit-status">{{ statusText[r.status] }}</span>
+                </li>
+              }
+            </ul>
           }
-        }
-      </div>
-    </section>
-
-    <!-- Sleeves ------------------------------------------------------------->
-    <section class="panel panel-flush span-7" aria-labelledby="sleeves-title">
-      <div class="panel-head">
-        <h2 id="sleeves-title">Each strategy's part <app-help-tip term="strategy_part" /></h2>
-      </div>
-      @if (live.error()) {
-        <p class="panel-body muted">Each strategy's part shows once live risk loads.</p>
-      } @else if (!live.hasValue()) {
-        <app-loading-state label="Loading each strategy's part" [rows]="3" />
-      } @else if (live.value().strategies.length === 0) {
-        <app-empty-state
-          title="No strategy parts yet"
-          message="Each strategy that trades this portfolio gets its own reading after a trading run."
-        />
-      } @else {
-        <app-data-table
-          caption="Risk of each strategy's part of the portfolio"
-          [rows]="live.value().strategies"
-          [columns]="sleeveColumns"
-          [rowKey]="sleeveKey"
-        >
-          <ng-template appCell="decayed" [appCellOf]="live.value().strategies" let-s>
-            @if (s.decayed) {
-              <span class="decay">Fading. {{ s.decay_reason }}</span>
-            } @else {
-              <span class="decay muted">Holding up</span>
+          <p class="section-body hint">
+            @if (noLimit(); as text) {
+              {{ text }}
             }
-          </ng-template>
-        </app-data-table>
-      }
-    </section>
+            @if (anyYours()) {
+              Rows marked Your limit follow your own risk limits, stricter than the system's. The
+              others are the system limits every portfolio trades under.
+            } @else {
+              The system limits every portfolio trades under. You have set none of your own that are
+              stricter.
+            }
+            @if (smallestOrder(); as min) {
+              Buys worth less than {{ min }} are skipped.
+            }
+            @if (mine.error()) {
+              Your own limits could not load, so only the system limits show.
+            }
+            @if (insights.error() || live.error()) {
+              Some readings are missing because a panel below failed to load.
+            }
+            <a class="touch-link" routerLink="/settings" [queryParams]="{ tab: 'risk' }"
+              >Change your risk limits</a
+            >
+          </p>
+        }
+      </section>
 
+      <!-- Sleeves ------------------------------------------------------------->
+      <section class="page-section section-flush" aria-labelledby="sleeves-title">
+        <header class="section-head">
+          <h2 id="sleeves-title">Each strategy's part <app-help-tip term="strategy_part" /></h2>
+        </header>
+        @if (live.error()) {
+          <p class="section-body muted">Each strategy's part shows once live risk loads.</p>
+        } @else if (!live.hasValue()) {
+          <app-loading-state label="Loading each strategy's part" [rows]="3" />
+        } @else if (live.value().strategies.length === 0) {
+          <app-empty-state
+            title="No strategy parts yet"
+            message="Each strategy that trades this portfolio gets its own reading after a trading run."
+          />
+        } @else {
+          <app-data-table
+            caption="Risk of each strategy's part of the portfolio"
+            [rows]="live.value().strategies"
+            [columns]="sleeveColumns"
+            [rowKey]="sleeveKey"
+          >
+            <ng-template appCell="decayed" [appCellOf]="live.value().strategies" let-s>
+              @if (s.decayed) {
+                <span class="decay">Fading. {{ s.decay_reason }}</span>
+              } @else {
+                <span class="decay muted">Holding up</span>
+              }
+            </ng-template>
+          </app-data-table>
+        }
+      </section>
+    </div>
+    <aside class="section-stack">
+      <!-- Today --------------------------------------------------------------->
+      <section class="page-section" aria-labelledby="today-title">
+        <header class="section-head">
+          <h2 id="today-title">On a bad day</h2>
+          @if (live.hasValue() && live.value().as_of) {
+            <span class="muted num head-note">{{ live.value().as_of }}</span>
+          }
+        </header>
+        <div class="section-body">
+          @if (live.error(); as err) {
+            <app-error-state
+              title="Could not load live risk"
+              [error]="err"
+              (retry)="live.reload()"
+            />
+          } @else if (!live.hasValue()) {
+            <app-loading-state label="Loading live risk" [rows]="4" />
+          } @else if (!live.value().portfolio) {
+            <app-empty-state
+              title="No risk readings yet"
+              message="Each trading run measures the portfolio. Readings appear after the first one."
+            >
+              <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+            </app-empty-state>
+          } @else {
+            @let b = live.value().portfolio!;
+            <dl class="figures bad-day">
+              <div>
+                <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
+                <dd>
+                  Could lose <span class="num">{{ loss(b.var_95) }}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
+                <dd>
+                  Could lose <span class="num">{{ loss(b.es_95) }}</span>
+                </dd>
+              </div>
+            </dl>
+            <p class="hint">
+              One-day losses as a share of value, {{ money(b.value) }} today. On 19 days out of 20
+              the loss should be smaller than the first figure.
+            </p>
+            <p class="misses">
+              Over the last {{ b.window_days }} days:
+              {{ violationText(b.violations_95, b.violation_ratio_95, b.kupiec_p_95) }}
+              <app-help-tip term="violation_ratio" />
+            </p>
+            @if (b.ratio_out_of_band) {
+              <p class="callout warning" data-tone="warn" role="note">
+                The model misses far more or far less often than it should. Treat these numbers with
+                care.
+              </p>
+            }
+          }
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="section-stack lower">
     <!-- History chart ------------------------------------------------------->
-    <section class="panel span-12" aria-labelledby="chart-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="chart-title">
+      <header class="section-head">
         <h2 id="chart-title">Risk over time</h2>
         @if (chartDays()) {
-          <span class="muted num">{{ chartDays() }} days</span>
+          <span class="muted num head-note">{{ chartDays() }} days</span>
         }
-      </div>
-      <div class="panel-body">
+      </header>
+      <div class="section-body">
         @if (chart.error(); as err) {
           <app-error-state
             title="Could not load the history"
@@ -194,13 +209,13 @@
     </section>
 
     <!-- History table ------------------------------------------------------->
-    <section class="panel panel-flush span-12" aria-labelledby="history-title">
-      <div class="panel-head">
+    <section class="page-section section-flush" aria-labelledby="history-title">
+      <header class="section-head">
         <h2 id="history-title">Daily readings</h2>
         @if (historyPage(); as p) {
-          <span class="muted num">{{ p.total }} days</span>
+          <span class="muted num head-note">{{ p.total }} days</span>
         }
-      </div>
+      </header>
       @let hp = historyPage();
       @if (history.error(); as err) {
         <app-error-state
@@ -238,6 +253,6 @@
       }
     </section>
 
-    <app-why-not-panel class="span-12" />
+    <app-why-not-panel />
   </div>
 }

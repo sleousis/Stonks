@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 /**
- * The order side as a ticket mark: a solid "B" block for a buy, an outlined
- * "S" for a sell. Shape and letter carry the meaning, never colour alone;
- * screen readers hear "Buy" or "Sell".
+ * The order side as an 18px tag: a green "B" for a buy, a red "S" for a
+ * sell. The letter carries the meaning, never colour alone; screen readers
+ * hear "Buy" or "Sell".
  *
  *   <app-side-tag [side]="order.side" />
  */
@@ -22,27 +22,25 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
     .tag {
       display: inline-grid;
       place-items: center;
-      /* 20px: the same height as a status pill, so a row keeps one baseline. */
-      width: 20px;
-      height: 20px;
-      border: 1.5px solid var(--color-ink);
-      border-radius: var(--radius-xs);
+      width: 18px;
+      height: 18px;
+      border-radius: var(--r-tag);
       font-family: var(--font-mono);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-bold);
+      font-size: var(--text-2xs);
+      font-weight: 700;
       line-height: 1;
     }
     .tag[data-side='buy'] {
-      background: var(--color-ink);
-      color: var(--color-surface);
+      background: var(--up-soft);
+      color: var(--up);
     }
     .tag[data-side='sell'] {
-      background: transparent;
-      color: var(--color-ink);
+      background: var(--down-soft);
+      color: var(--down);
     }
     .tag[data-side='other'] {
-      border-style: dashed;
-      color: var(--color-ink-2);
+      border: 1px dashed var(--rule-control);
+      color: var(--ink-2);
     }
   `,
 })

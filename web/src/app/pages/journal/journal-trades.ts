@@ -35,11 +35,16 @@ const STATUSES: readonly SegmentOption<Status>[] = [
   imports: [RouterLink, DataTable, TableCell, Segmented, EmptyState, ErrorState, LoadingState],
   styleUrl: './journal.scss',
   template: `
-    <section class="panel panel-flush" aria-labelledby="trips-title">
-      <div class="panel-head">
-        <h2 id="trips-title">Trades</h2>
+    <section class="page-section section-flush" aria-labelledby="trips-title">
+      <header class="section-head">
+        <h2 id="trips-title">
+          Trades
+          @if (latest(); as p) {
+            <span class="count">{{ p.total }}</span>
+          }
+        </h2>
         <app-segmented label="Show trades" [options]="statuses" [(value)]="status" />
-      </div>
+      </header>
       <p class="lead">
         Each trade runs from the fill that opened it to the fill that closed it. A partial exit is
         its own line. R is the result measured in the risk you took to your first stop, so +2R made
@@ -57,6 +62,7 @@ const STATUSES: readonly SegmentOption<Status>[] = [
         <app-loading-state label="Loading your trades" [rows]="6" />
       } @else if (page.items.length === 0) {
         <app-empty-state
+          icon="orders"
           title="No trades yet"
           message="Trades show here once an order fills in this portfolio."
         >

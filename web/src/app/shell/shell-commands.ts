@@ -21,25 +21,19 @@ import { type NavItem, NAV_ITEMS, navItemVisible, navViewer } from './nav-items'
  * Pages below the top level that traders jump to directly, named as their
  * tabs name them (UX-41).
  */
-const SUB_PAGES: readonly (Omit<NavItem, 'group'> & { keywords: readonly string[] })[] = [
-  { path: '/orders/ticks', label: 'Trading runs', keywords: ['runs', 'history', 'orders'] },
-  { path: '/orders/fills', label: 'Fills', keywords: ['executions', 'trades'] },
-  // The bell carries Notifications in the rail (FR-08); the palette and g n still find it.
+const SUB_PAGES: readonly (NavItem & { keywords: readonly string[] })[] = [
   {
-    path: '/notifications',
-    label: 'Notifications',
-    key: 'n',
-    keywords: ['alerts', 'feed', 'bell'],
+    path: '/orders/ticks',
+    label: 'Trading runs',
+    workspace: 'Trade',
+    keywords: ['runs', 'history', 'orders'],
   },
+  { path: '/orders/fills', label: 'Fills', workspace: 'Trade', keywords: ['executions', 'trades'] },
   {
     path: '/notifications/settings',
     label: 'Alert settings',
+    workspace: 'Account',
     keywords: ['telegram', 'push', 'quiet hours', 'webhook'],
-  },
-  {
-    path: '/journal',
-    label: 'Journal',
-    keywords: ['round trips', 'calendar', 'playbooks', 'review'],
   },
 ];
 
@@ -77,7 +71,8 @@ export function registerShellCommands(): void {
       id: `page.${item.path}`,
       label: item.label,
       group: 'Pages' as const,
-      keywords: [...(item.keywords ?? [])],
+      keywords: [...(item.keywords ?? []), item.workspace.toLowerCase()],
+      detail: item.workspace,
       hint: item.key ? `g ${item.key}` : undefined,
       visible: shows(item),
       run: go(item.path),
@@ -87,6 +82,7 @@ export function registerShellCommands(): void {
       label: p.label,
       group: 'Pages' as const,
       keywords: p.keywords,
+      detail: p.workspace,
       hint: p.key ? `g ${p.key}` : undefined,
       run: go(p.path),
     })),
@@ -182,7 +178,7 @@ export function registerShellCommands(): void {
             key: item.key,
             label: item.label,
             path: item.path,
-            visible: 'group' in item ? shows(item) : undefined,
+            visible: shows(item),
           },
         ]
       : [],

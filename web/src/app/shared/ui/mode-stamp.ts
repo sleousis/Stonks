@@ -3,10 +3,10 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { paperStampLabel } from '../live-stages';
 
 /**
- * A rubber-stamp mark for where money moves: a grey "PAPER" for simulated
- * money ("BROKER PAPER" with `stage` at Broker paper), a brass "LIVE" for
- * real money, a neutral grey "READ ONLY" for a real account Stonks only
- * reads. Brass means real money everywhere in
+ * A stamp for where money moves: a dashed "PAPER" for simulated money
+ * ("BROKER PAPER" with `stage` at Broker paper), a solid brass "LIVE" for
+ * real money, a muted "READ ONLY" for a real account Stonks only reads.
+ * `size="sm"` is the 10px stamp for table rows. Brass means real money everywhere in
  * the console, so use this (not a pill) for broker, portfolio and order
  * ticket modes.
  *
@@ -19,37 +19,42 @@ import { paperStampLabel } from '../live-stages';
   template: `<span class="stamp" [attr.data-mode]="mode()"
     >{{ label() }}<span class="visually-hidden">{{ hidden() }}</span></span
   >`,
+  host: { '[attr.data-size]': 'size()' },
   styles: `
     :host {
       display: inline-flex;
       vertical-align: middle;
     }
+    /* Radius 3, 11px mono capitals (the labels are capitals): the one uppercase use. */
     .stamp {
-      padding: 1px var(--space-2) 0;
-      border: 1.5px dashed var(--color-paper);
-      border-radius: var(--radius-xs);
+      padding: 3px 6px 2px;
+      border: 1px dashed var(--stamp-ink, var(--ink-2));
+      border-radius: var(--r-stamp);
       background: transparent;
-      color: var(--color-paper);
-      font-family: var(--font-display);
-      font-stretch: var(--display-stretch);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-bold);
+      color: var(--stamp-ink, var(--ink-2));
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      font-weight: var(--weight-semibold);
       letter-spacing: var(--tracking-stamp);
-      line-height: 1.45;
-      transform: rotate(-3deg);
+      line-height: 1;
+      white-space: nowrap;
     }
-    /* Real money that Stonks only reads: neutral grey, solid, never brass. */
+    :host([data-size='sm']) .stamp {
+      padding: 2px 4px 1px;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+    /* Real money that Stonks only reads: solid and muted, never brass. */
     .stamp[data-mode='read-only'] {
       border-style: solid;
-      border-color: var(--color-ink-3);
-      color: var(--color-ink-2);
+      border-color: var(--stamp-ink, var(--muted));
+      color: var(--stamp-ink, var(--muted));
     }
-    /* Real money: a double brass rule, the only stamp in the house metal. */
+    /* Real money: a solid brass stamp, the only one in the house metal. */
     .stamp[data-mode='live'] {
-      border: 2px solid var(--color-live);
-      outline: 1px solid var(--color-live);
-      outline-offset: 1px;
-      color: var(--color-live);
+      border: 1px solid var(--brass-fill);
+      background: var(--brass-fill);
+      color: var(--on-brass);
     }
   `,
 })
@@ -59,6 +64,8 @@ export class ModeStamp {
   readonly stage = input<string | null | undefined>(null);
   /** Fed by a read-only connection or CSV imports: real money Stonks never trades. */
   readonly readOnly = input(false);
+  /** `sm`: the 10px stamp for table rows. */
+  readonly size = input<'md' | 'sm'>('md');
   protected readonly mode = computed(() =>
     this.live() ? 'live' : this.readOnly() ? 'read-only' : 'paper',
   );

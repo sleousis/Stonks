@@ -160,12 +160,12 @@ export function rebase(points: readonly EquityPoint[], base = 100): number[] {
       gap: 2px;
       min-width: 0;
       padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
     }
     dt {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     dd {
       margin: 0;
@@ -173,13 +173,13 @@ export function rebase(points: readonly EquityPoint[], base = 100): number[] {
       overflow-wrap: anywhere;
     }
     dd.gain {
-      color: var(--color-gain);
+      color: var(--up);
     }
     dd.loss {
-      color: var(--color-loss);
+      color: var(--down);
     }
     dd.na {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-weight: var(--weight-regular);
     }
   `,

@@ -1,237 +1,233 @@
-// Design tokens: the console identity. Components read these CSS custom
-// properties only; never hard-code a colour, size, font or shadow in a
-// component stylesheet. docs/ui.md ("Identity") explains the rules.
+// Design tokens: the "pro app" look (docs/ui.md, "Identity"). Components
+// read these custom properties only. Never hard-code a colour, size, font or
+// shadow in a component stylesheet.
 //
-// The three rules in short:
-// 1. The trading day is the spine: the session strip sits on every page.
-// 2. Tape and ticket: every price and quantity is set in the mono figure
-//    face (`.num`, `--font-mono`); money actions are confirmed on a ticket.
-// 3. Brass means real money: only live equity, the LIVE stamp, the kill
-//    switch ring and a live headline figure use `--color-live*`. Paper and
-//    research use the cool greys and blues (`--color-paper*`, `--color-accent`).
+// The look in short:
+// 1. An ink chrome bar and session rail across the top, in both themes.
+// 2. Flat surfaces. Sections get a 2px ink rule on top and 1px hairlines
+//    between rows. One cobalt accent means "you or Stonks acting".
+// 3. Geist for the interface, Geist Mono for every figure (`.num`).
+// 4. Brass means real money: the LIVE stamp, live equity figures and the
+//    live confirm button. Nothing else is brass. Warnings are orange.
 //
 // Themes: light is the default. Dark applies when the OS prefers dark and the
 // user has not forced light (`html[data-theme='light']`), or when the user
 // forces dark (`html[data-theme='dark']`). ThemeService sets the attribute.
+//
+// A few older names (`--radius-*`, type sizes) stay below as aliases of the
+// new ones. The `--color-*` aliases are gone. See docs/ui.md ("Tokens").
 
 :root {
   color-scheme: light;
 
   // Type --------------------------------------------------------------------
-  // Body: Public Sans. Display (page titles, headline figures): Archivo at a
-  // condensed width, with tabular digits. Figures (prices, quantities, times,
-  // countdowns): IBM Plex Mono. Each has a real fallback stack.
-  --font-sans:
-    'Public Sans Variable', 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display:
-    'Archivo Variable', 'Archivo Narrow', 'Roboto Condensed', 'Arial Narrow', 'Helvetica Neue',
-    system-ui, sans-serif;
-  --font-mono:
-    'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
-  --display-stretch: 76%; // Archivo's width axis: condensed
-  --mono-scale: 0.94em; // Plex Mono runs wide; set it a touch smaller than the text around it
+  --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+  --mono-scale: 1em;
 
-  // Scale: roughly a major third from 14px body.
-  --text-xs: 0.75rem; // 12px: captions, table meta, stamps
-  --text-sm: 0.8125rem; // 13px: table cells, secondary text
-  --text-md: 0.875rem; // 14px: body
-  --text-lg: 1rem; // 16px: phone inputs, large meta
-  --text-panel: 0.9375rem; // 15px: panel titles
-  --text-xl: 1.25rem; // 20px: sub figures
-  --text-stat: 1.5rem; // 24px: stat values (display face)
-  --text-2xl: 1.625rem; // 26px: small headline figures
-  --text-title: 1.875rem; // 30px: page titles (display face)
-  --text-figure: 2.75rem; // 44px: the headline figure (display face)
+  // Scale. Stamps are the one uppercase use (--text-2xs).
+  --text-2xs: 0.6875rem; // 11px: stamps, count badges
+  --text-xs: 0.75rem; // 12px: table headers, meta, axis, chips
+  --text-sm: 0.78125rem; // 12.5px: secondary row text, helpers
+  --text-md: 0.84375rem; // 13.5px: table cells, controls
+  --text-body: 0.875rem; // 14px: body
+  --text-lead: 0.9375rem; // 15px: the standfirst under a title
+  --text-section: 1.0625rem; // 17px: section titles
+  --text-stat: 1.375rem; // 22px: summary strip figures (mono)
+  --text-title: 2.125rem; // 34px: page titles
+  --text-figure: 3.25rem; // 52px: the headline figure (mono)
   --leading-tight: 1.15;
-  --leading-body: 1.45;
+  --leading-body: 1.5;
   --weight-regular: 400;
-  --weight-medium: 520;
-  --weight-semibold: 620;
-  --weight-bold: 720;
-  --tracking-display: -0.01em;
-  --tracking-display-sm: 0.01em; // display face under 24px opens up a touch
-  --tracking-overline: 0.06em;
-  --tracking-stamp: 0.09em;
+  --weight-medium: 500;
+  --weight-label: 550;
+  --weight-semibold: 600;
+  --weight-bold: 650;
+  --weight-title: 680;
+  --tracking-title: -0.035em;
+  --tracking-section: -0.01em;
+  --tracking-figure: -0.04em;
+  --tracking-stamp: 0.12em;
 
-  // Spacing (4px grid) ----------------------------------------------------
+  // Spacing (4px base) ------------------------------------------------------
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --space-8: 64px;
-  --gutter: var(--space-5); // page side gutter; 16px on phones
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --gutter: 32px; // 24 tablet, 16 phone
+  --section-gap: 40px; // 28 phone
+  --column-gap: 56px;
 
-  // Radius: tickets and tags are square-ish, panels a little softer,
-  // overlays the softest. Status marks differ by shape, not by radius.
-  --radius-xs: 2px; // side tags, stamps, tickets, tape items
-  --radius-sm: 5px; // controls: inputs, buttons, wells, callouts
-  --radius-md: 8px; // panels, tables
-  --radius-lg: 12px; // dialogs, drawer, palette, sheets
-  --radius-pill: 999px; // lifecycle status only
-
-  // Borders
-  --border-live: 3px; // real money: a heavy brass border
-  --border-rule: 1px;
+  // Radius: one rule everywhere. Sections and tables are square.
+  --r-stamp: 3px;
+  --r-tag: 4px; // side tags, ticker tags, checkboxes
+  --r-ctl: 6px; // buttons, inputs, segmented, selects
+  --r-sheet: 10px; // sheets, menus, dialogs, bands, callouts, palette
+  --r-avatar: 10px;
+  --r-pill: 999px; // chips, filter pills, status, switch, count badges
 
   // Sizing
-  --control-h: 32px; // dense desktop control height
-  --touch-min: 44px; // minimum touch target on coarse pointers / phones
-  --row-h: 34px;
-  --row-h-2: 40px; // a table row with two lines
-  --sidebar-w: 224px;
-  --strip-h: 40px;
+  --control-h: 36px;
+  --control-h-compact: 32px;
+  --input-h: 40px;
+  --touch-min: 44px;
+  --row-h: 52px;
+  --row-h-2: 60px;
+  --chrome-h: 56px;
+  --rail-h: 48px;
+  // The pinned header's height; the shell publishes the measured value.
+  --header-h: calc(var(--chrome-h) + var(--rail-h));
+  --bottom-nav-h: 64px;
   --content-max: 1440px;
 
-  // Motion: purposeful and short. The count-up and the tape are the only
-  // moving parts that nobody asked for; both stop under reduced motion.
-  --dur-fast: 120ms;
-  --dur: 200ms;
-  --dur-slow: 420ms;
-  --dur-count: 700ms; // headline figure count-up
-  --tape-speed: 40s; // one pass of the fills tape
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  // Motion: short and purposeful. Everything stops under reduced motion.
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 150ms; // hover, press, toggles
+  --dur-menu: 160ms; // menus and sheets: scale .98 to 1 plus opacity
+  --dur-page: 320ms; // route enter: opacity plus translateY 6px
+  --dur-count: 700ms; // headline figure count-up
 
-  // Layers: the only z-index values. Sticky chrome, the phone drawer,
-  // overlays (palette, dialogs, sheets, tips) and toasts on top.
-  --z-sticky: 20;
-  --z-drawer: 30;
-  --z-overlay: 40;
-  --z-toast: 50;
-  --z-skip: 60;
+  // Layers: the only z-index values.
+  --z-sticky: 20; // chrome, rail, bottom nav
+  --z-menu: 40;
+  --z-sheet: 60;
+  --z-palette: 70;
+  --z-toast: 80;
+  --z-skip: 90;
 
-  // Palette: light ("desk") -----------------------------------------------
+  // Palette: light -----------------------------------------------------------
   //
   // Contrast (WCAG 2.x, checked for the axe e2e run):
-  //   ink-3 #5a6672 on bg 4.99, on surface-2 5.46, on surface-3 4.86
-  //   ink-2 #43505d on surface-2 7.69
-  //   link #1e4f91 on surface 8.13, on bg 6.91
-  //   warn #a24400 on surface 6.24, on bg 5.31, on warn-soft 5.18
-  //   live #8f610c on surface 5.41, on bg 4.60
-  //   control-border #7d8995 on surface 3.57, on bg 3.03 (3:1 for controls)
-  --color-bg: #e9edf1;
-  --color-surface: #ffffff;
-  --color-surface-2: #f5f7f9; // inset wells, table heads
-  --color-surface-3: #e6eaef;
-  --color-border: #d9dfe5;
-  --color-border-strong: #aab4bf;
-  --color-control-border: #7d8995; // text fields and checkboxes: 3:1 on bg and surface
-  --color-ink: #101a24;
-  --color-ink-2: #43505d;
-  --color-ink-3: #5a6672;
-  --color-primary: #1e4f91; // research blue: primary buttons
-  --color-primary-ink: #ffffff; // 8.13 on primary
-  --color-primary-hover: #19437c;
-  --color-primary-soft: #e2eaf6;
-  --color-link: #1e4f91; // text links: always readable on the page
-  --color-accent: #2c64ad; // markers: current page, selected option, progress
-  --color-accent-soft: #e4ecf7;
-  // Real money only.
-  --color-live: #8f610c;
-  --color-live-ink: #ffffff; // text on a brass fill
-  --color-live-soft: #f6ead2;
-  // Simulated money and research.
-  --color-paper: #56697d;
-  --color-paper-soft: #e5eaf0;
-  --color-gain: #13724a;
-  --color-gain-soft: #dff1e7;
-  --color-loss: #b0302a;
-  --color-loss-soft: #fbe4e1;
-  --color-loss-ink: #ffffff; // text on a loss fill (badges)
-  --color-warn: #a24400; // red-orange, kept apart from the brass of real money (FR-12)
-  --color-warn-soft: #fbe6d9;
-  --color-info: #2a5aa8;
-  --color-info-soft: #e3ebf8;
-  --color-neutral-soft: #e5e9ee;
-  --color-focus: #1e4f91;
-  --color-scrim: rgb(16 26 36 / 45%);
-  --color-hover: rgb(16 26 36 / 4%); // ink at 4%: hover on rows, tabs, ghost buttons
-  --color-pressed: rgb(16 26 36 / 8%); // ink at 8%: pressed
-  // The rail (sidebar): a slate slab in both themes.
-  --color-rail: #16222e;
-  --color-rail-2: #1f2d3b;
-  --color-rail-ink: #e6ecf2;
-  --color-rail-ink-2: #a9b6c3;
-  --color-rail-accent: #8db4ea;
-  // A solid slab for a picked option or the countdown chip: ink in light,
-  // a raised slate in dark (never an inverted light block).
-  --color-slab: var(--color-ink);
-  --color-slab-ink: var(--color-surface);
-  // Kept for older names: brass is the live colour.
-  --color-brass: var(--color-live);
-  --color-brass-soft: var(--color-live-soft);
+  //   muted #59616e on bg 5.83, on sunk 5.38, on accent-soft 5.24
+  //   accent #2a3ee0 on bg 6.84, on accent-soft 6.15, white on it 7.33
+  //   up on up-soft 4.63, down on down-soft 4.70, warn on warn-soft 5.17
+  //   brass #8a5f0c on bg 5.26, #1a1405 on brass-fill 6.83
+  //   chrome-muted #9aa3b1 on chrome 7.43, on chrome-2 6.50
+  //   rule-control #838b97 on bg 3.21 (3:1 for field edges, WCAG 1.4.11)
+  --bg: #f6f7f9;
+  --sunk: #eceef2;
+  --raise: #ffffff;
+  --rule: #dfe2e8;
+  --rule-strong: #0e1116;
+  --rule-control: #838b97;
+  --ink: #0e1116;
+  --ink-2: #3a414c;
+  --muted: #59616e;
+  --accent: #2a3ee0;
+  --accent-soft: #e7eaff;
+  --accent-line: #b9c1ff;
+  --on-accent: #ffffff;
+  --up: #0a7a52;
+  --up-soft: #dff3ea;
+  --down: #c22d2d;
+  --down-soft: #fbe5e5;
+  --on-down: #ffffff;
+  --warn: #a14a00; // orange, never brass
+  --warn-soft: #fdebd9;
+  --brass: #8a5f0c; // brass text: live figures
+  --brass-fill: #c9952f; // the LIVE stamp and the live confirm button
+  --brass-soft: #f6ecd6;
+  --on-brass: #1a1405;
+  --halt: #c22d2d;
+  --halt-band: #7a1a1f;
+  --halt-rule: #9b2a30;
+  --on-halt: #ffffff;
+  --on-halt-muted: #f2c4c6;
+  --scrim: rgb(7 8 11 / 50%);
+  --chart-fill: rgb(42 62 224 / 16%);
 
-  // Elevation: panels sit flat on a hairline; overlays lift.
-  --shadow-0: none;
-  // Panels carry no shadow (the hairline does the work), so --shadow-1 is none.
-  --shadow-1: none;
-  --shadow-overlay: 0 16px 40px -12px rgb(16 26 36 / 28%), 0 2px 6px rgb(16 26 36 / 8%);
-  --shadow-2: var(--shadow-overlay); // older name
-  --shadow-ticket: 0 1px 0 rgb(16 26 36 / 6%), 0 8px 20px -12px rgb(16 26 36 / 35%);
-  --ring-live: 0 0 0 var(--border-live) var(--color-live);
+  // The chrome: ink in both themes.
+  --chrome: #0e1116;
+  --chrome-2: #1a1f27;
+  --chrome-rule: #262c36;
+  --chrome-ink: #e8ebf0;
+  --chrome-muted: #9aa3b1;
+  --chrome-accent: #8d9bff;
+  // The brand mark and avatars on the chrome bar. Same in both themes.
+  --brand: #4f61ff;
+  --chrome-stop: #ff8a8a;
+  --chrome-stop-line: #c4434a;
+
+  // Elevation: flat by default. Shadows only on overlays.
+  --shadow-overlay: 0 1px 2px rgb(14 17 22 / 6%), 0 16px 40px -12px rgb(14 17 22 / 22%);
+
+  // Aliases (older names) ---------------------------------------------------
+  --font-display: var(--font-sans);
+  --text-lg: 1rem; // 16px: phone inputs
+  --text-panel: var(--text-section);
+  --text-xl: 1.25rem;
+  --text-2xl: 1.625rem;
+  --tracking-display: -0.02em;
+  --tracking-display-sm: -0.01em;
+  --tracking-overline: 0.04em;
+  --radius-xs: var(--r-tag);
+  --radius-sm: var(--r-ctl);
+  --radius-md: var(--r-sheet);
+  --radius-lg: var(--r-sheet);
+  --radius-pill: var(--r-pill);
+  --border-live: 2px;
+  --border-rule: 1px;
+  --strip-h: var(--rail-h);
+  --dur: 200ms;
+  --dur-slow: 420ms;
+  --tape-speed: 40s;
+
+  // Row and control hover and press washes.
+  --hover: color-mix(in srgb, var(--ink) 5%, transparent);
+  --pressed: color-mix(in srgb, var(--ink) 9%, transparent);
 
   // Chart palette (read by the chart engine at runtime)
-  --chart-line: var(--color-primary);
-  --chart-line-2: var(--color-accent);
-  --chart-grid: #e6eaee;
+  --chart-line: var(--accent);
+  --chart-line-2: var(--accent);
+  --chart-grid: var(--rule);
   --chart-violet: #6a3fa0; // a categorical line, never brass or amber
-  --chart-text: var(--color-ink-3);
+  --chart-text: var(--muted);
 }
 
 @mixin dark-palette {
   color-scheme: dark;
-  // Contrast: ink-3 #8e9aa7 on surface 6.30, on surface-3 5.35; link
-  // #8db2ea on surface 8.33; white on primary #4374bc 4.71; control-border
-  // #66778a on surface 3.93, on bg 4.19.
-  --color-bg: #0a0f14;
-  --color-surface: #10171e;
-  --color-surface-2: #151d26;
-  --color-surface-3: #1c2631;
-  --color-border: #232f3b;
-  --color-border-strong: #3c4a58;
-  --color-control-border: #66778a;
-  --color-ink: #e4eaf0;
-  --color-ink-2: #a9b4c0;
-  --color-ink-3: #8e9aa7;
-  --color-primary: #4374bc; // a filled blue with white text, never pastel
-  --color-primary-ink: #ffffff;
-  --color-primary-hover: #3a67a8;
-  --color-primary-soft: #1b2b42;
-  --color-link: #8db2ea;
-  --color-accent: #7fa8e0;
-  --color-accent-soft: #1b2a3f;
-  --color-live: #dcaa4c;
-  --color-live-ink: #0b1117;
-  --color-live-soft: #33291a;
-  --color-paper: #9fb0c2;
-  --color-paper-soft: #1c2733;
-  --color-gain: #4cc488;
-  --color-gain-soft: #14301f;
-  --color-loss: #f2786f;
-  --color-loss-soft: #3a1d1b;
-  --color-loss-ink: #0a0f14;
-  --color-warn: #f0955a; // red-orange, apart from brass (FR-12)
-  --color-warn-soft: #3a2316;
-  --color-info: #8db2ea;
-  --color-info-soft: #1b2b42;
-  --color-neutral-soft: #1f2b37;
-  --color-focus: #8db2ea;
-  --color-scrim: rgb(0 0 0 / 60%);
-  --color-hover: rgb(228 234 240 / 4%);
-  --color-pressed: rgb(228 234 240 / 8%);
-  --color-rail: #0e161e;
-  --color-rail-2: #16212c;
-  --color-rail-ink: #e4eaf0;
-  --color-rail-ink-2: #9aa7b4;
-  --color-rail-accent: #8db4ea;
-  --color-slab: #2f3f50; // rail ink on it 8.6
-  --color-slab-ink: #e4eaf0;
-  --shadow-overlay: 0 16px 40px -12px rgb(0 4 8 / 70%), 0 2px 6px rgb(0 4 8 / 40%);
-  --shadow-ticket: 0 1px 0 rgb(0 0 0 / 35%), 0 10px 24px -12px rgb(0 0 0 / 70%);
-  --chart-grid: #1a242e;
+  // Contrast: muted #9aa3b1 on bg 7.36, on sunk 6.98, on raise 6.56; accent
+  // #8d9bff on raise 6.57, #0a0e1f on accent 7.54; rule-control #646d7c on
+  // raise 3.20; rule-strong #6b7482 on raise 3.53. The page sits a step above
+  // the chrome (#07080b) so the ink bar reads as its own band.
+  --bg: #0f1218;
+  --sunk: #141821;
+  --raise: #191e28;
+  --rule: #272d39;
+  --rule-strong: #6b7482;
+  --rule-control: #646d7c;
+  --ink: #e8ebf0;
+  --ink-2: #c3c9d3;
+  --muted: #9aa3b1;
+  --accent: #8d9bff;
+  --accent-soft: rgb(141 155 255 / 14%);
+  --accent-line: rgb(141 155 255 / 40%);
+  --on-accent: #0a0e1f;
+  --up: #3fd29a;
+  --up-soft: rgb(63 210 154 / 13%);
+  --down: #ff7272;
+  --down-soft: rgb(255 114 114 / 13%);
+  --on-down: #0b0d11;
+  --warn: #ffa05a;
+  --warn-soft: rgb(255 160 90 / 13%);
+  --brass: #e2b552;
+  --brass-fill: #d9a83f;
+  --brass-soft: rgb(217 168 63 / 14%);
+  --halt: #ff6b6b;
+  --scrim: rgb(0 0 0 / 60%);
+  --chart-fill: rgb(141 155 255 / 16%);
+  --chrome: #07080b;
+  --chrome-2: #12151b;
+  --chrome-rule: #1d222b;
+  --shadow-overlay: inset 0 0 0 1px rgb(255 255 255 / 4%), 0 20px 48px -12px rgb(0 0 0 / 65%);
+  --hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --pressed: color-mix(in srgb, var(--ink) 10%, transparent);
   --chart-violet: #b9a0e8;
 }
 
@@ -245,18 +241,30 @@
   @include dark-palette;
 }
 
-// Phones: 16px gutter, smaller display sizes.
+// Tablet: 24px gutter.
+@media (max-width: 1099.98px) {
+  :root {
+    --gutter: 24px;
+  }
+}
+
+// Phones: 16px gutter, smaller title and figure.
 @media (max-width: 767.98px) {
   :root {
-    --gutter: var(--space-4);
+    --gutter: 16px;
+    --section-gap: 28px;
     --text-title: 1.625rem; // 26px
-    --text-figure: 2.25rem; // 36px
+    --text-figure: 2.5rem; // 40px
+    --control-h: var(--touch-min);
+    --input-h: var(--touch-min);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;
+    --dur-menu: 0ms;
+    --dur-page: 0ms;
     --dur: 0ms;
     --dur-slow: 0ms;
     --dur-count: 0ms;

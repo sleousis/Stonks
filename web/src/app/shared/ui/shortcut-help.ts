@@ -79,7 +79,7 @@ interface Row {
     h3 {
       margin-bottom: var(--space-1);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     dl {
       margin: 0;
@@ -90,7 +90,7 @@ interface Row {
       justify-content: space-between;
       gap: var(--space-3);
       padding: var(--space-1) 0;
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     dt {
       display: flex;
@@ -101,20 +101,20 @@ interface Row {
     dd {
       margin: 0;
       text-align: end;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .joiner {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     kbd {
       display: inline-block;
       min-width: 1.8em;
       padding: 1px 6px;
-      border: 1px solid var(--color-border-strong);
+      border: 1px solid var(--rule-control);
       border-radius: var(--radius-xs);
-      background: var(--color-surface-2);
+      background: var(--sunk);
       font: inherit;
       font-size: var(--text-xs);
       text-align: center;
@@ -122,7 +122,7 @@ interface Row {
     .hint {
       margin-top: calc(-1 * var(--space-3));
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

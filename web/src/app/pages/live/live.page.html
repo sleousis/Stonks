@@ -1,7 +1,4 @@
-<app-page-header
-  title="Intraday engine"
-  description="The intraday engine: its price stream and how fast it decides."
->
+<app-page-header title="Intraday engine" [description]="standfirst()">
   <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
@@ -24,241 +21,266 @@
 } @else if (!status.hasValue()) {
   <app-loading-state label="Loading the intraday engine" [rows]="3" />
 } @else {
-  @if (engines().length === 0) {
-    <section class="panel no-engine" aria-labelledby="no-engine-title">
-      <div class="panel-head">
-        <h2 id="no-engine-title">Engines</h2>
-      </div>
-      <app-empty-state
-        compact
-        title="No intraday engine running"
-        [message]="
-          status.value().streaming_enabled
-            ? 'Minute prices are on, but no engine has reported yet. The scheduler starts it 15 minutes before the market opens; check Schedule if it does not appear.'
-            : 'Intraday trading is off, which is the default. Daily trading runs do not need it. To trade during the day, an admin sets up intraday portfolios and minute prices on the server (Intraday trading in the docs). Its price stream, speed and alarms then show here.'
-        "
-      >
-        @if (status.value().streaming_enabled) {
-          <a class="btn" routerLink="/ops/schedule">Open schedule</a>
-        }
-      </app-empty-state>
-    </section>
-  } @else {
-    @if (troubled(); as n) {
-      <p class="banner callout" data-tone="loss" role="status">
-        <strong class="num">{{ n }}</strong> {{ n === 1 ? 'engine needs' : 'engines need' }}
-        a look. New entries wait while an engine is silent.
-      </p>
-    }
-    <ul class="engines" aria-label="Intraday engines">
-      @for (e of engines(); track e.engine_id) {
-        <li class="engine" [attr.data-tone]="state(e).tone">
-          <section [attr.aria-labelledby]="'engine-' + e.engine_id">
-            <div class="engine-head">
-              <h2 [id]="'engine-' + e.engine_id">{{ e.engine_id }}</h2>
-              <app-status-pill
-                [status]="state(e).status"
-                [label]="state(e).label"
-                [tone]="state(e).tone"
-              />
-            </div>
-            <p class="advice">{{ state(e).advice }}</p>
+  <div class="section-stack">
+    @if (engines().length === 0) {
+      <section class="panel page-section no-engine" aria-labelledby="no-engine-title">
+        <header class="section-head">
+          <h2 id="no-engine-title">Engines <span class="count">0</span></h2>
+        </header>
+        <div class="section-body">
+          <app-empty-state
+            compact
+            title="No intraday engine running"
+            [message]="
+              status.value().streaming_enabled
+                ? 'Minute prices are on, but no engine has reported yet. The scheduler starts it 15 minutes before the market opens. Check Schedule if it does not appear.'
+                : 'Intraday trading is off, which is the default. Daily trading runs do not need it. To trade during the day, an admin sets up intraday portfolios and minute prices on the server (Intraday trading in the docs). Its price stream, speed and alarms then show here.'
+            "
+          >
+            @if (status.value().streaming_enabled) {
+              <a class="btn" routerLink="/ops/schedule">Open schedule</a>
+            }
+          </app-empty-state>
+        </div>
+      </section>
+    } @else {
+      @if (troubled(); as n) {
+        <p class="banner callout" data-tone="loss" role="status">
+          <strong class="num">{{ n }}</strong> {{ n === 1 ? 'engine needs' : 'engines need' }}
+          a look. New entries wait while an engine is silent.
+        </p>
+      }
+      <ul class="engines" aria-label="Intraday engines">
+        @for (e of engines(); track e.engine_id) {
+          <li class="engine" [attr.data-tone]="state(e).tone">
+            <section [attr.aria-labelledby]="'engine-' + e.engine_id">
+              <header class="section-head">
+                <h2 [id]="'engine-' + e.engine_id">{{ e.engine_id }}</h2>
+                <app-status-pill
+                  [status]="state(e).status"
+                  [label]="state(e).label"
+                  [tone]="state(e).tone"
+                />
+              </header>
+              <p class="advice">{{ state(e).advice }}</p>
 
-            <dl class="facts status-tiles tile-grid">
-              <div>
-                <dt>Market</dt>
-                <dd>
-                  {{ e.market_open ? 'Open' : 'Closed' }}
-                  <span class="muted">({{ e.calendar }})</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Last bar closed</dt>
-                <dd class="num">{{ when(e.last_dispatch_at) }}</dd>
-              </div>
-              @if (e.deadman === 'silent') {
+              <!-- Engine status as a summary strip. -->
+              <dl class="status-strip">
                 <div>
-                  <dt>Silent for</dt>
-                  <dd class="num alarm">{{ seconds(e.silent_seconds) }}</dd>
+                  <dt>Market</dt>
+                  <dd class="big">{{ e.market_open ? 'Open' : 'Closed' }}</dd>
+                  <dd class="sub-line">{{ e.calendar }}</dd>
                 </div>
-              }
-              <div>
-                <dt>Bars closed</dt>
-                <dd class="num">{{ count(e.bar_closes) }}</dd>
-              </div>
-              <div>
-                <dt>Late bars dropped</dt>
-                <dd class="num">{{ count(e.late_bars) }}</dd>
-              </div>
-              <div>
-                <dt>Started</dt>
-                <dd class="num">{{ when(e.started_at) }}</dd>
-              </div>
-            </dl>
+                <div>
+                  <dt>Last bar closed</dt>
+                  <dd class="big num">{{ ago(e.last_dispatch_at) }}</dd>
+                  <dd class="sub-line num">{{ at(e.last_dispatch_at) }}</dd>
+                </div>
+                @if (e.deadman === 'silent') {
+                  <div class="alarm-cell">
+                    <dt>Silent for</dt>
+                    <dd class="big num alarm">{{ seconds(e.silent_seconds) }}</dd>
+                  </div>
+                }
+                <div>
+                  <dt>Bars closed</dt>
+                  <dd class="big num">{{ count(e.bar_closes) }}</dd>
+                  <dd class="sub-line num">{{ count(e.late_bars) }} late, dropped</dd>
+                </div>
+                <div>
+                  <dt>Started</dt>
+                  <dd class="big num">{{ ago(e.started_at) }}</dd>
+                  <dd class="sub-line num">{{ at(e.started_at) }}</dd>
+                </div>
+              </dl>
 
-            <div class="panels">
-              <div class="sub" role="group" [attr.aria-labelledby]="'stream-' + e.engine_id">
-                <h3 [id]="'stream-' + e.engine_id">Price stream</h3>
-                @if (e.stream; as s) {
-                  <dl class="facts">
+              <div class="panels">
+                <div class="sub" role="group" [attr.aria-labelledby]="'speed-' + e.engine_id">
+                  <h3 [id]="'speed-' + e.engine_id">Speed</h3>
+                  <dl class="fact-list">
                     <div>
-                      <dt>State</dt>
-                      <dd>
-                        {{ streamWords(s) }} <span class="muted">({{ s.source }})</span>
-                      </dd>
+                      <dt>Bar close to decision</dt>
+                      <dd class="text">{{ latencySummary(e.dispatch_lag) }}</dd>
                     </div>
                     <div>
-                      <dt>Last price</dt>
-                      <dd class="num">
-                        {{
-                          s.last_event_age_seconds === null
-                            ? 'None yet'
-                            : seconds(s.last_event_age_seconds) + ' ago'
-                        }}
-                      </dd>
+                      <dt>Decision to order</dt>
+                      <dd class="text">{{ latencySummary(e.event_to_order) }}</dd>
                     </div>
                     <div>
-                      <dt>Bars built</dt>
-                      <dd class="num">{{ count(s.bars_written) }}</dd>
+                      <dt>Slowest order</dt>
+                      <dd>{{ latency(e.event_to_order.max_seconds) }}</dd>
                     </div>
                     <div>
-                      <dt>Late prices dropped</dt>
-                      <dd class="num">{{ count(s.late_ticks) }}</dd>
-                    </div>
-                    <div>
-                      <dt>Connection drops</dt>
-                      <dd class="num">{{ count(s.disconnects) }}</dd>
-                    </div>
-                    <div>
-                      <dt>Gaps filled or open</dt>
-                      <dd class="num">{{ count(s.gaps) }}</dd>
+                      <dt>Orders measured</dt>
+                      <dd>{{ count(e.event_to_order.count) }}</dd>
                     </div>
                   </dl>
-                  @if (s.delayed_only) {
-                    <p class="problem callout" data-tone="warn" role="note">
-                      <strong>Delayed prices only:</strong> this account has no live market data.
-                      Delayed prices build no bars unless the server allows them, never reach the
-                      data lake and do not count as fresh prices for new trades.
-                    </p>
-                  }
-                  @if (s.last_error) {
-                    <p class="problem callout" data-tone="loss" role="note">
-                      <strong>Last problem:</strong> {{ s.last_error }}
-                    </p>
-                  }
-                } @else {
-                  <p class="muted">This engine reads bars without a live stream.</p>
-                }
-              </div>
+                </div>
 
-              <div class="sub" role="group" [attr.aria-labelledby]="'speed-' + e.engine_id">
-                <h3 [id]="'speed-' + e.engine_id">Speed</h3>
-                <dl class="facts">
-                  <div>
-                    <dt>Bar close to decision</dt>
-                    <dd>{{ latencySummary(e.dispatch_lag) }}</dd>
-                  </div>
-                  <div>
-                    <dt>Decision to order</dt>
-                    <dd>{{ latencySummary(e.event_to_order) }}</dd>
-                  </div>
-                  <div>
-                    <dt>Slowest order</dt>
-                    <dd class="num">{{ latency(e.event_to_order.max_seconds) }}</dd>
-                  </div>
-                  <div>
-                    <dt>Orders measured</dt>
-                    <dd class="num">{{ count(e.event_to_order.count) }}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            @if (errors(e.handler_errors); as lines) {
-              @if (lines.length) {
-                <div class="sub" role="group" [attr.aria-labelledby]="'errors-' + e.engine_id">
-                  <h3 [id]="'errors-' + e.engine_id">Steps that failed</h3>
-                  <ul class="errors">
-                    @for (line of lines; track line.name) {
-                      <li>
-                        <span class="step">{{ line.name }}</span>
-                        <span class="num"
-                          >{{ count(line.count) }} {{ line.count === 1 ? 'time' : 'times' }}</span
-                        >
-                      </li>
+                <div class="sub" role="group" [attr.aria-labelledby]="'stream-' + e.engine_id">
+                  <h3 [id]="'stream-' + e.engine_id">Price stream</h3>
+                  @if (e.stream; as s) {
+                    <dl class="fact-list">
+                      <div>
+                        <dt>State</dt>
+                        <dd class="text">
+                          {{ streamWords(s) }} <span class="muted">({{ s.source }})</span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Last price</dt>
+                        <dd>
+                          {{
+                            s.last_event_age_seconds === null
+                              ? 'None yet'
+                              : seconds(s.last_event_age_seconds) + ' ago'
+                          }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Bars built</dt>
+                        <dd>{{ count(s.bars_written) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Late prices dropped</dt>
+                        <dd>{{ count(s.late_ticks) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Connection drops</dt>
+                        <dd>{{ count(s.disconnects) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Gaps filled or open</dt>
+                        <dd>{{ count(s.gaps) }}</dd>
+                      </div>
+                    </dl>
+                    @if (s.delayed_only) {
+                      <p class="problem callout" data-tone="warn" role="note">
+                        <strong>Delayed prices only:</strong> this account has no live market data.
+                        Delayed prices build no bars unless the server allows them, never reach the
+                        data lake and do not count as fresh prices for new trades.
+                      </p>
                     }
-                  </ul>
-                </div>
-              }
-            }
-          </section>
-        </li>
-      }
-    </ul>
-  }
-
-  @if (engines().length || status.value().intraday_pnl.available) {
-    <section class="panel pnl" aria-labelledby="pnl-title">
-      <div class="panel-head">
-        <h2 id="pnl-title">Intraday P&amp;L by portfolio</h2>
-      </div>
-      <p class="note prose">{{ status.value().intraday_pnl.note }}</p>
-      @if (status.value().intraday_pnl.available) {
-        @if (pnl.error(); as err) {
-          <app-error-state
-            title="Could not load intraday P&amp;L"
-            [error]="err"
-            (retry)="pnl.reload()"
-          />
-        } @else if (!pnl.hasValue()) {
-          <app-loading-state label="Loading intraday P&amp;L" [rows]="2" />
-        } @else {
-          <ul class="pnl-list" aria-label="Intraday P&amp;L by portfolio">
-            @for (line of pnl.value(); track line.id) {
-              <li class="pnl-line">
-                <h3>{{ line.name }}</h3>
-                @if (line.failed) {
-                  <p class="muted">Could not read this portfolio.</p>
-                } @else if (line.row; as row) {
-                  <dl class="facts">
-                    <div>
-                      <dt>P&amp;L today</dt>
-                      <dd class="num" [class]="tone(row.pnl)">{{ money(row.pnl) }}</dd>
-                    </div>
-                    <div>
-                      <dt>Return today</dt>
-                      <dd class="num" [class]="tone(row.day_return)">
-                        {{ percent(row.day_return) }}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Down from the day's high</dt>
-                      <dd class="num">{{ percent(row.drawdown) }}</dd>
-                    </div>
-                    <div>
-                      <dt>Gross exposure</dt>
-                      <dd class="num">{{ plainMoney(row.gross_exposure) }}</dd>
-                    </div>
-                    <div>
-                      <dt>Fills today</dt>
-                      <dd class="num">{{ count(row.fills) }}</dd>
-                    </div>
-                    <div>
-                      <dt>As of</dt>
-                      <dd class="num">{{ when(row.at) }}</dd>
-                    </div>
-                  </dl>
-                  @if (stale(row); as warning) {
-                    <p class="problem callout" data-tone="warn" role="note">{{ warning }}</p>
+                    @if (s.last_error) {
+                      <p class="problem callout" data-tone="loss" role="note">
+                        <strong>Last problem:</strong> {{ s.last_error }}
+                      </p>
+                    }
+                  } @else {
+                    <p class="muted">This engine reads bars without a live stream.</p>
                   }
-                } @else {
-                  <p class="muted">No intraday rows yet.</p>
+                </div>
+              </div>
+
+              @if (errors(e.handler_errors); as lines) {
+                @if (lines.length) {
+                  <div class="sub" role="group" [attr.aria-labelledby]="'errors-' + e.engine_id">
+                    <h3 [id]="'errors-' + e.engine_id">Steps that failed</h3>
+                    <ul class="row-list errors">
+                      @for (line of lines; track line.name) {
+                        <li>
+                          <span class="row-main step">{{ line.name }}</span>
+                          <span class="row-figure loss"
+                            >{{ count(line.count) }} {{ line.count === 1 ? 'time' : 'times' }}</span
+                          >
+                        </li>
+                      }
+                    </ul>
+                  </div>
                 }
-              </li>
-            }
-          </ul>
+              }
+            </section>
+          </li>
         }
-      }
-    </section>
-  }
+      </ul>
+    }
+
+    @if (engines().length || status.value().intraday_pnl.available) {
+      <section class="panel page-section pnl" aria-labelledby="pnl-title">
+        <header class="section-head">
+          <h2 id="pnl-title">Intraday P&amp;L by portfolio</h2>
+        </header>
+        <div class="section-body">
+          <p class="note prose">{{ status.value().intraday_pnl.note }}</p>
+          @if (status.value().intraday_pnl.available) {
+            @if (pnl.error(); as err) {
+              <app-error-state
+                title="Could not load intraday P&amp;L"
+                [error]="err"
+                (retry)="pnl.reload()"
+              />
+            } @else if (!pnl.hasValue()) {
+              <app-loading-state label="Loading intraday P&amp;L" [rows]="2" />
+            } @else {
+              @if (chart().length) {
+                <!-- P&L today per portfolio: bars either side of zero. -->
+                <figure class="pnl-chart" role="img" [attr.aria-label]="chartSummary()">
+                  @for (bar of chart(); track bar.id) {
+                    <div class="bar-row" aria-hidden="true">
+                      <span class="bar-name">{{ bar.name }}</span>
+                      <span class="bar-track">
+                        <span
+                          class="bar"
+                          [class.gain]="bar.value >= 0"
+                          [class.loss]="bar.value < 0"
+                          [style.--w]="bar.width + '%'"
+                        ></span>
+                      </span>
+                      <span class="bar-value num" [class]="tone(bar.value)">{{
+                        money(bar.value)
+                      }}</span>
+                    </div>
+                  }
+                </figure>
+              }
+              <ul class="pnl-list" aria-label="Intraday P&amp;L by portfolio">
+                @for (line of pnl.value(); track line.id) {
+                  <li class="pnl-line">
+                    <h3>{{ line.name }}</h3>
+                    @if (line.failed) {
+                      <p class="muted">Could not read this portfolio.</p>
+                    } @else if (line.row; as row) {
+                      <dl class="pnl-facts">
+                        <div>
+                          <dt>P&amp;L today</dt>
+                          <dd class="num" [class]="tone(row.pnl)">{{ money(row.pnl) }}</dd>
+                        </div>
+                        <div>
+                          <dt>Return today</dt>
+                          <dd class="num" [class]="tone(row.day_return)">
+                            {{ percent(row.day_return) }}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Down from the day's high</dt>
+                          <dd class="num">{{ percent(row.drawdown) }}</dd>
+                        </div>
+                        <div>
+                          <dt>Gross exposure</dt>
+                          <dd class="num">{{ plainMoney(row.gross_exposure) }}</dd>
+                        </div>
+                        <div>
+                          <dt>Fills today</dt>
+                          <dd class="num">{{ count(row.fills) }}</dd>
+                        </div>
+                        <div>
+                          <dt>As of</dt>
+                          <dd class="num">{{ when(row.at) }}</dd>
+                        </div>
+                      </dl>
+                      @if (stale(row); as warning) {
+                        <p class="problem callout" data-tone="warn" role="note">{{ warning }}</p>
+                      }
+                    } @else {
+                      <p class="muted">No intraday rows yet.</p>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          }
+        </div>
+      </section>
+    }
+  </div>
 }

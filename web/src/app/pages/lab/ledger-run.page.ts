@@ -107,7 +107,7 @@ export function searchName(tuner: string): string {
               [detail]="r.error_detail"
             />
           }
-          <div class="tiles tile-grid">
+          <div class="tiles summary-strip">
             <app-stat-tile label="Settings tried" [value]="count(r.n_trials)" detail="This run" />
             <app-stat-tile
               label="Settings with errors"
@@ -156,6 +156,7 @@ export function searchName(tuner: string): string {
         </div>
         @if (r.trials.length === 0) {
           <app-empty-state
+            icon="doc"
             title="No settings recorded"
             message="The run stopped before its first setting finished."
           />

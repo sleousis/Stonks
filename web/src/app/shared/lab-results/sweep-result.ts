@@ -114,7 +114,7 @@ export function rankSweepRows(rows: readonly SweepRowView[]): RankedSweepRow[] {
     }
     .lead {
       margin: 0;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .name {
       font-weight: 600;
@@ -127,11 +127,11 @@ export function rankSweepRows(rows: readonly SweepRowView[]): RankedSweepRow[] {
       display: block;
       margin-top: var(--space-1);
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
       overflow-wrap: anywhere;
     }
     .na {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

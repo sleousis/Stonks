@@ -1,0 +1,502 @@
+// Controls: buttons, fields, checkboxes, switches, chips and filter pills.
+// Radius rule: controls 6px, chips and pills 999px, tags 4px.
+@use 'breakpoints' as bp;
+
+// Buttons ---------------------------------------------------------------
+// One primary, then secondary (the default), then ghost. Height 36 (32
+// compact in rows, 44 on phones), labels never wrap.
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  background: var(--raise);
+  color: var(--ink);
+  font-size: var(--text-md);
+  font-weight: var(--weight-label);
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+
+  svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: var(--rule-control);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  // A disabled button reads as off: faded, with a dashed edge.
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    border-style: dashed;
+  }
+
+  &.btn-compact {
+    min-height: var(--control-h-compact);
+    padding: 0 10px;
+  }
+
+  &.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: var(--weight-semibold);
+
+    &:hover:not(:disabled),
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+      border-color: color-mix(in srgb, var(--accent) 88%, var(--ink));
+    }
+  }
+
+  // Danger: outlined red. The confirm step fills it: any danger button in a
+  // dialog or sheet, or `.btn-danger-fill`.
+  &.btn-danger {
+    background: var(--raise);
+    border-color: var(--down);
+    color: var(--down);
+
+    &:hover:not(:disabled) {
+      background: var(--down-soft);
+      border-color: var(--down);
+    }
+  }
+
+  &.btn-danger-fill,
+  dialog &.btn-danger {
+    background: var(--down);
+    border-color: var(--down);
+    color: var(--on-down);
+    font-weight: var(--weight-semibold);
+
+    &:hover:not(:disabled),
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--down) 88%, var(--ink));
+      border-color: color-mix(in srgb, var(--down) 88%, var(--ink));
+    }
+  }
+
+  // Real money moves: the brass confirm. Nothing else uses this fill.
+  &.btn-live {
+    background: var(--brass-fill);
+    border-color: var(--brass-fill);
+    color: var(--on-brass);
+    font-weight: var(--weight-semibold);
+
+    &:hover:not(:disabled),
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--brass-fill) 88%, var(--on-brass));
+      border-color: color-mix(in srgb, var(--brass-fill) 88%, var(--on-brass));
+    }
+  }
+
+  // Ghost: no fill, ink-2. .btn-tertiary is the older name.
+  &.btn-ghost,
+  &.btn-tertiary {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-2);
+
+    &:hover:not(:disabled) {
+      border-color: transparent;
+      background: var(--sunk);
+      color: var(--ink);
+    }
+
+    &:disabled {
+      border-color: var(--rule);
+    }
+  }
+
+  // Link: accent text, no box.
+  &.btn-link {
+    min-height: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+
+    &:hover:not(:disabled) {
+      text-decoration: underline;
+    }
+  }
+
+  &.btn-icon {
+    width: var(--control-h);
+    padding: 0;
+  }
+}
+
+// Fields ------------------------------------------------------------------
+// Label above (13px 550 ink-2), helper below (12.5 muted), error below with
+// a mark (12.5 down). Join them with aria-describedby.
+.field {
+  display: grid;
+  gap: 6px;
+
+  > label,
+  > .label {
+    color: var(--ink-2);
+    font-size: 0.8125rem;
+    font-weight: var(--weight-label);
+  }
+
+  .hint {
+    color: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  // A small mark in front of the error, so it does not rest on colour alone.
+  .error {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--down);
+    font-size: var(--text-sm);
+
+    &::before {
+      content: '!';
+      flex: none;
+      display: inline-grid;
+      place-items: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: currentColor;
+      color: var(--raise);
+      font-size: 10px;
+      font-weight: var(--weight-bold);
+      line-height: 1;
+      transform: translateY(2px);
+    }
+  }
+}
+
+// A group of fields: a 2px ink rule and a 15px title, no box. Two columns
+// from 1024px with `.form-grid-2` inside.
+fieldset.group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  > legend:not(.visually-hidden) {
+    display: block;
+    width: 100%;
+    margin-bottom: var(--space-4);
+    padding: 0 0 var(--space-2);
+    border-bottom: 2px solid var(--rule-strong);
+    color: var(--ink);
+    font-size: var(--text-lead);
+    font-weight: var(--weight-bold);
+  }
+}
+
+.input {
+  width: 100%;
+  min-height: var(--input-h);
+  padding: 0 var(--space-3);
+  // Field edges meet 3:1 (WCAG 1.4.11); buttons are identified by their text.
+  border: 1px solid var(--rule-control);
+  border-radius: var(--r-ctl);
+  background: var(--raise);
+  color: var(--ink);
+  font-size: var(--text-md);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+
+  &::placeholder {
+    color: var(--muted);
+    // A mono field (a ticker) still shows its hint in the sans, like every field.
+    font-family: var(--font-sans);
+  }
+
+  &:hover:not(:disabled) {
+    border-color: var(--muted);
+  }
+
+  // Focus: a 2px accent ring with a 2px gap in the page colour. The
+  // transparent outline is what forced-colors mode paints (as Highlight),
+  // since it drops box-shadows.
+  &:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: var(--accent);
+    box-shadow:
+      0 0 0 2px var(--bg),
+      0 0 0 4px var(--accent);
+  }
+
+  &[aria-invalid='true'] {
+    border-color: var(--down);
+  }
+
+  &:disabled {
+    background: var(--sunk);
+    cursor: not-allowed;
+  }
+}
+
+textarea.input {
+  min-height: 6rem;
+  padding-block: var(--space-2);
+  line-height: var(--leading-body);
+}
+
+select.input {
+  padding-right: 32px;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) 50%,
+    calc(100% - 12px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  cursor: pointer;
+
+  input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border-radius: var(--r-tag);
+    accent-color: var(--accent);
+  }
+}
+
+// Forms: one column on phones, two from 1024px when marked .form-grid-2.
+.form-grid {
+  display: grid;
+  gap: var(--space-4) var(--space-6);
+  max-width: 720px;
+  // Each field keeps its own height: a select or a hint never stretches its neighbour (FR-11).
+  align-items: start;
+
+  @media (min-width: 1024px) {
+    &.form-grid-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}
+
+// Switch: a 36x20 pill, on in accent, its text label on the left.
+.switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-label);
+  cursor: pointer;
+
+  .track {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 20px;
+    border-radius: var(--r-pill);
+    background: var(--rule-control);
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--raise);
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  &[aria-checked='true'] .track {
+    background: var(--accent);
+  }
+
+  &[aria-checked='true'] .thumb {
+    transform: translateX(16px);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+// Chips and pills ---------------------------------------------------------
+// A filter pill: 32px (44 on phones), a hairline, label plus a mono count.
+// The picked one fills with ink.
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+
+  @include bp.phone {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+}
+
+.filter-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  font-weight: var(--weight-label);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+
+  .count {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+  }
+
+  &:hover {
+    border-color: var(--rule-control);
+  }
+
+  &[aria-pressed='true'],
+  &[aria-checked='true'],
+  &[aria-current='page'],
+  &.on {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+
+    .count {
+      color: inherit;
+      opacity: 0.75;
+    }
+  }
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+}
+
+// A count badge: an ink pill with a mono figure.
+.count-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+// A ticker tag: a 22px outlined chip.
+.ticker-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-tag);
+  background: var(--raise);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+// Touch: every interactive control gets a 44px target on coarse pointers
+// and phones.
+@mixin touch-targets {
+  .btn,
+  .input,
+  .check {
+    min-height: var(--touch-min);
+  }
+
+  .btn.btn-icon {
+    width: var(--touch-min);
+  }
+}
+
+@include bp.coarse {
+  @include touch-targets;
+}
+
+@include bp.phone {
+  @include touch-targets;
+
+  // 16px text stops iOS Safari zooming into a field on focus.
+  .input {
+    font-size: var(--text-lg);
+  }
+
+  // Page header actions on phones: the primary takes the whole row, the
+  // rest share one row. The actions are projected, so the rules live here.
+  .page-header .actions {
+    > .btn-primary,
+    > :only-child,
+    > :not(.btn-primary):nth-child(odd):has(+ .btn-primary),
+    > .btn-primary:first-child ~ :last-child:nth-child(even) {
+      grid-column: 1 / -1;
+    }
+
+    > .btn,
+    > * > .btn {
+      width: 100%;
+    }
+
+    > .btn-tertiary,
+    > .btn-ghost {
+      white-space: normal;
+    }
+  }
+}

@@ -11,8 +11,9 @@ import {
   NotificationFeedService,
 } from '../../core/notify/notification-feed.service';
 import { nextRequest, tick } from '../../../testing/http';
-import { FEED_PAGE } from './notification-feed';
-import { NotificationsPage } from './notifications.page';
+import { componentCss, rulesFor } from '../../../testing/styles';
+import { FEED_PAGE, NotificationFeed } from './notification-feed';
+import { NotificationsPage, inboxStandfirst } from './notifications.page';
 
 @Component({ template: '' })
 class Blank {}
@@ -90,7 +91,20 @@ describe('NotificationsPage', () => {
       b.textContent?.includes(text),
     );
 
-  it('lists the feed newest first and marks unread items with a dot and a word', async () => {
+  it('keeps a 44px touch target on Mark read and Open (old .text-btn and .open)', () => {
+    const rules = rulesFor(componentCss(NotificationFeed), '.buttons .btn');
+    expect(rules.length).toBe(2);
+    expect(rules.every((r) => r.includes('var(--touch-min)'))).toBe(true);
+  });
+
+  it('builds the standfirst from the unread count', () => {
+    expect(inboxStandfirst(3)).toBe(
+      '3 unread, newest first. It all lands here, even when push is off.',
+    );
+    expect(inboxStandfirst(0)).toContain('You are all caught up.');
+  });
+
+  it('lists the feed newest first and marks unread items with an edge and a word', async () => {
     const { el, req } = await render();
     expect(req.request.urlWithParams).toContain('unread_only=false');
     expect(req.request.urlWithParams).toContain(`limit=${FEED_PAGE}`);
@@ -98,6 +112,8 @@ describe('NotificationsPage', () => {
     expect(first.classList).toContain('unread');
     expect(first.querySelector('.unread-tag')?.textContent?.trim()).toBe('Unread');
     expect(first.textContent).toContain('Order');
+    expect(first.querySelector('app-category-glyph')?.getAttribute('data-category')).toBe('order');
+    expect(el.querySelector('#feed-title')?.textContent).toContain('Inbox');
     expect(first.querySelector('time')?.textContent?.trim()).toBe('5m ago');
     expect(second.classList).not.toContain('unread');
     expect(second.querySelector('.unread-tag')).toBeNull();

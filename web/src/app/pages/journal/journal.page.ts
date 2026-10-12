@@ -13,7 +13,6 @@ import { NoBook, bookState } from '../../shared/ui/no-book';
 import { PageHeader } from '../../shared/ui/page-header';
 import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { LoadingState } from '../../shared/ui/states';
-import { OrdersTabs } from '../orders/orders-tabs';
 import { JournalCalendar } from './journal-calendar';
 import { JournalPlaybooks } from './journal-playbooks';
 import { JournalResults } from './journal-results';
@@ -28,21 +27,20 @@ const VIEWS: readonly { value: JournalView; label: string }[] = [
   { value: 'playbooks', label: 'Playbooks' },
 ];
 
-/** The views as a second tab row under the Orders tabs. */
+/** The views as the page's tab row. */
 const VIEW_TABS: readonly PageTab[] = VIEWS.map((v) => ({ id: v.value, label: v.label }));
 
 /**
  * The round-trip journal (roadmap 23.3): trades built from fills, the P&L
  * calendar, results split by what you wrote about each trade, and your
- * playbooks. Shares the Orders tab bar, with its own views as a second,
- * smaller tab row under it. The view is kept in `?view=`.
+ * playbooks, a tab of its own in the Trade workspace with its views as a
+ * tab row. The view is kept in `?view=`.
  */
 @Component({
   selector: 'app-journal-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     PageHeader,
-    OrdersTabs,
     PageTabs,
     NoBook,
     LoadingState,
@@ -51,17 +49,21 @@ const VIEW_TABS: readonly PageTab[] = VIEWS.map((v) => ({ id: v.value, label: v.
     JournalResults,
     JournalPlaybooks,
   ],
+  styles: `
+    .view {
+      display: block;
+      margin-top: var(--space-6);
+    }
+  `,
   template: `
     <app-page-header
       title="Journal"
       description="Every trade from entry to exit, how far it went for and against you, and what you learned."
     />
-    <app-orders-tabs />
     @switch (book()) {
       @case ('ready') {
         <app-page-tabs
           #viewBar
-          variant="sub"
           idPrefix="journal"
           label="Journal view"
           [tabs]="viewTabs"
@@ -69,6 +71,7 @@ const VIEW_TABS: readonly PageTab[] = VIEWS.map((v) => ({ id: v.value, label: v.
           (selectedChange)="pickView($event)"
         />
         <div
+          class="view"
           role="tabpanel"
           [id]="viewBar.panelId(shown())"
           [attr.aria-labelledby]="viewBar.tabId(shown())"

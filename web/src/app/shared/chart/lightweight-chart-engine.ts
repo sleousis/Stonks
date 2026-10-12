@@ -186,7 +186,10 @@ class LightweightChart implements ChartHandle {
         fontSize: 11,
         panes: { separatorColor: t.border, separatorHoverColor: t.border },
       },
-      grid: { vertLines: { visible: false }, horzLines: { color: t.grid } },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: t.grid, style: LineStyle.Dotted },
+      },
     });
   }
 
@@ -194,15 +197,15 @@ class LightweightChart implements ChartHandle {
     const color = this.theme.colors[spec.color];
     if (spec.kind === 'area') {
       // Filled between the line and zero (drawdown hangs below the zero line),
-      // a quiet 12% wash of the line colour.
+      // a wash of the line colour from 16% at the line to nothing.
       return {
         topLineColor: color,
-        topFillColor1: withAlpha(color, 0.12),
-        topFillColor2: withAlpha(color, 0.02),
+        topFillColor1: withAlpha(color, 0.16),
+        topFillColor2: withAlpha(color, 0),
         bottomLineColor: color,
-        bottomFillColor1: withAlpha(color, 0.02),
-        bottomFillColor2: withAlpha(color, 0.12),
-        lineWidth: 1 as const,
+        bottomFillColor1: withAlpha(color, 0),
+        bottomFillColor2: withAlpha(color, 0.16),
+        lineWidth: 2 as const,
       };
     }
     return {
@@ -387,7 +390,10 @@ class LightweightPriceChart implements PriceChartHandle {
         fontFamily: t.font,
         fontSize: 11,
       },
-      grid: { vertLines: { visible: false }, horzLines: { color: t.grid } },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: t.grid, style: LineStyle.Dotted },
+      },
     });
     const up = t.colors.gain;
     const down = t.colors.loss;

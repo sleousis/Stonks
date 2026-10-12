@@ -141,6 +141,7 @@ export const TICK_FILLS_LIMIT = 200;
           </div>
           @if (risks().length === 0) {
             <app-empty-state
+              icon="orders"
               title="No adjustments"
               message="The risk policy let every order through as the strategy asked."
             />
@@ -166,6 +167,7 @@ export const TICK_FILLS_LIMIT = 200;
           </div>
           @if (t.orders.length === 0) {
             <app-empty-state
+              icon="orders"
               title="No orders"
               message="Dry runs and runs without a winner place no orders."
             />
@@ -194,7 +196,11 @@ export const TICK_FILLS_LIMIT = 200;
           } @else if (!fills.hasValue()) {
             <app-loading-state label="Loading fills" [rows]="3" />
           } @else if (fills.value().items.length === 0) {
-            <app-empty-state title="No fills" message="Nothing was filled on this run." />
+            <app-empty-state
+              icon="orders"
+              title="No fills"
+              message="Nothing was filled on this run."
+            />
           } @else {
             <app-data-table
               caption="Fills for this trading run"
@@ -227,6 +233,7 @@ export const TICK_FILLS_LIMIT = 200;
           }
           @if (shadows().length === 0) {
             <app-empty-state
+              icon="check"
               title="No strategies on trial checked"
               message="Strategies on trial are checked after real trading runs, not dry runs."
             />
@@ -264,7 +271,7 @@ export const TICK_FILLS_LIMIT = 200;
       display: block;
       margin-top: var(--space-1);
       font-size: var(--text-xs);
-      color: var(--color-loss);
+      color: var(--down);
       overflow-wrap: anywhere;
       white-space: normal;
     }

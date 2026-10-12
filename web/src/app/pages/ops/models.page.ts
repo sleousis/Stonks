@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, resource } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { type ModelVersionView, ModelVersionsService } from '../../api/model-versions.service';
@@ -29,88 +29,93 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
     LoadingState,
   ],
   template: `
-    <app-page-header
-      title="Model versions"
-      description="New versions of strategies that learn from data. Each trades on its own test book until an admin puts it in use or rejects it."
-    />
+    <app-page-header title="Model versions" [description]="standfirst()" />
 
-    <section class="panel" aria-labelledby="candidates-title">
-      <div class="panel-head">
-        <h2 id="candidates-title">Candidates</h2>
-        @if (candidates.hasValue()) {
-          <span class="muted num">{{ candidates.value().length }}</span>
+    <div class="cols-facts">
+      <section class="page-section" aria-labelledby="candidates-title">
+        <div class="section-head">
+          <h2 id="candidates-title">
+            Candidates
+            @if (candidates.hasValue()) {
+              <span class="count">{{ candidates.value().length }}</span>
+            }
+          </h2>
+        </div>
+        @if (candidates.error(); as err) {
+          <app-error-state
+            title="Could not load the candidates"
+            [error]="err"
+            (retry)="candidates.reload()"
+          />
+        } @else if (!candidates.hasValue()) {
+          <app-loading-state label="Loading candidates" [rows]="3" />
+        } @else if (candidates.value().length === 0) {
+          <app-empty-state
+            title="No candidates"
+            message="A retrain runs every Saturday and each new version waits here until it is put in use or rejected. Only strategies that learn from data get new versions, so this stays empty while none of them is approved or on trial. Use Retrain all to retrain now."
+          />
+        } @else {
+          <app-data-table
+            caption="Candidate models, one per strategy"
+            [rows]="candidates.value()"
+            [columns]="columns"
+            [rowKey]="key"
+          >
+            <ng-template appCell="strategy" [appCellOf]="candidates.value()" let-v>
+              <a
+                [routerLink]="['/strategies', v.strategy_id]"
+                [queryParams]="{ tab: 'versions' }"
+                [attr.aria-label]="'Review v' + v.version + ' of ' + name(v.strategy_id)"
+                >{{ name(v.strategy_id) }}</a
+              >
+            </ng-template>
+            <ng-template appCell="version" [appCellOf]="candidates.value()" let-v>
+              <span class="num">v{{ v.version }}</span>
+            </ng-template>
+          </app-data-table>
         }
-      </div>
-      @if (candidates.error(); as err) {
-        <app-error-state
-          title="Could not load the candidates"
-          [error]="err"
-          (retry)="candidates.reload()"
-        />
-      } @else if (!candidates.hasValue()) {
-        <app-loading-state label="Loading candidates" [rows]="3" />
-      } @else if (candidates.value().length === 0) {
-        <app-empty-state
-          title="No candidates"
-          message="A retrain runs every Saturday and each new version waits here until it is put in use or rejected. Only strategies that learn from data get new versions, so this stays empty while none of them is approved or on trial. Use Retrain all below to retrain now."
-        />
-      } @else {
-        <app-data-table
-          caption="Candidate models, one per strategy"
-          [rows]="candidates.value()"
-          [columns]="columns"
-          [rowKey]="key"
-        >
-          <ng-template appCell="strategy" [appCellOf]="candidates.value()" let-v>
-            <a
-              [routerLink]="['/strategies', v.strategy_id]"
-              [queryParams]="{ tab: 'versions' }"
-              [attr.aria-label]="'Review v' + v.version + ' of ' + name(v.strategy_id)"
-              >{{ name(v.strategy_id) }}</a
-            >
-          </ng-template>
-          <ng-template appCell="version" [appCellOf]="candidates.value()" let-v>
-            <span class="num">v{{ v.version }}</span>
-          </ng-template>
-        </app-data-table>
-      }
-    </section>
+      </section>
 
-    <section class="panel" aria-labelledby="retrain-title">
-      <div class="panel-head">
-        <h2 id="retrain-title">Retrain</h2>
-      </div>
-      <div class="panel-body">
-        <p class="muted">
-          Retrains every strategy that learns from data on its latest data. The weekly run does the
-          same. A strategy retrained in the last few days is skipped unless you check the box.
-        </p>
-        <app-retrain-job label="Retrain all" (finished)="candidates.reload()" />
-      </div>
-    </section>
+      <section class="page-section" aria-labelledby="retrain-title">
+        <div class="section-head">
+          <h2 id="retrain-title">Retrain</h2>
+        </div>
+        <div class="retrain">
+          <p class="callout">
+            Retrains every strategy that learns from data on its latest data. The weekly run does
+            the same. A strategy retrained in the last few days is skipped unless you check the box.
+          </p>
+          <app-retrain-job label="Retrain all" (finished)="candidates.reload()" />
+        </div>
+      </section>
+    </div>
   `,
   styles: `
     :host {
-      display: grid;
-      gap: var(--space-4);
+      display: block;
       min-width: 0;
     }
-    @media (max-width: 767.98px) {
-      :host {
-        gap: var(--space-3);
-      }
-    }
-    .muted {
-      max-width: 70ch;
-      color: var(--color-ink-2);
-    }
-    .panel-body {
+    .retrain {
       display: grid;
-      gap: var(--space-3);
+      gap: var(--space-4);
+      padding-top: var(--space-4);
+    }
+    .callout {
+      font-size: var(--text-sm);
     }
   `,
 })
 export class ModelsPage {
+  /** One sentence from the list: how many versions wait for a decision. */
+  protected readonly standfirst = computed(() => {
+    const words = 'Each trades on its own test book until an admin decides.';
+    if (!this.candidates.hasValue())
+      return `New versions of strategies that learn from data. ${words}`;
+    const n = this.candidates.value().length;
+    if (n === 0) return `No new version waits for a decision. A retrain runs every Saturday.`;
+    return `${n === 1 ? '1 new version waits' : n + ' new versions wait'} for a decision. ${words}`;
+  });
+
   private readonly api = inject(ModelVersionsService);
 
   protected readonly candidates = resource({ loader: () => this.api.candidates() });

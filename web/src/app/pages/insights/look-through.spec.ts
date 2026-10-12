@@ -99,7 +99,7 @@ describe('LookThroughPanel', () => {
     )!;
     sector.click();
     fixture.detectChanges();
-    const list = el.querySelector('ul[aria-label="Sector"]');
+    const list = el.querySelector('table[aria-label="Sector"]');
     expect(list?.textContent).toContain('Not in the fund list');
     expect(list?.textContent).toContain('Cash');
     expect(list?.textContent).toContain('Technology');

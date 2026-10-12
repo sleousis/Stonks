@@ -61,32 +61,30 @@
     min-width: var(--touch-min);
     min-height: var(--touch-min);
     font-size: var(--text-lg);
-    color: var(--color-ink-3);
+    color: var(--muted);
 
     &:hover:not(:disabled) {
-      color: var(--color-loss);
+      color: var(--down);
     }
   }
 }
 
 .compare {
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
 }
 
-// A group is an inset well with an accent rule on its edge; nested groups
-// keep the rule, so the tree reads without a box round every level.
+// A group is a 2px accent rule on its left edge, no box; nested groups step
+// in, so the tree reads without a box round any level.
 .group,
 .not {
   margin: 0;
   min-width: 0;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
   border: 0;
-  border-left: 2px solid var(--color-accent);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border-left: 2px solid var(--accent-line);
+  border-radius: 0;
+  background: none;
 
   @include bp.phone {
     padding-left: var(--space-2);
@@ -94,7 +92,7 @@
 }
 
 .not {
-  border-left-color: var(--color-warn);
+  border-left-color: var(--warn);
 }
 
 .group-head,
@@ -118,10 +116,8 @@
 
 .not-label {
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: var(--tracking-overline);
-  text-transform: uppercase;
-  color: var(--color-warn);
+  font-weight: var(--weight-semibold);
+  color: var(--warn);
 }
 
 .group-type {
@@ -150,6 +146,11 @@
 .issue {
   margin-top: var(--space-1);
   font-size: var(--text-xs);
-  color: var(--color-loss);
+  color: var(--down);
   overflow-wrap: anywhere;
+}
+
+// Keeps the hidden legend of a condition group inside its fieldset.
+fieldset.group {
+  position: relative;
 }

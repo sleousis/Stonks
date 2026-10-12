@@ -27,24 +27,38 @@ const PAGE_SIZE = 50;
  * live in the URL (`?ticker=&strategy=&tick=&status=`) so other pages can
  * link to a filtered view and the back button restores it. Strategy picks
  * from the followed strategies by name. A run (`?tick=`, from a run's page)
- * shows as a chip to clear, never a box to type an id in (PO-09). On phones
- * the filters fold behind a Filter button.
+ * shows as a chip to clear, never a box to type an id in (PO-09). Status is a
+ * row of filter pills. On phones the ticker and strategy fold behind a
+ * Filter button.
  */
 @Component({
   selector: 'app-orders-list-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, OrdersTable, LoadingState, EmptyState, ErrorState],
   template: `
-    <section class="panel panel-flush" aria-labelledby="orders-title">
-      <div class="panel-head">
-        <h2 id="orders-title">Orders</h2>
-        @if (page(); as p) {
-          <span class="count num">{{ p.total }} matching</span>
-        }
-        <a class="head-link" routerLink="/orders/ticks">See trading runs</a>
-      </div>
-
-      <div class="filter-bar">
+    <section class="page-section section-flush" aria-labelledby="orders-title">
+      <!-- Status as filter pills, the other filters on the right. -->
+      <div class="toolbar">
+        <div class="filter-pills" role="group" aria-label="Show orders by status">
+          <button
+            type="button"
+            class="filter-pill"
+            [attr.aria-pressed]="!status()"
+            (click)="setFilter('status', '')"
+          >
+            All
+          </button>
+          @for (s of statusOptions; track s.value) {
+            <button
+              type="button"
+              class="filter-pill"
+              [attr.aria-pressed]="s.value === status()"
+              (click)="setFilter('status', s.value === status() ? '' : s.value)"
+            >
+              {{ s.label }}
+            </button>
+          }
+        </div>
         <button
           type="button"
           class="btn filter-toggle"
@@ -52,12 +66,69 @@ const PAGE_SIZE = 50;
           [attr.aria-expanded]="filtersOpen()"
           (click)="filtersOpen.set(!filtersOpen())"
         >
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"
+          >
+            <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
+          </svg>
           Filter
           @if (filterCount()) {
-            <span class="num">({{ filterCount() }})</span>
+            <span class="count-badge">{{ filterCount() }}</span>
           }
         </button>
-        @if (tick(); as run) {
+        <form
+          id="orders-filters"
+          class="filters"
+          role="search"
+          aria-label="Filter orders"
+          [class.open]="filtersOpen()"
+          (submit)="$event.preventDefault()"
+        >
+          <div class="field">
+            <label for="f-ticker">Ticker</label>
+            <input
+              id="f-ticker"
+              class="input"
+              placeholder="AAPL.US"
+              autocapitalize="characters"
+              [value]="ticker() ?? ''"
+              (change)="setFilter('ticker', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="f-strategy">Strategy</label>
+            <select
+              id="f-strategy"
+              class="input"
+              [value]="strategy() ?? ''"
+              (change)="setFilter('strategy', $any($event.target).value)"
+            >
+              <option value="">Any strategy</option>
+              @for (s of strategyOptions(); track s.value) {
+                <option [value]="s.value" [selected]="s.value === strategy()">{{ s.label }}</option>
+              }
+            </select>
+          </div>
+          @if (hasFilters()) {
+            <button type="button" class="btn btn-ghost clear" (click)="clearFilters()">
+              Clear filters
+            </button>
+          }
+        </form>
+      </div>
+
+      <header class="section-head">
+        <h2 id="orders-title">
+          Orders
+          @if (page(); as p) {
+            <span class="count">{{ p.total }} matching</span>
+          }
+        </h2>
+        @if (tick()) {
           <span class="chip">
             One trading run
             <button
@@ -66,101 +137,60 @@ const PAGE_SIZE = 50;
               aria-label="Show orders from every run"
               (click)="setFilter('tick', '')"
             >
-              ×
+              <svg
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="M3 3l6 6M9 3l-6 6" />
+              </svg>
             </button>
           </span>
         }
-      </div>
+        <a class="text-link head-link" routerLink="/orders/ticks">See trading runs</a>
+      </header>
 
-      <form
-        id="orders-filters"
-        class="filters"
-        role="search"
-        aria-label="Filter orders"
-        [class.open]="filtersOpen()"
-        (submit)="$event.preventDefault()"
-      >
-        <div class="field">
-          <label for="f-ticker">Ticker</label>
-          <input
-            id="f-ticker"
-            class="input"
-            placeholder="AAPL.US"
-            autocapitalize="characters"
-            [value]="ticker() ?? ''"
-            (change)="setFilter('ticker', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="f-strategy">Strategy</label>
-          <select
-            id="f-strategy"
-            class="input"
-            [value]="strategy() ?? ''"
-            (change)="setFilter('strategy', $any($event.target).value)"
-          >
-            <option value="">Any strategy</option>
-            @for (s of strategyOptions(); track s.value) {
-              <option [value]="s.value" [selected]="s.value === strategy()">{{ s.label }}</option>
-            }
-          </select>
-        </div>
-        <div class="field">
-          <label for="f-status">Status</label>
-          <select
-            id="f-status"
-            class="input"
-            [value]="status() ?? ''"
-            (change)="setFilter('status', $any($event.target).value)"
-          >
-            <option value="">Any status</option>
-            @for (s of statusOptions; track s.value) {
-              <option [value]="s.value" [selected]="s.value === status()">{{ s.label }}</option>
-            }
-          </select>
-        </div>
-        <div class="filter-actions">
-          <button type="button" class="btn" [disabled]="!hasFilters()" (click)="clearFilters()">
-            Clear filters
-          </button>
-        </div>
-      </form>
-
-      @let p = page();
-      @if (orders.error(); as err) {
-        <app-error-state title="Could not load orders" [error]="err" (retry)="orders.reload()" />
-      } @else if (!p) {
-        <app-loading-state label="Loading orders" [rows]="6" />
-      } @else if (p.items.length === 0) {
-        @if (hasFilters()) {
-          <app-empty-state
-            title="No orders match these filters"
-            message="Clear a filter or widen the search."
-          >
-            <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
-          </app-empty-state>
+      <div class="section-body">
+        @let p = page();
+        @if (orders.error(); as err) {
+          <app-error-state title="Could not load orders" [error]="err" (retry)="orders.reload()" />
+        } @else if (!p) {
+          <app-loading-state label="Loading orders" [rows]="6" />
+        } @else if (p.items.length === 0) {
+          @if (hasFilters()) {
+            <app-empty-state
+              icon="orders"
+              title="No orders match these filters"
+              message="Clear a filter or widen the search."
+            >
+              <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+            </app-empty-state>
+          } @else {
+            <app-empty-state
+              icon="orders"
+              title="No orders yet"
+              message="Orders appear here after a trading run, or when you place one by hand."
+            >
+              <a class="btn btn-primary" routerLink="/orders/new">New order</a>
+              <a class="btn" routerLink="/orders/ticks">See trading runs</a>
+            </app-empty-state>
+          }
         } @else {
-          <app-empty-state
-            title="No orders yet"
-            message="Orders appear here after a trading run, or when you place one by hand."
-          >
-            <a class="btn btn-primary" routerLink="/orders/new">New order</a>
-            <a class="btn" routerLink="/orders/ticks">See trading runs</a>
-          </app-empty-state>
+          <!-- Re-created per filter set so paging restarts on page one. -->
+          @for (k of [filterKey()]; track k) {
+            <app-orders-table
+              [rows]="p.items"
+              [total]="p.total"
+              [offset]="p.offset"
+              [busy]="orders.isLoading()"
+              [pageSize]="pageSize"
+              (pageChange)="offset.set($event.offset)"
+            />
+          }
         }
-      } @else {
-        <!-- Re-created per filter set so paging restarts on page one. -->
-        @for (k of [filterKey()]; track k) {
-          <app-orders-table
-            [rows]="p.items"
-            [total]="p.total"
-            [offset]="p.offset"
-            [busy]="orders.isLoading()"
-            [pageSize]="pageSize"
-            (pageChange)="offset.set($event.offset)"
-          />
-        }
-      }
+      </div>
     </section>
   `,
   styleUrl: './orders-views.scss',
@@ -193,7 +223,7 @@ export class OrdersListPage {
   protected readonly hasFilters = computed(() => Object.values(this.filters()).some(Boolean));
   /** Filters set in the folded phone form, shown on its button. */
   protected readonly filterCount = computed(
-    () => [this.ticker(), this.strategy(), this.status()].filter(Boolean).length,
+    () => [this.ticker(), this.strategy()].filter(Boolean).length,
   );
   protected readonly filtersOpen = signal(false);
 

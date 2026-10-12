@@ -11,7 +11,7 @@ import { JournalService } from '../../api/journal.service';
 import type { GroupStatsView } from '../../api/models';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
-import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
+import type { SegmentOption } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { formatProfitFactor, formatR, formatRate, groupLabel } from './journal-format';
 
@@ -30,13 +30,24 @@ const GROUPINGS: readonly SegmentOption<ResultsBy>[] = [
 @Component({
   selector: 'app-journal-results',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DataTable, Segmented, EmptyState, ErrorState, LoadingState],
+  imports: [DataTable, EmptyState, ErrorState, LoadingState],
   styleUrl: './journal.scss',
   template: `
-    <section class="panel panel-flush" aria-labelledby="results-title">
-      <div class="panel-head">
+    <section class="page-section section-flush" aria-labelledby="results-title">
+      <header class="section-head">
         <h2 id="results-title">Results</h2>
-        <app-segmented label="Group results by" [options]="groupings" [(value)]="by" />
+      </header>
+      <div class="filter-pills group-by" role="group" aria-label="Group results by">
+        @for (g of groupings; track g.value) {
+          <button
+            type="button"
+            class="filter-pill"
+            [attr.aria-pressed]="g.value === by()"
+            (click)="by.set(g.value)"
+          >
+            {{ g.label }}
+          </button>
+        }
       </div>
       <p class="lead">
         How your closed trades did, split by what you wrote about them. A trade with two tags counts
@@ -52,7 +63,11 @@ const GROUPINGS: readonly SegmentOption<ResultsBy>[] = [
       } @else if (!results.hasValue()) {
         <app-loading-state label="Loading your results" [rows]="4" />
       } @else if (results.value().groups.length === 0) {
-        <app-empty-state title="No trades yet" message="Results show once a trade closes." />
+        <app-empty-state
+          icon="orders"
+          title="No trades yet"
+          message="Results show once a trade closes."
+        />
       } @else {
         <app-data-table
           [caption]="'Results by ' + byLabel().toLowerCase()"

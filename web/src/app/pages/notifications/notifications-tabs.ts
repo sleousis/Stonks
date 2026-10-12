@@ -7,13 +7,13 @@ import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
  * and every alert setting in one place (what reaches you, where and when).
  */
 export const NOTIFICATIONS_TABS = [
-  { path: '/notifications', label: 'Feed', exact: true },
+  { path: '/notifications', label: 'Inbox', exact: true },
   { path: '/notifications/price-alerts', label: 'Price alerts' },
-  { path: '/notifications/settings', label: 'Alert settings' },
+  { path: '/notifications/settings', label: 'Settings' },
 ] as const;
 
 /**
- * The tab bar of the Feed, Price alerts and Alert settings, one tap apart:
+ * The tab bar of the Inbox, Price alerts and alert Settings, one tap apart:
  * the console's one tab style (`<app-page-tabs>`, M4), plain links with the
  * current one marked by aria-current.
  */

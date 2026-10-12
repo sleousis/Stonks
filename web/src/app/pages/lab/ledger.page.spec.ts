@@ -97,6 +97,9 @@ describe('LedgerPage', () => {
     expect(el.querySelector('a[href="/lab/ledger/lab_1"]')).not.toBeNull();
     expect(el.textContent).toContain('more likely a good result is luck');
     expect(el.querySelector('nav[aria-label="Lab screens"] a[href="/lab/ledger"]')).not.toBeNull();
+    // Errors shows by default on desktop, as before the Columns picker.
+    const headers = [...el.querySelectorAll('thead th')].map((th) => th.textContent ?? '');
+    expect(headers.some((h) => h.includes('Errors'))).toBe(true);
   });
 
   it('filters by the strategy in the URL', async () => {

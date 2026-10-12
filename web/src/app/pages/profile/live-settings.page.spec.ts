@@ -262,7 +262,7 @@ describe('LiveSettingsPage', () => {
 
   it('shows no brass and a PAPER stamp while no real money moves', async () => {
     const el = await render();
-    expect(el.querySelector('.live-frame')).toBeNull();
+    expect(el.querySelector('[data-testid="allocation-figure"]')?.classList).not.toContain('brass');
     expect(el.querySelector('app-page-header app-mode-stamp')?.textContent).toContain('PAPER');
     expect(button(el, 'Set allocation').classList).not.toContain('btn-danger');
   });
@@ -274,7 +274,7 @@ describe('LiveSettingsPage', () => {
       next_stage: 'live_scale',
       real_money: true,
     });
-    expect(el.querySelector('.live-frame')).not.toBeNull();
+    expect(el.querySelector('[data-testid="allocation-figure"]')?.classList).toContain('brass');
     expect(el.querySelector('app-page-header app-mode-stamp')?.textContent).toContain('LIVE');
     expect(button(el, 'Set allocation').classList).toContain('btn-danger');
   });

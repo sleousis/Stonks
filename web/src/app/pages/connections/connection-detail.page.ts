@@ -8,7 +8,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 
 import { ConnectionsService } from '../../api/connections.service';
 import type { SyncResultView } from '../../api/models';
@@ -42,7 +42,6 @@ const READS =
     LoadingState,
     StatusPill,
     AccountList,
-    RouterLink,
     AgoPipe,
     DateTimePipe,
   ],

@@ -70,6 +70,7 @@ export function picksError(
       <app-loading-state label="Loading your sales" [rows]="3" />
     } @else if (sales().length === 0) {
       <app-empty-state
+        icon="orders"
         title="No sales yet"
         message="Once this portfolio sells, pick here which buys each sale closes."
       />
@@ -185,7 +186,7 @@ export function picksError(
       align-items: center;
       gap: var(--space-2) var(--space-3);
       padding: var(--space-2) 0;
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
       @include bp.phone {
         grid-template-columns: minmax(0, 1fr) 6.5rem;
       }
@@ -199,10 +200,10 @@ export function picksError(
     .total {
       margin: var(--space-2) 0;
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .total.error {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .actions {
       display: flex;

@@ -29,8 +29,8 @@ const DEBOUNCE_MS = 250;
   imports: [DataTable, TableCell, LoadingState, EmptyState, ErrorState],
   styleUrls: ['./data-shared.scss'],
   template: `
-    <section class="panel panel-flush" aria-labelledby="search-title">
-      <div class="panel-head">
+    <section class="page-section section-flush" aria-labelledby="search-title">
+      <div class="section-head">
         <h2 id="search-title">Instruments</h2>
         @if (page(); as found) {
           <span class="muted num count">{{ found.total }} found</span>
@@ -77,6 +77,7 @@ const DEBOUNCE_MS = 250;
         <app-loading-state label="Searching instruments" [rows]="5" />
       } @else if (p.items.length === 0) {
         <app-empty-state
+          icon="search"
           title="No instruments match"
           [message]="
             q() || assetClass()
@@ -106,6 +107,10 @@ const DEBOUNCE_MS = 250;
             >
               {{ row.id }}
             </button>
+          </ng-template>
+          <ng-template appCell="name" [appCellOf]="p.items" let-row>
+            <span class="name">{{ row.name || row.id }}</span>
+            <span class="name-meta">{{ meta(row) }}</span>
           </ng-template>
         </app-data-table>
       }
@@ -141,15 +146,11 @@ export class InstrumentSearch {
 
   protected readonly columns: TableColumn<InstrumentView>[] = [
     { key: 'id', label: 'Ticker', mobile: 'title' },
-    { key: 'name', label: 'Name', wrap: true },
-    { key: 'asset_class', label: 'Class', value: (r) => instrumentClassLabel(r) },
-    {
-      key: 'exchange',
-      label: 'Exchange',
-      value: (r) => exchangeLabel(r.exchange),
-      mobile: 'hide',
-    },
+    { key: 'name', label: 'Name', wrap: true, mobile: 'inline' },
   ];
+  /** "Stocks, US": the class and exchange under the name. */
+  protected readonly meta = (r: InstrumentView) =>
+    [...new Set([instrumentClassLabel(r), exchangeLabel(r.exchange)].filter(Boolean))].join(', ');
   protected readonly key = (r: InstrumentView) => r.id;
 
   private timer: ReturnType<typeof setTimeout> | undefined;

@@ -14,7 +14,7 @@ import { LiveService } from '../../api/live.service';
 import { SubscriptionsService } from '../../api/subscriptions.service';
 import { SessionService } from '../../core/auth/session.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { stageWords } from '../../shared/live-stages';
+import { type LiveStage, STAGES, STAGE_WORDS, stageWords } from '../../shared/live-stages';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -50,10 +50,7 @@ import { lastPreview } from './preview-memory';
     LoadingState,
   ],
   template: `
-    <app-page-header
-      title="Going live"
-      description="Every step from paper to real money for one portfolio, in order. Each says whether it is done and where to do it. Nothing changes here. Alerts only and Paper need none of these steps and no broker."
-    >
+    <app-page-header title="Going live" [description]="standfirst()">
       @if (stageLoaded()) {
         <app-mode-stamp [live]="realMoney()" />
       }
@@ -72,12 +69,31 @@ import { lastPreview } from './preview-memory';
         title="No portfolio yet"
         message="Open a paper portfolio and follow a strategy on it first. This checklist then shows the way to real money."
       >
-        <a class="btn" routerLink="/welcome" [queryParams]="{ step: 'portfolio' }"
+        <a class="btn btn-primary" routerLink="/welcome" [queryParams]="{ step: 'portfolio' }"
           >Open a portfolio</a
         >
       </app-empty-state>
     } @else {
       @let p = picked()!;
+      <!-- The stage path: four stages on one track. The current one in accent,
+           the real-money stages in brass. -->
+      <section class="path" aria-labelledby="path-title">
+        <h2 id="path-title" class="visually-hidden">Stage path</h2>
+        <ol class="stages">
+          @for (st of stagePath(); track st.id) {
+            <li
+              [attr.data-state]="st.state"
+              [class.live]="st.live"
+              [attr.aria-current]="st.state === 'current' ? 'step' : null"
+            >
+              <span class="node" aria-hidden="true"></span>
+              <span class="stage-label">{{ st.label }}</span>
+              <span class="stage-means">{{ st.means }}</span>
+            </li>
+          }
+        </ol>
+      </section>
+
       <div class="top">
         @if (ctx.options().length > 1) {
           <div class="field picker">
@@ -102,6 +118,7 @@ import { lastPreview } from './preview-memory';
             Stage now: {{ s }} <app-help-tip term="Portfolio stage" />
           }
         </p>
+        <!-- The steps done as a bar, as before the stage path (old going-live.page.ts:105). -->
         <div
           class="bar"
           role="progressbar"
@@ -110,7 +127,7 @@ import { lastPreview } from './preview-memory';
           [attr.aria-valuemax]="total()"
           [attr.aria-valuenow]="doneCount()"
         >
-          <span [style.width.%]="(doneCount() / total()) * 100"></span>
+          <span [style.width.%]="total() ? (doneCount() / total()) * 100 : 0"></span>
         </div>
       </div>
 
@@ -159,10 +176,16 @@ import { lastPreview } from './preview-memory';
         }
       </ol>
 
-      <p class="foot muted">
-        Real money moves only at the two Real money stages, and only for follows set to Approve each
-        trade or Automatic. You can stop trading from any page at any time.
-      </p>
+      <div class="foot callout">
+        <p>
+          Real money moves only at the two Real money stages, and only for follows set to Approve
+          each trade or Automatic. You can stop trading from any page at any time.
+        </p>
+        <p>
+          Nothing changes on this page. Alerts only and Paper need none of these steps and no
+          broker.
+        </p>
+      </div>
     }
   `,
   styles: `
@@ -170,9 +193,102 @@ import { lastPreview } from './preview-memory';
 
     :host {
       display: grid;
-      gap: var(--space-5);
+      gap: var(--space-6);
       min-width: 0;
     }
+
+    /* Stage path: a horizontal stepper on one 2px track. */
+    .path {
+      padding-bottom: var(--space-5);
+      border-bottom: 1px solid var(--rule);
+    }
+    .stages {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .stages li {
+      position: relative;
+      display: grid;
+      align-content: start;
+      gap: var(--space-1);
+      min-width: 0;
+      padding-right: var(--space-3);
+    }
+    .stages li::before {
+      content: '';
+      position: absolute;
+      top: 7px;
+      left: 16px;
+      right: 0;
+      height: 2px;
+      background: var(--rule);
+    }
+    .stages li:last-child::before {
+      display: none;
+    }
+    .stages li[data-state='done']::before {
+      background: var(--ink);
+    }
+    .node {
+      position: relative;
+      width: 16px;
+      height: 16px;
+      margin-bottom: var(--space-2);
+      border: 2px solid var(--rule-control);
+      border-radius: 50%;
+      background: var(--bg);
+    }
+    li[data-state='done'] .node {
+      border-color: var(--ink);
+      background: var(--ink);
+    }
+    li[data-state='current'] .node {
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+    /* Real-money stages: brass ring, a brass fill once reached. */
+    li.live .node {
+      border-color: var(--brass-fill);
+    }
+    li.live[data-state='done'] .node,
+    li.live[data-state='current'] .node {
+      border-color: var(--brass-fill);
+      background: var(--brass-fill);
+      box-shadow: 0 0 0 4px var(--brass-soft);
+    }
+    .stage-label {
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
+    }
+    li[data-state='todo'] .stage-label {
+      color: var(--muted);
+      font-weight: var(--weight-label);
+    }
+    li[data-state='current'] .stage-label {
+      color: var(--accent);
+    }
+    li.live:not([data-state='todo']) .stage-label {
+      color: var(--brass);
+    }
+    .stage-means {
+      max-width: 28ch;
+      color: var(--muted);
+      font-size: var(--text-xs);
+      line-height: 1.4;
+    }
+    @include bp.phone {
+      .stage-means {
+        display: none;
+      }
+      .stage-label {
+        font-size: var(--text-sm);
+      }
+    }
+
     .top {
       display: grid;
       gap: var(--space-3);
@@ -182,89 +298,86 @@ import { lastPreview } from './preview-memory';
       max-width: 20rem;
     }
     .progress {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
+      font-size: var(--text-lead);
       overflow-wrap: anywhere;
     }
     .bar {
       height: 6px;
-      border-radius: var(--radius-xs);
-      background: var(--color-surface-3);
+      border-radius: var(--r-pill);
+      background: var(--sunk);
       overflow: hidden;
     }
     .bar span {
       display: block;
       height: 100%;
-      background: var(--color-gain);
-      transition: width var(--dur) var(--ease-out);
+      background: var(--up);
+      transition: width var(--dur-menu) var(--ease-out);
     }
-    /* The steps: one panel, a hairline between rows. */
+    @media (prefers-reduced-motion: reduce) {
+      .bar span {
+        transition: none;
+      }
+    }
+    /* The gates: rows on a 2px ink rule, a hairline between. No box. */
     .steps {
       display: grid;
-      max-width: 60rem;
       margin: 0;
       padding: 0;
       list-style: none;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
-      overflow: hidden;
+      border-top: 2px solid var(--rule-strong);
     }
-    .steps > li + li {
-      border-top: 1px solid var(--color-border);
+    .steps > li {
+      border-bottom: 1px solid var(--rule);
     }
     .step {
       display: grid;
-      grid-template-columns: 2rem minmax(0, 1fr) auto auto;
+      grid-template-columns: 28px minmax(0, 1fr) auto auto;
       align-items: center;
-      gap: var(--space-2) var(--space-3);
-      padding: var(--space-4);
+      gap: var(--space-2) var(--space-4);
+      padding: var(--space-4) 0;
 
       @include bp.phone {
-        grid-template-columns: 2rem minmax(0, 1fr);
-        padding: var(--space-3);
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: var(--space-2) var(--space-3);
       }
     }
     .later {
-      padding: var(--space-3) var(--space-4);
-      background: var(--color-surface-2);
+      padding: var(--space-3) 0 var(--space-3) calc(28px + var(--space-4));
       font-size: var(--text-sm);
-
-      @include bp.phone {
-        padding: var(--space-3);
-      }
     }
-    /* The step number: a small square mark; a tick once done. */
+    /* The step number in a small sunk squircle; a filled check once done. */
     .mark {
       display: inline-grid;
       place-items: center;
-      width: 2rem;
-      height: 2rem;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-xs);
-      color: var(--color-ink-2);
+      width: 28px;
+      height: 28px;
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
+      color: var(--ink-2);
       font-family: var(--font-mono);
-      font-size: var(--text-sm);
+      font-size: var(--text-xs);
       font-weight: var(--weight-semibold);
       font-variant-numeric: tabular-nums slashed-zero;
     }
     .step[data-state='done'] .mark {
-      border-color: var(--color-gain);
-      background: var(--color-gain);
-      color: var(--color-surface);
+      background: var(--up-soft);
+      color: var(--up);
     }
     .body {
       display: grid;
-      gap: var(--space-1);
+      gap: 2px;
       min-width: 0;
     }
     .title {
-      font-size: var(--text-panel);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
+      letter-spacing: normal;
       overflow-wrap: anywhere;
     }
     .detail {
-      max-width: 70ch;
-      color: var(--color-ink-2);
+      max-width: 68ch;
+      color: var(--ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
@@ -285,11 +398,13 @@ import { lastPreview } from './preview-memory';
       }
     }
     /* Brass only where real money moves: the done steps of a Real money portfolio. */
-    .steps.live .step[data-state='done'] {
-      box-shadow: inset var(--border-live) 0 0 var(--color-live);
+    .steps.live .step[data-state='done'] .mark {
+      background: var(--brass-soft);
+      color: var(--brass);
     }
     .foot {
-      max-width: 70ch;
+      display: grid;
+      gap: var(--space-1);
       font-size: var(--text-sm);
     }
   `,
@@ -408,6 +523,31 @@ export class GoingLivePage {
   protected readonly realMoney = computed(
     () => this.stageLoaded() && (this.stage.value()?.real_money ?? false),
   );
+  /** The four stages with where this portfolio stands: a paper portfolio sits at Simulated. */
+  protected readonly stagePath = computed(() => {
+    const now: LiveStage = this.stageLoaded()
+      ? ((this.stage.value()?.stage as LiveStage | undefined) ?? 'sim_paper')
+      : 'sim_paper';
+    const at = STAGES.indexOf(now);
+    return STAGES.map((id, i) => ({
+      id,
+      label: STAGE_WORDS[id].label,
+      means: STAGE_WORDS[id].means,
+      live: STAGE_WORDS[id].live,
+      state: i < at ? 'done' : i === at ? 'current' : 'todo',
+    }));
+  });
+  /** The standfirst, from the portfolio: "Main is at Broker paper. Each step below says where to do it." */
+  protected readonly standfirst = computed(() => {
+    const p = this.picked();
+    if (!p || !this.steps().length) {
+      return 'Every step from paper to real money for one portfolio, in order.';
+    }
+    const stage = this.stageLabel();
+    return stage
+      ? `${p.name} is at ${stage}. Each step below says where to do it.`
+      : `From paper to real money for ${p.name}. Each step below says where to do it.`;
+  });
   protected readonly stageLabel = computed(() =>
     this.stageLoaded() ? stageWords(this.stage.value()?.stage ?? '').label : null,
   );

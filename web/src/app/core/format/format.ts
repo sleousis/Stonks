@@ -276,3 +276,13 @@ export function toneClass(value: Num): 'gain' | 'loss' | '' {
 function isNum(value: Num): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
+
+/**
+ * A money figure split for a headline: the whole part, then the cents and
+ * any currency after them, which the headline sets in the muted ink.
+ * "$10,412.37" gives ["$10,412", ".37"]. A masked or odd figure stays whole.
+ */
+export function splitMoney(text: string): [string, string] {
+  const m = /^(.*\d)([.,]\d{1,2})(\D*)$/.exec(text);
+  return m ? [m[1], m[2] + m[3]] : [text, ''];
+}

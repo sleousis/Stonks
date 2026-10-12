@@ -6,6 +6,7 @@ import {
   input,
   linkedSignal,
   resource,
+  signal,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
@@ -20,6 +21,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { robustnessWords } from '../../shared/lab-results/robustness';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { ColumnsPicker, visibleColumns } from '../../shared/ui/columns-picker';
 import { LabNav } from './lab-nav';
 import { strategyTitle } from './lab-requests';
 
@@ -49,6 +51,7 @@ export function scoreText(score: number | null | undefined): string {
     PageHeader,
     ExportButton,
     LabNav,
+    ColumnsPicker,
     DataTable,
     TableCell,
     StatusPill,
@@ -57,45 +60,55 @@ export function scoreText(score: number | null | undefined): string {
     LoadingState,
   ],
   template: `
-    <app-page-header
-      title="Lab"
-      description="Every lab run on record, the idea it tested and how many settings it tried."
-    >
+    <app-page-header title="Lab" [description]="standfirst()">
       <app-export-button actions kind="lab-trials" label="All settings CSV" [ghost]="true" />
     </app-page-header>
     <app-lab-nav />
 
-    <section class="panel" aria-labelledby="ledger-title">
-      <div class="panel-head">
-        <h2 id="ledger-title">Lab history</h2>
-        @if (page(); as p) {
-          <span class="count num">{{ p.total }} runs</span>
-        }
-      </div>
-      <div class="panel-body">
-        <p class="lead">
+    <section class="page-section" aria-labelledby="ledger-title">
+      <header class="section-head">
+        <h2 id="ledger-title">
+          Lab history
+          @if (page(); as p) {
+            <span class="count">{{ p.total }} runs</span>
+          }
+        </h2>
+      </header>
+      <div class="section-body">
+        <p class="lead callout">
           Each lab run is written down before it starts, with the idea it tests, then every setting
           it tries. The more settings a strategy has tried, the more likely a good result is luck,
           so the robustness tests count them all.
         </p>
-        <form
-          class="filters"
-          role="search"
-          aria-label="Filter the Lab history"
-          (submit)="$event.preventDefault()"
-        >
-          <div class="field">
-            <label for="ledger-class">Strategy</label>
-            <select id="ledger-class" class="input" (change)="setClass($any($event.target).value)">
-              <option value="" [selected]="!strategy()">All strategies</option>
-              @for (c of classOptions(); track c.class_path) {
-                <option [value]="c.class_path" [selected]="c.class_path === strategy()">
-                  {{ title(c) }}
-                </option>
-              }
-            </select>
-          </div>
-        </form>
+        <div class="toolbar">
+          <form
+            class="filters"
+            role="search"
+            aria-label="Filter the Lab history"
+            (submit)="$event.preventDefault()"
+          >
+            <div class="field">
+              <label for="ledger-class">Strategy</label>
+              <select
+                id="ledger-class"
+                class="input"
+                (change)="setClass($any($event.target).value)"
+              >
+                <option value="" [selected]="!strategy()">All strategies</option>
+                @for (c of classOptions(); track c.class_path) {
+                  <option [value]="c.class_path" [selected]="c.class_path === strategy()">
+                    {{ title(c) }}
+                  </option>
+                }
+              </select>
+            </div>
+          </form>
+          <app-columns-picker
+            [columns]="columns"
+            storageKey="stonks.lab.ledger.columns"
+            (hiddenChange)="hidden.set($event)"
+          />
+        </div>
 
         @if (runs.error(); as err) {
           <app-error-state
@@ -116,7 +129,7 @@ export function scoreText(score: number | null | undefined): string {
               <app-data-table
                 caption="Recorded lab runs"
                 [rows]="p.items"
-                [columns]="columns"
+                [columns]="shownColumns()"
                 [rowKey]="key"
                 [total]="p.total"
                 [offset]="p.offset"
@@ -186,8 +199,18 @@ export class LedgerPage {
   /** The last loaded page stays on screen while the next one loads. */
   protected readonly page = keepLatest(this.runs);
 
-  protected readonly columns: TableColumn<LedgerRunView>[] = [
-    { key: 'started_at', label: 'Started', sortable: false, mobile: 'title' },
+  /** Columns the viewer hid with the Columns menu. */
+  protected readonly hidden = signal<string[]>([]);
+  protected readonly shownColumns = computed(() => visibleColumns(this.columns, this.hidden()));
+  protected readonly standfirst = computed(() => {
+    const p = this.page();
+    if (!p || !p.total)
+      return 'Every lab run on record, the idea it tested and the settings it tried.';
+    return `${p.total} lab ${p.total === 1 ? 'run' : 'runs'} on record. Open one for every setting it tried.`;
+  });
+
+  protected readonly columns: (TableColumn<LedgerRunView> & { fixed?: boolean })[] = [
+    { key: 'started_at', label: 'Started', sortable: false, mobile: 'title', fixed: true },
     {
       key: 'strategy_class',
       label: 'Strategy',

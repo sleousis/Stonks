@@ -10,25 +10,36 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { CalendarsService, type NewsQuery } from '../../api/calendars.service';
 import type { DividendEvent, EarningsEvent, EconomicEvent, FilingEvent } from '../../api/models';
+
+import { CalendarsService, type NewsQuery } from '../../api/calendars.service';
 import { SessionService } from '../../core/auth/session.service';
-import { isoDay } from '../../core/format/format';
+import { formatDate, isoDay } from '../../core/format/format';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
-import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { DataPlanNote } from '../../shared/ui/data-plan-note';
+import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import {
+  type AgendaDay,
+  type AgendaItem,
   type CalendarScope,
+  KIND_LABELS,
   addDays,
+  agendaDayLabel,
+  dividendItem,
+  earningsItem,
+  economicItem,
   economicRelease,
   economicValue,
+  filingItem,
   filingItemsLabel,
+  groupByDay,
   importanceLabel,
   parseCountries,
   parseTickers,
+  relativeDay,
   safeUrl,
   scopeQuery,
   timingLabel,
@@ -36,7 +47,36 @@ import {
 } from './calendar-view';
 import { NewsPanel } from './news-panel';
 
-type Tab = 'earnings' | 'dividends' | 'economic' | 'filings' | 'news';
+type Tab = 'all' | 'earnings' | 'dividends' | 'economic' | 'filings' | 'news';
+
+/** How one kind of event shows: the day agenda, or the sortable table. */
+export type CalendarLayout = 'agenda' | 'table';
+
+export const CALENDAR_VIEW_KEY = 'stonks.calendar.view';
+
+const VIEWS: SegmentOption<CalendarLayout>[] = [
+  { value: 'agenda', label: 'Agenda' },
+  { value: 'table', label: 'Table' },
+];
+
+function storedView(): CalendarLayout {
+  try {
+    return localStorage.getItem(CALENDAR_VIEW_KEY) === 'table' ? 'table' : 'agenda';
+  } catch {
+    return 'agenda';
+  }
+}
+
+/** An economic figure column, in the release's own unit (old calendar.page.ts:58). */
+function economicFigure(
+  key: 'actual' | 'estimate' | 'previous',
+  label: string,
+): TableColumn<EconomicEvent> {
+  return { key, label, format: 'number', help: false, display: (e) => economicValue(e[key], e) };
+}
+
+/** Rows shown before "Show more". */
+const ROW_STEP = 120;
 
 const SCOPES: SegmentOption<CalendarScope>[] = [
   { value: 'holdings', label: 'Your holdings' },
@@ -54,20 +94,6 @@ interface DayRange {
   end: string;
 }
 
-/** An economic figure with its unit: "2.5%", "210K jobs". Sorts by the number. */
-function economicFigure(
-  key: 'actual' | 'estimate' | 'previous',
-  label: string,
-): TableColumn<EconomicEvent> {
-  return {
-    key,
-    label,
-    format: 'number',
-    help: false,
-    display: (e) => economicValue(e[key], e),
-  };
-}
-
 /**
  * Earnings, ex-dividend dates and economic releases for your holdings, a
  * watchlist, some tickers or the whole market, the SEC filings (8-K) of
@@ -83,341 +109,16 @@ function economicFigure(
     RouterLink,
     PageHeader,
     Segmented,
-    DataTable,
-    TableCell,
     LoadingState,
     ErrorState,
     EmptyState,
     NewsPanel,
     DataPlanNote,
+    DataTable,
+    TableCell,
   ],
-  template: `
-    <app-page-header
-      title="Calendar"
-      description="Earnings, ex-dividend dates, economic releases and SEC filings for what you hold or watch, and the news on them."
-    />
-    <app-data-plan-note kind="calendars" />
-
-    <section class="panel filters" aria-labelledby="cal-filter-title">
-      <div class="panel-head">
-        <h2 id="cal-filter-title">Whose events</h2>
-      </div>
-      <form class="panel-body form" novalidate (submit)="$event.preventDefault(); apply()">
-        <app-segmented
-          label="Whose events"
-          [options]="scopes"
-          [value]="scope()"
-          (valueChange)="scope.set($any($event))"
-        />
-
-        @if (scope() === 'watchlists') {
-          <div class="field">
-            <label for="cal-watchlist">Watchlist</label>
-            <select
-              id="cal-watchlist"
-              class="input"
-              (change)="watchlistId.set($any($event.target).value || null)"
-            >
-              <option value="" [selected]="!watchlistId()">All your watchlists</option>
-              @for (w of watchlists.lists(); track w.id) {
-                <option [value]="w.id" [selected]="watchlistId() === w.id">{{ w.name }}</option>
-              }
-            </select>
-          </div>
-        } @else if (scope() === 'tickers') {
-          <div class="field">
-            <label for="cal-tickers">Tickers</label>
-            <input
-              id="cal-tickers"
-              class="input"
-              autocapitalize="characters"
-              spellcheck="false"
-              placeholder="AAPL.US, MSFT.US"
-              aria-describedby="cal-tickers-hint"
-              [value]="tickersText()"
-              (input)="tickersText.set($any($event.target).value)"
-              (change)="apply()"
-            />
-            <span id="cal-tickers-hint" class="hint">Separate with commas or spaces.</span>
-          </div>
-        } @else if (scope() === 'holdings') {
-          <p class="hint">What your portfolios hold now.</p>
-        } @else {
-          <p class="hint">Every event we have. Economic releases show for every choice.</p>
-        }
-
-        <div class="dates">
-          <div class="field">
-            <label for="cal-start">From</label>
-            <input
-              id="cal-start"
-              class="input num"
-              type="date"
-              [value]="start()"
-              (change)="setRange({ start: $any($event.target).value })"
-            />
-          </div>
-          <div class="field">
-            <label for="cal-end">To</label>
-            <input
-              id="cal-end"
-              class="input num"
-              type="date"
-              [value]="end()"
-              (change)="setRange({ end: $any($event.target).value })"
-            />
-          </div>
-        </div>
-        @if (rangeError(); as e) {
-          <p class="error" role="alert">{{ e }}</p>
-        }
-        @if (scope() === 'tickers') {
-          <div class="actions">
-            <button type="submit" class="btn">Show events</button>
-          </div>
-        }
-      </form>
-    </section>
-
-    <div class="tabs">
-      <app-segmented
-        label="Show"
-        [options]="tabOptions()"
-        [value]="tab()"
-        (valueChange)="tab.set($any($event))"
-      />
-    </div>
-
-    @if (tab() === 'news') {
-      <app-news-panel [query]="newsQuery()" />
-    } @else {
-      <section class="panel panel-flush" aria-labelledby="cal-events-title">
-        <div class="panel-head">
-          <h2 id="cal-events-title">{{ tabTitle() }}</h2>
-        </div>
-        @if (tab() === 'economic') {
-          <form
-            class="panel-body countries"
-            novalidate
-            (submit)="$event.preventDefault(); applyCountries()"
-          >
-            <div class="field">
-              <label for="cal-countries">Countries</label>
-              <input
-                id="cal-countries"
-                class="input"
-                autocapitalize="characters"
-                spellcheck="false"
-                placeholder="US, DE, EU"
-                aria-describedby="cal-countries-hint"
-                [value]="countriesText()"
-                (input)="countriesText.set($any($event.target).value)"
-                (change)="applyCountries()"
-              />
-              <span id="cal-countries-hint" class="hint"
-                >Two-letter codes. Leave empty for every country.</span
-              >
-            </div>
-          </form>
-        }
-        @if (!query()) {
-          <app-empty-state
-            title="Name some tickers"
-            message="Type the tickers whose events you want, then show them."
-          />
-        } @else if (shown().error(); as err) {
-          <app-error-state
-            title="Could not load the calendar"
-            [error]="err"
-            (retry)="shown().reload()"
-          />
-        } @else if (!shown().hasValue()) {
-          <app-loading-state label="Loading the calendar" [rows]="5" />
-        } @else {
-          @let v = shown().value()!;
-          @if (v.truncated) {
-            <p class="callout note" data-tone="warn" role="status">
-              Only the first events show. Pick fewer days or fewer tickers to see them all.
-            </p>
-          }
-          @switch (tab()) {
-            @case ('earnings') {
-              @if (v.earnings.length === 0) {
-                <app-empty-state title="No earnings in these days" [message]="emptyMessage()" />
-              } @else {
-                <app-data-table
-                  caption="Earnings reports"
-                  [rows]="v.earnings"
-                  [columns]="earningsColumns"
-                  [rowKey]="earningsKey"
-                  [initialSort]="{ key: 'report_date', dir: 'asc' }"
-                  [pageSize]="50"
-                >
-                  <ng-template appCell="ticker" [appCellOf]="v.earnings" let-e>
-                    <a class="ticker-link" [routerLink]="['/charts', e.ticker]">{{ e.ticker }}</a>
-                  </ng-template>
-                </app-data-table>
-              }
-            }
-            @case ('dividends') {
-              @if (v.dividends.length === 0) {
-                <app-empty-state
-                  title="No ex-dividend dates in these days"
-                  [message]="emptyMessage()"
-                />
-              } @else {
-                <app-data-table
-                  caption="Ex-dividend dates"
-                  [rows]="v.dividends"
-                  [columns]="dividendColumns"
-                  [rowKey]="dividendKey"
-                  [initialSort]="{ key: 'ex_date', dir: 'asc' }"
-                  [pageSize]="50"
-                >
-                  <ng-template appCell="ticker" [appCellOf]="v.dividends" let-d>
-                    <a class="ticker-link" [routerLink]="['/charts', d.ticker]">{{ d.ticker }}</a>
-                  </ng-template>
-                </app-data-table>
-              }
-            }
-            @case ('economic') {
-              @if (v.economic.length === 0) {
-                <app-empty-state
-                  title="No economic releases in these days"
-                  message="Releases arrive with the morning calendar update. Try more days or other countries."
-                />
-              } @else {
-                <app-data-table
-                  caption="Economic releases"
-                  [rows]="v.economic"
-                  [columns]="economicColumns"
-                  [rowKey]="economicKey"
-                  [initialSort]="{ key: 'event_time', dir: 'asc' }"
-                  [pageSize]="50"
-                />
-              }
-            }
-            @case ('filings') {
-              @let filings = v.filings ?? [];
-              @if (filings.length === 0) {
-                <app-empty-state
-                  title="No filings in these days"
-                  [message]="filingsEmptyMessage()"
-                />
-              } @else {
-                <app-data-table
-                  caption="SEC filings"
-                  [rows]="filings"
-                  [columns]="filingColumns"
-                  [rowKey]="filingKey"
-                  [initialSort]="{ key: 'accepted_at', dir: 'desc' }"
-                  [pageSize]="50"
-                >
-                  <ng-template appCell="ticker" [appCellOf]="filings" let-f>
-                    <a class="ticker-link" [routerLink]="['/charts', f.ticker]">{{ f.ticker }}</a>
-                  </ng-template>
-                  <ng-template appCell="url" [appCellOf]="filings" let-f>
-                    @if (safeUrl(f.url); as href) {
-                      <a class="filing-link" [href]="href" target="_blank" rel="noopener noreferrer"
-                        >Open on SEC<span class="visually-hidden">
-                          : {{ f.form }} of {{ f.ticker }}, opens in a new tab</span
-                        ></a
-                      >
-                    } @else {
-                      <span class="muted">No link</span>
-                    }
-                  </ng-template>
-                </app-data-table>
-              }
-            }
-          }
-        }
-      </section>
-    }
-  `,
-  styles: `
-    @use 'breakpoints' as bp;
-    :host {
-      display: grid;
-      gap: var(--space-4);
-      min-width: 0;
-    }
-    .form {
-      display: grid;
-      gap: var(--space-3);
-    }
-    /* From and To share the row. A date input has a wide intrinsic size,
-       so the fields and inputs may shrink below it and never push the panel. */
-    .dates {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--space-3);
-      max-width: 26rem;
-      min-width: 0;
-    }
-    .dates .field,
-    .dates .input {
-      min-width: 0;
-    }
-    .dates .input {
-      width: 100%;
-      padding-inline: var(--space-2);
-    }
-    .field select {
-      max-width: 20rem;
-    }
-    .hint {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
-    }
-    .error {
-      font-size: var(--text-xs);
-      color: var(--color-loss);
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-    }
-    /* The events panel is flush for its table: the countries form keeps
-       the panel padding. */
-    .panel-body.countries {
-      max-width: 26rem;
-      padding: var(--space-4);
-      @include bp.phone {
-        padding: var(--space-3);
-      }
-    }
-    /* 44px targets on phones, like every link in a row card. */
-    .ticker-link {
-      font-weight: var(--weight-semibold);
-      display: inline-flex;
-      align-items: center;
-      min-height: var(--touch-min);
-      padding-block: var(--space-2);
-      @include bp.from-tablet {
-        min-height: 0;
-        padding-block: 0;
-      }
-    }
-    .filing-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: var(--touch-min);
-      @include bp.from-tablet {
-        min-height: 24px;
-      }
-    }
-    .muted {
-      color: var(--color-ink-3);
-    }
-    .note {
-      margin: var(--space-3) var(--space-4);
-      @include bp.phone {
-        margin: var(--space-3);
-      }
-    }
-  `,
+  templateUrl: './calendar.page.html',
+  styleUrl: './calendar.page.scss',
 })
 export class CalendarPage implements OnInit {
   private readonly api = inject(CalendarsService);
@@ -451,7 +152,9 @@ export class CalendarPage implements OnInit {
   protected readonly end = computed(() => this.range().end);
   protected readonly countriesText = signal('');
   private readonly countries = signal<readonly string[]>([]);
-  protected readonly tab = signal<Tab>('earnings');
+  protected readonly tab = signal<Tab>('all');
+  /** How many agenda rows show; "Show more" adds a step. */
+  protected readonly limit = signal(ROW_STEP);
 
   protected readonly rangeError = computed(() => windowError(this.start(), this.end()));
 
@@ -506,6 +209,10 @@ export class CalendarPage implements OnInit {
     const v = this.calendar.hasValue() ? this.calendar.value() : null;
     const count = (n: number | undefined) => (n === undefined ? '' : ` (${n})`);
     return [
+      {
+        value: 'all',
+        label: `All${count(v ? v.earnings.length + v.dividends.length + v.economic.length : undefined)}`,
+      },
       { value: 'earnings', label: `Earnings${count(v?.earnings.length)}` },
       { value: 'dividends', label: `Ex-dividend${count(v?.dividends.length)}` },
       { value: 'economic', label: `Economic${count(v?.economic.length)}` },
@@ -522,10 +229,145 @@ export class CalendarPage implements OnInit {
         return 'Economic releases';
       case 'filings':
         return 'SEC filings';
-      default:
+      case 'earnings':
         return 'Earnings reports';
+      default:
+        return 'Coming up';
     }
   });
+
+  /** The events of the open tab, grouped by day. */
+  protected readonly agenda = computed<AgendaDay[]>(() => {
+    const read = this.shown();
+    if (!read.hasValue()) return [];
+    const v = read.value();
+    const tab = this.tab();
+    const items: AgendaItem[] = [];
+    if (tab === 'all' || tab === 'earnings') items.push(...v.earnings.map(earningsItem));
+    if (tab === 'all' || tab === 'dividends') items.push(...v.dividends.map(dividendItem));
+    if (tab === 'all' || tab === 'economic') items.push(...v.economic.map(economicItem));
+    if (tab === 'filings') items.push(...(v.filings ?? []).map(filingItem));
+    return groupByDay(items, tab === 'filings');
+  });
+
+  protected readonly eventCount = computed(() =>
+    this.agenda().reduce((n, d) => n + d.items.length, 0),
+  );
+
+  /** The days shown, cut after `limit` rows. */
+  protected readonly shownDays = computed<AgendaDay[]>(() => {
+    let left = this.limit();
+    const out: AgendaDay[] = [];
+    for (const d of this.agenda()) {
+      if (left <= 0) break;
+      out.push(d.items.length <= left ? d : { day: d.day, items: d.items.slice(0, left) });
+      left -= d.items.length;
+    }
+    return out;
+  });
+
+  /** "3 earnings reports, 1 ex-dividend date and 4 releases from 2026-10-12 to 2026-11-11." */
+  protected readonly standfirst = computed(() => {
+    const base =
+      'Earnings, ex-dividend dates, economic releases and SEC filings for what you hold or watch.';
+    if (!this.calendar.hasValue()) return base;
+    const v = this.calendar.value();
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    const parts = [
+      plural(v.earnings.length, 'earnings report', 'earnings reports'),
+      plural(v.dividends.length, 'ex-dividend date', 'ex-dividend dates'),
+      plural(v.economic.length, 'economic release', 'economic releases'),
+    ];
+    const { start, end } = this.ahead();
+    return `${parts[0]}, ${parts[1]} and ${parts[2]} from ${formatDate(start)} to ${formatDate(end)}.`;
+  });
+
+  /**
+   * Each single kind of event can also show as the sortable table it was
+   * before the agenda (old calendar.page.ts:248), 50 rows a page. The choice
+   * is remembered on this device.
+   */
+  protected readonly views = VIEWS;
+  protected readonly view = signal<CalendarLayout>(storedView());
+  protected readonly tableView = computed(
+    () => this.view() === 'table' && this.tab() !== 'all' && this.tab() !== 'news',
+  );
+  protected pickView(view: CalendarLayout): void {
+    this.view.set(view);
+    try {
+      localStorage.setItem(CALENDAR_VIEW_KEY, view);
+    } catch {
+      // Storage is off: the choice lasts for this visit only.
+    }
+  }
+
+  protected readonly earningsColumns: TableColumn<EarningsEvent>[] = [
+    { key: 'report_date', label: 'Date', format: 'date' },
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'name', label: 'Company', mobile: 'hide' },
+    { key: 'when', label: 'When', value: (e) => timingLabel(e.before_after_market) },
+    { key: 'period_end', label: 'Quarter ending', format: 'date', mobile: 'hide' },
+    { key: 'eps_estimate', label: 'EPS estimate', format: 'money', currency: (e) => e.currency },
+    { key: 'eps_actual', label: 'EPS actual', format: 'money', currency: (e) => e.currency },
+    {
+      key: 'surprise',
+      label: 'Surprise',
+      format: 'signedPercent',
+      tone: true,
+      value: (e) => (typeof e.surprise_percent === 'number' ? e.surprise_percent / 100 : null),
+      mobile: 'hide',
+    },
+  ];
+  protected readonly dividendColumns: TableColumn<DividendEvent>[] = [
+    { key: 'ex_date', label: 'Ex-dividend', format: 'date' },
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'name', label: 'Company', mobile: 'hide' },
+    { key: 'amount', label: 'Amount', format: 'money', currency: (d) => d.currency },
+    { key: 'record_date', label: 'Record', format: 'date', mobile: 'hide' },
+    { key: 'pay_date', label: 'Paid', format: 'date' },
+  ];
+  protected readonly economicColumns: TableColumn<EconomicEvent>[] = [
+    { key: 'event_time', label: 'Time', format: 'datetime' },
+    { key: 'event_type', label: 'Release', mobile: 'title', value: (e) => economicRelease(e) },
+    { key: 'country', label: 'Country' },
+    { key: 'importance', label: 'Importance', value: (e) => importanceLabel(e.importance) },
+    { key: 'period', label: 'Period', mobile: 'hide' },
+    economicFigure('actual', 'Actual'),
+    economicFigure('estimate', 'Estimate'),
+    { ...economicFigure('previous', 'Previous'), mobile: 'hide' },
+  ];
+  protected readonly filingColumns: TableColumn<FilingEvent>[] = [
+    { key: 'accepted_at', label: 'Filed', format: 'datetime' },
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'name', label: 'Company', mobile: 'hide' },
+    { key: 'form', label: 'Form' },
+    {
+      key: 'items',
+      label: 'What it announces',
+      value: (f) => filingItemsLabel(f),
+      sortable: false,
+    },
+    { key: 'url', label: 'Document', sortable: false },
+  ];
+  protected readonly safeUrl = safeUrl;
+  protected readonly filingKey = (f: FilingEvent) => `${f.ticker}|${f.accepted_at}|${f.form}`;
+  protected readonly earningsKey = (e: EarningsEvent) => `${e.ticker}|${e.period_end}`;
+  protected readonly dividendKey = (d: DividendEvent) => `${d.ticker}|${d.ex_date}`;
+  protected readonly economicKey = (e: EconomicEvent) =>
+    `${e.country}|${e.event_time}|${e.event_type}|${e.comparison}`;
+
+  protected readonly kindLabels = KIND_LABELS;
+  protected readonly dayLabel = agendaDayLabel;
+  protected readonly relative = (day: string) => relativeDay(day);
+
+  protected showMore(): void {
+    this.limit.update((n) => n + ROW_STEP);
+  }
+
+  protected pickTab(tab: Tab): void {
+    this.tab.set(tab);
+    this.limit.set(ROW_STEP);
+  }
 
   protected readonly emptyMessage = computed(() => {
     switch (this.scope()) {
@@ -546,65 +388,6 @@ export class CalendarPage implements OnInit {
       ? 'Filings show for your holdings, a watchlist or the tickers you name.'
       : 'Filings are past events: pick an earlier From date to see what these companies filed.',
   );
-
-  protected readonly earningsColumns: TableColumn<EarningsEvent>[] = [
-    { key: 'report_date', label: 'Date', format: 'date' },
-    { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'name', label: 'Company', mobile: 'hide' },
-    { key: 'when', label: 'When', value: (e) => timingLabel(e.before_after_market) },
-    { key: 'period_end', label: 'Quarter ending', format: 'date', mobile: 'hide' },
-    { key: 'eps_estimate', label: 'EPS estimate', format: 'money', currency: (e) => e.currency },
-    { key: 'eps_actual', label: 'EPS actual', format: 'money', currency: (e) => e.currency },
-    {
-      key: 'surprise',
-      label: 'Surprise',
-      format: 'signedPercent',
-      tone: true,
-      value: (e) => (typeof e.surprise_percent === 'number' ? e.surprise_percent / 100 : null),
-      mobile: 'hide',
-    },
-  ];
-
-  protected readonly dividendColumns: TableColumn<DividendEvent>[] = [
-    { key: 'ex_date', label: 'Ex-dividend', format: 'date' },
-    { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'name', label: 'Company', mobile: 'hide' },
-    { key: 'amount', label: 'Amount', format: 'money', currency: (d) => d.currency },
-    { key: 'record_date', label: 'Record', format: 'date', mobile: 'hide' },
-    { key: 'pay_date', label: 'Paid', format: 'date' },
-  ];
-
-  protected readonly economicColumns: TableColumn<EconomicEvent>[] = [
-    { key: 'event_time', label: 'Time', format: 'datetime' },
-    { key: 'event_type', label: 'Release', mobile: 'title', value: (e) => economicRelease(e) },
-    { key: 'country', label: 'Country' },
-    { key: 'importance', label: 'Importance', value: (e) => importanceLabel(e.importance) },
-    { key: 'period', label: 'Period', mobile: 'hide' },
-    economicFigure('actual', 'Actual'),
-    economicFigure('estimate', 'Estimate'),
-    { ...economicFigure('previous', 'Previous'), mobile: 'hide' },
-  ];
-
-  protected readonly filingColumns: TableColumn<FilingEvent>[] = [
-    { key: 'accepted_at', label: 'Filed', format: 'datetime' },
-    { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'name', label: 'Company', mobile: 'hide' },
-    { key: 'form', label: 'Form' },
-    {
-      key: 'items',
-      label: 'What it announces',
-      value: (f) => filingItemsLabel(f),
-      sortable: false,
-    },
-    { key: 'url', label: 'Document', sortable: false },
-  ];
-
-  protected readonly safeUrl = safeUrl;
-  protected readonly filingKey = (f: FilingEvent) => `${f.ticker}|${f.accepted_at}|${f.form}`;
-  protected readonly earningsKey = (e: EarningsEvent) => `${e.ticker}|${e.period_end}`;
-  protected readonly dividendKey = (d: DividendEvent) => `${d.ticker}|${d.ex_date}`;
-  protected readonly economicKey = (e: EconomicEvent) =>
-    `${e.country}|${e.event_time}|${e.event_type}|${e.comparison}`;
 
   constructor() {
     // Watchlists are personal: nothing to read for someone not signed in.

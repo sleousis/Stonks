@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 import type { MonthlyReturn } from '../../api/models';
-import { formatPercent } from '../../core/format/format';
+import { MISSING, formatPercent } from '../../core/format/format';
 
 export const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -120,8 +120,17 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
             <tr>
               <th scope="row" class="num">{{ y.year }}</th>
               @for (c of y.cells; track c.month) {
-                <td class="num cell" [attr.data-tone]="c.tone" [attr.data-strength]="c.strength">
-                  {{ c.text }}
+                <td
+                  class="num cell"
+                  [class.none]="c.value === null"
+                  [attr.data-tone]="c.tone"
+                  [attr.data-strength]="c.strength"
+                >
+                  @if (c.value === null) {
+                    <span aria-hidden="true">{{ missing }}</span>
+                  } @else {
+                    {{ c.text }}
+                  }
                 </td>
               }
               <td class="num total" [attr.data-tone]="y.totalTone">{{ y.total }}</td>
@@ -187,7 +196,7 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
       font-weight: var(--weight-semibold);
     }
     .year-total {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .year-total .total {
       padding: 0 var(--space-1);
@@ -206,11 +215,11 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
       gap: var(--space-2);
       padding: var(--space-2);
       border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      background: var(--sunk);
       font-size: var(--text-sm);
     }
     .year-months dt {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .year-months dd {
       margin: 0;
@@ -222,48 +231,55 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
     .months {
       width: 100%;
       min-width: 44rem;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 2px 0;
       font-size: var(--text-sm);
     }
     th {
       padding: var(--space-1) var(--space-2);
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-weight: var(--weight-medium);
       text-align: right;
     }
     th[scope='row'] {
       text-align: left;
-      color: var(--color-ink);
+      color: var(--ink);
     }
+    /* No boxes: only months with a return are tinted, a hairline between years. */
     td {
       padding: var(--space-1) var(--space-2);
-      border: 1px solid var(--color-surface);
       text-align: right;
       white-space: nowrap;
     }
+    tbody tr + tr > * {
+      border-top: 1px solid var(--rule);
+    }
+    td.none {
+      color: var(--muted);
+    }
     .cell[data-tone='gain'],
     .total[data-tone='gain'] {
-      background: var(--color-gain-soft);
-      color: var(--color-gain);
+      background: var(--up-soft);
+      color: var(--up);
     }
     .cell[data-tone='loss'],
     .total[data-tone='loss'] {
-      background: var(--color-loss-soft);
-      color: var(--color-loss);
+      background: var(--down-soft);
+      color: var(--down);
     }
     .cell[data-tone='gain'][data-strength='2'] {
-      background: color-mix(in srgb, var(--color-gain) 22%, var(--color-gain-soft));
+      background: color-mix(in srgb, var(--up) 22%, var(--up-soft));
     }
     .cell[data-tone='gain'][data-strength='3'] {
-      background: color-mix(in srgb, var(--color-gain) 40%, var(--color-gain-soft));
-      color: var(--color-ink);
+      background: color-mix(in srgb, var(--up) 40%, var(--up-soft));
+      color: var(--ink);
     }
     .cell[data-tone='loss'][data-strength='2'] {
-      background: color-mix(in srgb, var(--color-loss) 22%, var(--color-loss-soft));
+      background: color-mix(in srgb, var(--down) 22%, var(--down-soft));
     }
     .cell[data-tone='loss'][data-strength='3'] {
-      background: color-mix(in srgb, var(--color-loss) 40%, var(--color-loss-soft));
-      color: var(--color-ink);
+      background: color-mix(in srgb, var(--down) 40%, var(--down-soft));
+      color: var(--ink);
     }
     .total {
       font-weight: var(--weight-semibold);
@@ -289,5 +305,6 @@ export class MonthlyReturns {
   readonly caption = input.required<string>();
 
   protected readonly monthNames = MONTHS;
+  protected readonly missing = MISSING;
   protected readonly rows = computed(() => yearRows(this.months()));
 }

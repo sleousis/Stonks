@@ -87,8 +87,19 @@ describe('DemoPage', () => {
     await tick();
     fixture.detectChanges();
     expect(root.querySelector('[role="note"]')?.textContent).toContain('Sample data');
+    // A sample paper book: the band carries the PAPER stamp, never LIVE.
+    expect(root.querySelector('.demo-band app-mode-stamp')?.textContent).toContain('PAPER');
     expect(root.textContent).toContain('ACME.DEMO');
     expect(root.textContent).toContain('$112,000.00');
+  });
+
+  it('keeps every holding column on phones, as the old cards did', async () => {
+    const root = (await render(DEMO)).nativeElement as HTMLElement;
+    const headers = [...root.querySelectorAll('th')].map((th) => th.textContent?.trim() ?? '');
+    for (const label of ['Shares', 'Price', 'Weight', 'P&L']) {
+      expect(headers.some((h) => h.startsWith(label))).toBe(true);
+    }
+    expect(root.querySelectorAll('td.hide-phone, th.hide-phone').length).toBe(0);
   });
 
   it('hides money in privacy mode but keeps the return', async () => {

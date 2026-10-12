@@ -115,7 +115,9 @@ describe('HealthPage', () => {
     const overall = el.querySelector('.overall')!;
     expect(overall.getAttribute('data-level')).toBe('warning');
     expect(overall.textContent).toContain('2 of 5 checks failed');
-    expect(overall.textContent).toContain('Needs a look soon');
+    // The urgency words sit beside the headline again (old health.page.html:46).
+    expect(overall.querySelector('h2 .overall-count')?.textContent).toBe('Needs a look soon');
+    expect(overall.textContent).toContain('needs a look soon');
     expect(overall.textContent).toContain('API 1.2.3');
   });
 
@@ -196,9 +198,10 @@ describe('HealthPage', () => {
     expect(section.textContent).toContain('broker down');
   });
 
-  it('says when it last updated', async () => {
+  it('says when it last checked, once', async () => {
     await flushAll();
-    expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated just now');
+    expect(el.querySelector('app-page-header')?.textContent).toContain('Checked');
+    expect(el.querySelector('app-updated-ago')).toBeNull();
   });
 
   it('Refresh reloads the alerts too', async () => {

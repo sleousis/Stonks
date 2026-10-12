@@ -1,7 +1,4 @@
-<app-page-header
-  title="Studio"
-  description="Build a strategy, test it, put it on trial, then approve it when it earns it."
->
+<app-page-header title="Build a strategy" [description]="standfirst()">
   @if (!creating()) {
     <button
       actions
@@ -20,12 +17,12 @@
 
 <!-- Create ------------------------------------------------------------------>
 @if (creating()) {
-  <section class="panel create" aria-labelledby="create-title">
-    <div class="panel-head">
+  <section class="sheet-box create" aria-labelledby="create-title">
+    <div class="create-head">
       <h2 id="create-title">New draft</h2>
-      <button type="button" class="btn btn-tertiary" (click)="creating.set(false)">Cancel</button>
+      <button type="button" class="btn btn-ghost" (click)="creating.set(false)">Cancel</button>
     </div>
-    <form class="panel-body create-body" (submit)="$event.preventDefault(); create()">
+    <form class="create-body" (submit)="$event.preventDefault(); create()">
       <fieldset class="starts">
         <legend>Start from</legend>
         @if (templates.error()) {
@@ -85,13 +82,15 @@
 }
 
 <!-- Drafts ------------------------------------------------------------------>
-<section class="panel" aria-labelledby="drafts-title">
-  <div class="panel-head">
-    <h2 id="drafts-title">Drafts</h2>
-    @if (drafts.hasValue()) {
-      <span class="muted num">{{ drafts.value().total }} total</span>
-    }
-  </div>
+<section class="page-section section-flush" aria-labelledby="drafts-title">
+  <header class="section-head">
+    <h2 id="drafts-title">
+      Drafts
+      @if (drafts.hasValue()) {
+        <span class="count">{{ drafts.value().total }} total</span>
+      }
+    </h2>
+  </header>
   @if (!canLab()) {
     <div class="lock-note"><app-permission-note permission="lab.run" /></div>
   }
@@ -101,15 +100,32 @@
     <app-loading-state label="Loading drafts" [rows]="4" />
   } @else if (drafts.value().items.length === 0) {
     <app-empty-state
+      icon="doc"
       title="No drafts yet"
-      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then put it on trial."
-    >
-      @if (!creating()) {
-        <button type="button" class="btn btn-primary" [disabled]="!canLab()" (click)="openCreate()">
-          New draft
-        </button>
-      }
-    </app-empty-state>
+      message="A draft is a strategy you are building. Pick a starting point, test it, then put it on trial."
+    />
+    @if (!creating() && canLab()) {
+      <ul class="starters" aria-label="Start a draft from">
+        @for (o of starters(); track o.id) {
+          <li>
+            <button type="button" class="starter" (click)="startFrom(o)">
+              <span class="starter-title">{{ o.title }}</span>
+              <span class="starter-desc">{{ o.description }}</span>
+              <svg
+                class="chev"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="m6 3.5 4.5 4.5L6 12.5" />
+              </svg>
+            </button>
+          </li>
+        }
+      </ul>
+    }
   } @else {
     <ul class="drafts">
       @for (d of drafts.value().items; track d.id) {
@@ -137,7 +153,6 @@
               <a class="draft-name" [routerLink]="['/studio', d.id]">{{ d.name }}</a>
               <p class="draft-meta">
                 <span>{{ summary(d) }}</span>
-                <span aria-hidden="true">·</span>
                 <span>edited {{ d.updated_at | ago }}</span>
               </p>
             </div>
@@ -156,10 +171,10 @@
               }
             </div>
             <div class="draft-actions">
-              <a class="btn" [routerLink]="['/studio', d.id]">Open</a>
+              <a class="btn btn-compact" [routerLink]="['/studio', d.id]">Open</a>
               <button
                 type="button"
-                class="btn btn-tertiary"
+                class="btn btn-ghost"
                 [attr.data-rename-for]="d.id"
                 [disabled]="!canLab()"
                 (click)="startRename(d)"
@@ -168,7 +183,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-tertiary danger"
+                class="btn btn-ghost danger"
                 [disabled]="deletingId() === d.id || !canLab()"
                 (click)="remove(d)"
               >

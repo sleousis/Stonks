@@ -38,7 +38,7 @@
   align-items: flex-end;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
 
   .field {
     flex: 1 1 16rem;
@@ -58,17 +58,22 @@
   }
 }
 
-// Tabs -----------------------------------------------------------------------
+// Tabs: an underline row. The step number is a small mono mark, the
+// current step in accent.
 .tabs {
   display: flex;
-  gap: var(--space-1);
-  margin-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-5);
+  margin: var(--space-2) 0 var(--space-6);
+  border-bottom: 1px solid var(--rule);
   overflow-x: auto;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
+  }
+
+  @include bp.phone {
+    gap: 0;
   }
 }
 
@@ -76,30 +81,28 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 36px;
-  padding: 0 var(--space-3);
+  min-height: var(--touch-min);
+  padding: 0 2px;
   border: 0;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   background: transparent;
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+  color: var(--muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-label);
   cursor: pointer;
   white-space: nowrap;
   transition:
-    color var(--dur-fast) var(--ease),
-    background-color var(--dur-fast) var(--ease);
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
   &:hover {
-    background: var(--color-hover);
-    color: var(--color-ink);
+    color: var(--ink);
   }
 
   &[aria-selected='true'] {
-    color: var(--color-ink);
-    font-weight: var(--weight-semibold);
-    border-bottom-color: var(--color-accent);
+    border-bottom-color: var(--ink);
+    color: var(--ink);
   }
 
   &:focus-visible {
@@ -109,95 +112,115 @@
   @include bp.phone {
     flex: 1 1 0;
     justify-content: center;
-    min-height: var(--touch-min);
-    padding: 0 var(--space-2);
-  }
-
-  @include bp.coarse {
-    min-height: var(--touch-min);
   }
 }
 
-// The step number: a small square mark, filled on the current step.
 .tab-step {
   display: inline-grid;
   place-items: center;
   width: 18px;
   height: 18px;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-3);
+  border-radius: var(--r-tag);
+  background: var(--sunk);
+  color: var(--muted);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
 
   [aria-selected='true'] & {
-    background: var(--color-primary);
-    color: var(--color-primary-ink);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 }
 
 .tab-badge {
   min-width: 18px;
   padding: 0 5px;
-  border-radius: var(--radius-pill);
-  background: var(--color-loss-soft);
-  color: var(--color-loss);
-  font-size: var(--text-xs);
+  border-radius: var(--r-pill);
+  background: var(--down-soft);
+  color: var(--down);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   line-height: 18px;
   text-align: center;
 }
 
-// Build ----------------------------------------------------------------------
-.json > summary {
-  min-height: var(--touch-min);
-  cursor: pointer;
-}
-
+// Build: two panes from 1100px. The rules on the left, the check (and the
+// JSON for admins) on the right, sticky under the chrome.
 .build-grid {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--section-gap) var(--column-gap);
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 
   @include bp.from-desktop {
-    // Two columns only when the JSON panel is there (admins).
-    &:has(> .json) {
-      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    }
-
-    .json {
-      position: sticky;
-      top: var(--space-4);
-    }
+    grid-template-columns: minmax(0, 1fr) 380px;
   }
 }
 
-.head-actions {
+.preview {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+
+  @include bp.from-desktop {
+    position: sticky;
+    top: calc(var(--header-h) + var(--space-6));
+  }
+}
+
+.check-body {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.check-btn {
+  width: 100%;
+}
+
+.json {
+  border-top: 2px solid var(--rule-strong);
+}
+
+.json-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+  min-height: var(--touch-min);
+  list-style: none;
+  cursor: pointer;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  h2 {
+    font-size: var(--text-section);
+  }
+
+  .muted {
+    margin-left: auto;
+    font-size: var(--text-sm);
+  }
 }
 
-// Notices and problems are callouts (warn, loss) set inside the panel.
+.json-body {
+  padding-top: var(--space-3);
+}
+
 .notice {
-  margin: var(--space-4) var(--space-4) 0;
+  width: 100%;
 
   [role='tabpanel'] > & {
     margin: 0 0 var(--space-4);
   }
-
-  @include bp.phone {
-    margin: var(--space-3) var(--space-3) 0;
-  }
 }
 
 .issues {
-  margin: var(--space-4) var(--space-4) 0;
-
-  @include bp.phone {
-    margin: var(--space-3) var(--space-3) 0;
-  }
+  width: 100%;
 
   > ul {
     max-width: none;
@@ -213,9 +236,9 @@
 }
 
 .issues-title {
+  color: var(--down);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: var(--color-loss);
 }
 
 .issue-link {
@@ -227,7 +250,7 @@
   padding: var(--space-1) 0;
   border: 0;
   background: none;
-  color: var(--color-ink);
+  color: var(--ink);
   font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
@@ -246,31 +269,25 @@
 }
 
 .smoke {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  justify-items: start;
   gap: var(--space-2);
-  margin: var(--space-4) var(--space-4) 0;
+  width: 100%;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
   font-size: var(--text-sm);
-
-  @include bp.phone {
-    margin: var(--space-3) var(--space-3) 0;
-  }
-
-  .error {
-    flex-basis: 100%;
-  }
 }
 
 .error {
-  font-size: var(--text-xs);
-  color: var(--color-loss);
+  color: var(--down);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .hint {
-  font-size: var(--text-xs);
-  color: var(--color-ink-3);
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 // Code drafts ----------------------------------------------------------------
@@ -292,9 +309,9 @@
   width: 100%;
   min-height: 24rem;
   padding: var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  border: 1px solid var(--rule-control);
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -308,7 +325,7 @@
   }
 
   &[aria-invalid='true'] {
-    border-color: var(--color-loss);
+    border-color: var(--down);
   }
 }
 
@@ -322,15 +339,20 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  margin: var(--space-4) calc(-1 * var(--gutter)) 0;
+  margin: var(--space-6) calc(-1 * var(--gutter)) 0;
   padding: var(--space-3) var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border-top: 1px solid var(--rule);
+  background: var(--raise);
   box-shadow: var(--shadow-overlay);
+
+  @include bp.phone {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    padding-bottom: var(--space-3);
+  }
 
   span {
     margin-right: auto;
     font-size: var(--text-sm);
-    color: var(--color-ink-2);
+    color: var(--ink-2);
   }
 }

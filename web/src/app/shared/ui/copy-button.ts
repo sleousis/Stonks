@@ -55,7 +55,7 @@ export function downloadText(filename: string, text: string): void {
     }
     .blocked {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
   `,
 })

@@ -1,10 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  type ElementRef,
+  DestroyRef,
+  ElementRef,
+  afterRenderEffect,
   computed,
+  inject,
   input,
   model,
+  signal,
+  viewChild,
   viewChildren,
 } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
@@ -25,9 +30,9 @@ export interface PageTab {
 }
 
 /**
- * The one tab style of the console (M4): an underline under the current
- * tab, 44px tall on phones and touch screens, scrolling sideways with a
- * fading edge when the tabs do not fit. Two kinds, one look:
+ * The one tab style of the console (M4): a 2px ink underline under the
+ * current tab over a 1px rule, 44px tall on phones and touch screens, scrolling sideways when the
+ * tabs do not fit, with an edge fading only while tabs hide past it. Two kinds, one look:
  *
  * - Links, when each view has its own address (Orders, Notifications):
  *
@@ -41,8 +46,8 @@ export interface PageTab {
  *
  * Segmented controls stay for filters and view switches inside a panel.
  *
- * `variant="sub"` is a second tab row under the first (Journal): smaller,
- * no rule, the current tab a soft pill, so it reads as sub-navigation.
+ * `variant="sub"` is a second tab row under the first (Journal): filter
+ * pills, the current one filled with ink, so it reads as sub-navigation.
  */
 @Component({
   selector: 'app-page-tabs',
@@ -51,7 +56,14 @@ export interface PageTab {
   host: { '[attr.data-variant]': 'variant()' },
   template: `
     @if (asLinks()) {
-      <nav class="tabs" [attr.aria-label]="label()">
+      <nav
+        #row
+        class="tabs"
+        [class.fade-start]="edges().start"
+        [class.fade-end]="edges().end"
+        [attr.aria-label]="label()"
+        (scroll)="measure()"
+      >
         @for (t of tabs(); track t.path ?? t.id) {
           <a
             class="tab"
@@ -65,7 +77,15 @@ export interface PageTab {
         }
       </nav>
     } @else {
-      <div class="tabs" role="tablist" [attr.aria-label]="label()">
+      <div
+        #row
+        class="tabs"
+        role="tablist"
+        [class.fade-start]="edges().start"
+        [class.fade-end]="edges().end"
+        [attr.aria-label]="label()"
+        (scroll)="measure()"
+      >
         @for (t of tabs(); track t.id; let i = $index) {
           <button
             #tab
@@ -95,16 +115,30 @@ export interface PageTab {
     :host {
       display: block;
       min-width: 0;
-      margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+      margin: calc(-1 * var(--space-2)) 0 var(--space-6);
     }
     .tabs {
       display: flex;
-      gap: var(--space-1);
-      border-bottom: 1px solid var(--color-border);
+      gap: var(--space-5);
+      border-bottom: 1px solid var(--rule);
       overflow-x: auto;
       scrollbar-width: none;
-      /* A fading right edge hints at tabs past the edge (m9). */
-      mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    }
+    /* An edge fades only while tabs hide past it (m9). */
+    .tabs.fade-end {
+      mask-image: linear-gradient(to left, transparent, #000 24px);
+    }
+    .tabs.fade-start {
+      mask-image: linear-gradient(to right, transparent, #000 24px);
+    }
+    .tabs.fade-start.fade-end {
+      mask-image: linear-gradient(
+        to right,
+        transparent,
+        #000 24px,
+        #000 calc(100% - 24px),
+        transparent
+      );
     }
     .tabs::-webkit-scrollbar {
       display: none;
@@ -112,50 +146,46 @@ export interface PageTab {
     .tab {
       display: inline-flex;
       align-items: center;
-      min-height: 36px;
+      min-height: 40px;
       margin-bottom: -1px;
-      padding: 0 var(--space-3);
+      padding: 0;
       border: 0;
       border-bottom: 2px solid transparent;
       background: none;
-      color: var(--color-ink-2);
+      color: var(--muted);
       font: inherit;
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      font-size: var(--text-md);
+      font-weight: var(--weight-label);
       text-decoration: none;
       white-space: nowrap;
       cursor: pointer;
       transition:
-        color var(--dur-fast) var(--ease),
-        background-color var(--dur-fast) var(--ease);
-    }
-    .tab:last-child {
-      margin-right: 24px;
+        color var(--dur-fast) var(--ease-out),
+        border-color var(--dur-fast) var(--ease-out);
     }
     .badge {
       min-width: 1.25rem;
       margin-left: var(--space-2);
-      padding: 0 var(--space-1);
-      border-radius: var(--radius-pill, 999px);
-      background: var(--color-ink);
-      color: var(--color-surface);
-      font-size: var(--text-xs);
+      padding: 0 6px;
+      border-radius: var(--r-pill);
+      background: var(--ink);
+      color: var(--bg);
+      font-size: var(--text-2xs);
+      line-height: 18px;
       text-align: center;
     }
     .tab:hover {
-      background: var(--color-hover);
-      color: var(--color-ink);
+      color: var(--ink);
     }
     .tab.active {
-      color: var(--color-ink);
-      font-weight: var(--weight-semibold);
-      border-bottom-color: var(--color-accent);
+      border-bottom-color: var(--ink);
+      color: var(--ink);
     }
     .tab:focus-visible {
-      outline: 2px solid var(--color-focus);
+      outline: 2px solid var(--accent);
       outline-offset: -2px;
     }
-    /* Sub: a second-level row. No rule, 13px, the current tab a soft pill. */
+    /* Sub: a second-level row. No rule, the current tab a filter pill. */
     :host([data-variant='sub']) {
       margin-top: 0;
     }
@@ -164,33 +194,32 @@ export interface PageTab {
       border-bottom: 0;
     }
     :host([data-variant='sub']) .tab {
-      min-height: 30px;
+      min-height: 32px;
       margin-bottom: 0;
       padding: 0 var(--space-3);
-      border-bottom: 0;
-      border-radius: var(--radius-pill);
-      font-size: var(--text-sm);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-pill);
+      color: var(--ink-2);
+      font-size: 0.8125rem;
     }
     :host([data-variant='sub']) .tab.active {
-      background: var(--color-accent-soft);
-      color: var(--color-ink);
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--bg);
     }
     @include bp.phone {
+      .tabs {
+        gap: var(--space-4);
+      }
       .tab,
       :host([data-variant='sub']) .tab {
         min-height: var(--touch-min);
-        padding: 0 var(--space-2);
       }
     }
     @include bp.coarse {
       .tab,
       :host([data-variant='sub']) .tab {
         min-height: var(--touch-min);
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .tab {
-        transition: none;
       }
     }
   `,
@@ -208,6 +237,36 @@ export class PageTabs {
 
   protected readonly asLinks = computed(() => this.tabs().every((t) => !!t.path));
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('tab');
+  private readonly row = viewChild<ElementRef<HTMLElement>>('row');
+  /** Whether tabs hide past the start or end of the row. */
+  protected readonly edges = signal({ start: false, end: false });
+
+  constructor() {
+    const resize =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.measure());
+    let watched: HTMLElement | null = null;
+    inject(DestroyRef).onDestroy(() => resize?.disconnect());
+    afterRenderEffect(() => {
+      this.tabs();
+      const el = this.row()?.nativeElement ?? null;
+      if (el !== watched) {
+        if (watched) resize?.unobserve(watched);
+        if (el) resize?.observe(el);
+        watched = el;
+      }
+      this.measure();
+    });
+  }
+
+  /** Reads the scroll position into `edges`; called on scroll and resize. */
+  protected measure(): void {
+    const el = this.row()?.nativeElement;
+    const next = el
+      ? { start: el.scrollLeft > 1, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 }
+      : { start: false, end: false };
+    const now = this.edges();
+    if (now.start !== next.start || now.end !== next.end) this.edges.set(next);
+  }
 
   tabId(id: string): string {
     return `${this.idPrefix()}-tab-${id}`;

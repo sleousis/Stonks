@@ -83,13 +83,13 @@ describe('StatusPill forms', () => {
     expect(pillForm('something new', 'neutral')).toBe('lamp');
   });
 
-  it('shows the brand mark while working and a mark otherwise', () => {
+  it('shows a turning ring while working and a mark otherwise', () => {
     const fixture = TestBed.createComponent(StatusPill);
     fixture.componentRef.setInput('status', 'running');
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.getAttribute('data-form')).toBe('working');
-    expect(el.querySelector('app-brand-mark')).not.toBeNull();
+    expect(el.querySelector('.ring')).not.toBeNull();
     fixture.componentRef.setInput('status', 'filled');
     fixture.detectChanges();
     expect(el.getAttribute('data-form')).toBe('receipt');

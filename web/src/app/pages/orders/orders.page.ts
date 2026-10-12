@@ -12,7 +12,8 @@ import { LoadingState } from '../../shared/ui/states';
 import { OrdersTabs } from './orders-tabs';
 
 /**
- * Orders and the trading runs that produce them. The header and view tabs
+ * Orders and the trading runs that produce them. New order is a view tab,
+ * so the header keeps Rebalance and the two CSV downloads. The header and view tabs
  * (shared with Trade costs) stay put; the child routes (orders, fills, runs,
  * runs/:id) render below and report their freshness to the header through
  * RefreshStatus. With no portfolio, Orders and Fills point at opening one.
@@ -34,14 +35,11 @@ import { OrdersTabs } from './orders-tabs';
   template: `
     <app-page-header
       title="Orders"
-      description="Orders placed by trading runs and by hand, the fills they received, and the runs themselves."
+      description="Every order from your trading runs and by hand, with the fills it got."
     >
       <app-updated-ago [at]="status.updatedAt()" />
       <ng-container ngProjectAs="[actions]">
         @if (book() !== 'none') {
-          @if (!onNew()) {
-            <a class="btn btn-primary paired" routerLink="/orders/new">New order</a>
-          }
           <a class="btn" routerLink="/orders/rebalance">Rebalance</a>
           @if (showExports()) {
             <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
@@ -63,17 +61,6 @@ import { OrdersTabs } from './orders-tabs';
       <app-loading-state label="Loading your portfolios" [rows]="4" />
     }
   `,
-  styles: `
-    @use 'breakpoints' as bp;
-
-    /* Phones: New order and Rebalance share the first row of the header grid
-       and the two CSV downloads the second, so nothing sits alone. */
-    @include bp.phone {
-      .btn.btn-primary.paired {
-        grid-column: auto;
-      }
-    }
-  `,
 })
 export class OrdersPage {
   protected readonly status = inject(RefreshStatus);
@@ -90,9 +77,10 @@ export class OrdersPage {
   );
   /** On the runs tab the CSV downloads give way to the runner. */
   protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
-  /** On the ticket itself the New order button would point to itself. */
-  protected readonly onNew = computed(() => this.url().split(/[?#]/)[0] === '/orders/new');
-  /** The CSV downloads belong to the orders and fills lists only. */
+  /**
+   * Both CSV downloads on the orders and fills lists, as before the
+   * redesign: a trader on either list can take both files.
+   */
   protected readonly showExports = computed(() => {
     const path = this.url().split(/[?#]/)[0];
     return path === '/orders' || path.startsWith('/orders/fills');

@@ -130,6 +130,7 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
           } @else if (page(); as p) {
             @if (p.items.length === 0) {
               <app-empty-state
+                icon="doc"
                 title="No research sessions yet"
                 message="Start one with the form here, or ask the assistant in the chat to research a goal."
               />

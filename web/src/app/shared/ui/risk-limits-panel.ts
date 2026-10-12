@@ -175,7 +175,7 @@ export function shown(policy: RiskPolicy, f: LimitField): string {
       gap: var(--space-3);
     }
     .lead {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       max-width: 60ch;
     }
     .fields {
@@ -188,7 +188,7 @@ export function shown(policy: RiskPolicy, f: LimitField): string {
       }
     }
     .error {
-      color: var(--color-loss);
+      color: var(--down);
       font-size: var(--text-sm);
     }
     .actions {

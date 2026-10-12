@@ -29,8 +29,8 @@ textarea.input {
 }
 
 .input[readonly] {
-  background: var(--color-surface-2);
-  color: var(--color-ink-2);
+  background: var(--sunk);
+  color: var(--ink-2);
 }
 
 fieldset.source {
@@ -61,14 +61,14 @@ fieldset.group {
   padding: var(--space-3);
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  background: var(--sunk);
 
   legend {
     float: left;
     width: 100%;
     margin: 0;
     padding: 0;
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
     letter-spacing: normal;
@@ -102,7 +102,7 @@ fieldset.group {
     gap: var(--space-2);
     min-height: var(--touch-min);
     cursor: pointer;
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-weight: var(--weight-medium);
     list-style: none;
 

@@ -84,6 +84,57 @@ export class LivePage {
   protected readonly percent = (n: number | null | undefined) =>
     formatPercent(n ?? null, { signed: true });
 
+  /** One sentence from the data under the title. */
+  protected readonly standfirst = computed(() => {
+    if (!this.status.hasValue()) return 'Its price stream and how fast it decides.';
+    const list = this.engines();
+    if (!list.length) {
+      return this.status.value().streaming_enabled
+        ? 'Minute prices are on. No engine has reported yet.'
+        : 'No engine runs. Intraday trading is off.';
+    }
+    const trouble = this.troubled();
+    const lead =
+      list.length === 1
+        ? '1 engine reports.'
+        : `${formatNumber(list.length, { digits: 0 })} engines report.`;
+    if (trouble) return `${lead} ${trouble === 1 ? 'One needs' : `${trouble} need`} a look.`;
+    const last = list
+      .map((e) => e.last_dispatch_at)
+      .filter((v): v is string => !!v)
+      .sort()
+      .at(-1);
+    return last
+      ? `${lead} The last bar closed ${formatAgo(last)}.`
+      : `${lead} No bar has closed yet.`;
+  });
+
+  /** P&L today per portfolio as bars either side of zero, scaled to the largest. */
+  protected readonly chart = computed(() => {
+    if (!this.pnl.hasValue()) return [];
+    const rows = this.pnl
+      .value()
+      .filter((l) => l.row)
+      .map((l) => ({ id: l.id, name: l.name, value: l.row!.pnl }));
+    const top = Math.max(0, ...rows.map((r) => Math.abs(r.value)));
+    return rows.map((r) => ({ ...r, width: top > 0 ? (Math.abs(r.value) / top) * 100 : 0 }));
+  });
+  protected readonly chartSummary = computed(
+    () =>
+      'P&L today by portfolio: ' +
+      this.chart()
+        .map((b) => `${b.name} ${this.money(b.value)}`)
+        .join(', '),
+  );
+
+  protected ago(at: string | null | undefined): string {
+    return at ? formatAgo(at) : 'Never';
+  }
+
+  protected at(at: string | null | undefined): string {
+    return at ? formatDateTime(at) : '';
+  }
+
   protected when(at: string | null | undefined): string {
     return at ? `${formatAgo(at)}, ${formatDateTime(at)}` : 'Never';
   }

@@ -68,6 +68,7 @@ export function whenText(at: string | null | undefined): string {
         <app-loading-state label="Loading broker gateways" [rows]="2" />
       } @else if (gateways.value().gateways.length === 0) {
         <app-empty-state
+          icon="plug"
           compact
           title="No broker gateway"
           message="Trading at Interactive Brokers runs through a gateway. None is set up, so every portfolio trades on paper."
@@ -75,7 +76,7 @@ export function whenText(at: string | null | undefined): string {
       } @else {
         <ul class="gateways">
           @for (g of gateways.value().gateways; track g.gateway) {
-            <li class="gateway well" [attr.data-state]="state(g).status">
+            <li class="gateway" [attr.data-state]="state(g).status">
               <div class="gateway-head">
                 <h3>{{ g.gateway }}</h3>
                 <app-mode-stamp [live]="g.mode === 'live'" />
@@ -156,33 +157,27 @@ export function whenText(at: string | null | undefined): string {
   styles: `
     @use 'breakpoints' as bp;
     .down {
-      color: var(--color-loss);
+      color: var(--down);
       font-weight: var(--weight-semibold);
     }
     .gateways {
       display: grid;
       gap: var(--space-3);
       margin: 0;
-      padding: var(--space-4);
+      padding: 0;
       list-style: none;
-      @include bp.from-desktop {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
     }
-    // Each gateway is an inset well; the status pill carries the state.
+    /* Each gateway is a row on a hairline; the status pill carries the state. */
     .gateway {
       display: grid;
       gap: var(--space-3);
       min-width: 0;
-      padding: var(--space-3) var(--space-4);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--rule);
     }
-    @include bp.phone {
-      .gateways {
-        padding: var(--space-3);
-      }
-      .gateway {
-        padding: var(--space-3);
-      }
+    .gateway[data-state='unhealthy'] {
+      padding-left: var(--space-4);
+      box-shadow: inset 3px 0 0 var(--down);
     }
     .gateway-head {
       display: flex;
@@ -191,14 +186,14 @@ export function whenText(at: string | null | undefined): string {
       gap: var(--space-2) var(--space-3);
     }
     h3 {
-      font-size: var(--text-panel);
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
     h4 {
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .facts {
       display: grid;
@@ -208,7 +203,7 @@ export function whenText(at: string | null | undefined): string {
     }
     dt {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     dd {
       margin: 2px 0 0;

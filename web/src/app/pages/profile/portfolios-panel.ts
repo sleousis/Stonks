@@ -24,9 +24,14 @@ const NAME_MAX = 80;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, ModeStamp, PermissionNote, Sheet, EmptyState, ErrorState, LoadingState],
   template: `
-    <section class="panel" aria-labelledby="portfolios-title">
-      <div class="panel-head">
-        <h2 id="portfolios-title">Your portfolios</h2>
+    <section class="page-section" aria-labelledby="portfolios-title">
+      <div class="section-head">
+        <h2 id="portfolios-title">
+          Your portfolios
+          @if (ctx.state() === 'ready') {
+            <span class="count">{{ books().length }}</span>
+          }
+        </h2>
       </div>
       @if (ctx.state() === 'failed') {
         <app-error-state
@@ -37,52 +42,58 @@ const NAME_MAX = 80;
       } @else if (ctx.state() === 'idle' || ctx.state() === 'loading') {
         <app-loading-state label="Loading your portfolios" [rows]="2" />
       } @else {
-        <div class="panel-body stack">
-          @if (books().length === 0) {
-            <app-empty-state
-              title="No portfolio yet"
-              message="Open a paper portfolio below, then follow a strategy on it."
-            />
-          } @else {
-            <ul class="books">
-              @for (p of books(); track p.id) {
-                <li>
-                  <span class="name">{{ p.name }}</span>
-                  <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
+        @if (books().length === 0) {
+          <app-empty-state
+            compact
+            title="No portfolio yet"
+            message="Open a paper portfolio below, then follow a strategy on it."
+          />
+        } @else {
+          <ul class="books">
+            @for (p of books(); track p.id) {
+              <li>
+                <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
+                <span class="name">
+                  {{ p.name }}
                   @if (p.is_default) {
                     <span class="muted default">Default</span>
                   }
-                  <span class="book-actions">
-                    @if (atBroker(p)) {
-                      <a
-                        class="btn"
-                        [routerLink]="['/profile/live', p.id]"
-                        [attr.aria-label]="'Real-money settings of ' + p.name"
-                        >Real-money settings</a
-                      >
-                    }
-                    <button
-                      type="button"
-                      class="btn"
-                      [disabled]="!canManage()"
-                      [attr.aria-label]="'Rename ' + p.name"
-                      (click)="openRename(p)"
+                </span>
+                <span class="book-actions">
+                  @if (atBroker(p)) {
+                    <a
+                      class="btn btn-compact"
+                      [routerLink]="['/profile/live', p.id]"
+                      [attr.aria-label]="'Real-money settings of ' + p.name"
+                      >Real-money settings</a
                     >
-                      Rename
-                    </button>
-                  </span>
-                </li>
-              }
-            </ul>
-          }
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-compact"
+                    [disabled]="!canManage()"
+                    [attr.aria-label]="'Rename ' + p.name"
+                    (click)="openRename(p)"
+                  >
+                    Rename
+                  </button>
+                </span>
+              </li>
+            }
+          </ul>
+        }
 
-          <form
-            class="new form-grid form-grid-2"
-            aria-labelledby="new-portfolio-title"
-            (submit)="$event.preventDefault(); create()"
-            novalidate
-          >
+        <form
+          class="new"
+          aria-labelledby="new-portfolio-title"
+          (submit)="$event.preventDefault(); create()"
+          novalidate
+        >
+          <div class="new-text">
             <h3 id="new-portfolio-title">New paper portfolio</h3>
+            <p class="muted">Practice money only. Follow a strategy on it to trade it.</p>
+          </div>
+          <div class="new-fields">
             <div class="field">
               <label for="new-portfolio-name">Name</label>
               <input
@@ -135,8 +146,8 @@ const NAME_MAX = 80;
               </button>
               <app-permission-note permission="portfolio.manage" />
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
       }
     </section>
 
@@ -175,15 +186,11 @@ const NAME_MAX = 80;
     </app-sheet>
   `,
   styles: `
+    @use 'breakpoints' as bp;
     :host {
       display: block;
     }
-    .stack {
-      display: grid;
-      gap: var(--space-4);
-    }
     .books {
-      display: grid;
       margin: 0;
       padding: 0;
       list-style: none;
@@ -193,29 +200,57 @@ const NAME_MAX = 80;
       flex-wrap: wrap;
       align-items: center;
       gap: var(--space-2) var(--space-3);
+      min-height: var(--row-h);
       padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-border);
-    }
-    .books li:last-child {
-      border-bottom: 0;
+      border-bottom: 1px solid var(--rule);
     }
     .name {
+      display: inline-flex;
+      align-items: baseline;
+      gap: var(--space-2);
+      min-width: 0;
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
-      min-width: 0;
     }
     .default {
       font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
     }
     .book-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-2);
+      gap: var(--space-1);
       margin-left: auto;
     }
-    .new h3 {
-      grid-column: 1 / -1;
-      font-size: var(--text-md);
+    /* The new portfolio: what it is on the left, the fields on the right. */
+    .new {
+      display: grid;
+      gap: var(--space-4) var(--space-8);
+      padding: var(--space-5) 0 0;
+    }
+    @include bp.from-tablet {
+      .new {
+        grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+      }
+    }
+    .new-text h3 {
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+    }
+    .new-text p {
+      margin-top: 2px;
+      font-size: var(--text-sm);
+    }
+    .new-fields {
+      display: grid;
+      gap: var(--space-4);
+      align-items: start;
+    }
+    @media (min-width: 1024px) {
+      .new-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
     .actions {
       display: flex;

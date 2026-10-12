@@ -64,12 +64,11 @@ def test_the_admin_watches_the_live_engine(browse, stack, viewport):
 
     # AO-11: with intraday off and no engine, the nav leaves the page out and
     # the page itself is one empty state.
-    v.open_nav()
-    expect(page.get_by_role("link", name="Intraday engine")).to_have_count(0)
+    expect(v.open_nav().get_by_role("link", name="Intraday engine")).to_have_count(0)
     page = v.go("/live")
     expect(page.get_by_role("heading", level=1)).to_have_text("Intraday engine")
     expect(page.get_by_text("No intraday engine running")).to_be_visible()
-    expect(page.get_by_text("Intraday trading is off")).to_be_visible()
+    expect(page.get_by_text("Intraday trading is off, which is the default")).to_be_visible()
     expect(page.get_by_role("heading", name="Intraday P&L by portfolio")).to_have_count(0)
     v.check_page("live engine, none running")
 

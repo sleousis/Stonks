@@ -153,4 +153,38 @@ describe('JournalResults', () => {
     expect(heads.some((h) => h.startsWith('Open'))).toBe(false);
     controller.verify();
   });
+
+  it('groups by another label from the filter pills', async () => {
+    const { controller, fixture, el } = setup(JournalResults);
+    (await nextRequest(controller, '/api/journal/breakdown')).flush({
+      portfolio_id: 'pf_default',
+      by: 'plan',
+      base_currency: 'USD',
+      since: null,
+      until: null,
+      groups: [],
+      unconverted: 0,
+      fx_missing: [],
+    });
+    await settle(fixture);
+    const pills = [...el.querySelectorAll<HTMLButtonElement>('.filter-pill')];
+    expect(pills.find((p) => p.getAttribute('aria-pressed') === 'true')?.textContent).toContain(
+      'Plan',
+    );
+    pills.find((p) => p.textContent!.trim() === 'Tag')!.click();
+    await settle(fixture);
+    const req = await nextRequest(controller, '/api/journal/breakdown');
+    expect(req.request.urlWithParams).toContain('by=tag');
+    req.flush({
+      portfolio_id: 'pf_default',
+      by: 'tag',
+      base_currency: 'USD',
+      since: null,
+      until: null,
+      groups: [],
+      unconverted: 0,
+      fx_missing: [],
+    });
+    controller.verify();
+  });
 });

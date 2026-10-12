@@ -33,7 +33,10 @@ describe('GlossaryPage', () => {
 
   it('opens with how Stonks works, then the trading words and the figures (F5)', () => {
     const { el } = render();
-    const headings = [...el.querySelectorAll('section.group h2')].map((h) => h.textContent);
+    // The title without its count.
+    const headings = [...el.querySelectorAll('section.group h2')].map((h) =>
+      h.firstChild?.textContent?.trim(),
+    );
     expect(headings).toEqual([
       'How Stonks works',
       'Trading words',
@@ -58,6 +61,8 @@ describe('GlossaryPage', () => {
     expect(terms.length).toBeGreaterThan(0);
     expect(terms.length).toBeLessThan(METRIC_KEYS.length);
     expect(terms).toContain(GLOSSARY.max_drawdown.term);
+    // The five sentences stay while filtering, as before the redesign.
+    expect(el.querySelectorAll('.steps li').length).toBe(5);
   });
 
   it('says so when nothing matches', () => {

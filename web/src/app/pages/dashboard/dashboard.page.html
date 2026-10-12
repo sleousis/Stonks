@@ -1,5 +1,5 @@
 <!-- Refreshes itself every minute and after each trading run, so no Refresh button (m2). -->
-<app-page-header title="Dashboard" [description]="asOf()">
+<app-page-header title="Dashboard" [description]="standfirst()">
   <app-updated-ago [at]="auto.updatedAt()" />
 </app-page-header>
 
@@ -17,7 +17,7 @@
       (retry)="portfolio.reload()"
     />
   }
-  <section class="tiles tile-grid" aria-label="Portfolio summary">
+  <section class="tiles summary-strip" aria-label="Portfolio summary">
     <app-stat-tile
       class="tile-value featured"
       label="Portfolio value"
@@ -59,177 +59,193 @@
   </section>
 }
 
-<div class="page-grid">
-  @if (book() !== 'none') {
-    <!-- Performance ---------------------------------------------------------->
-    <section class="panel span-8" aria-labelledby="perf-title">
-      <div class="panel-head">
-        <h2 id="perf-title">Value and drawdown</h2>
-        @if (rows().length) {
-          <span class="muted num"
-            >{{ rows().length }} {{ rows().length === 1 ? 'day' : 'days' }}</span
-          >
-        }
-      </div>
-      <div class="panel-body">
-        @if (pnl.error(); as err) {
-          <app-error-state title="Could not load P&L" [error]="err" (retry)="pnl.reload()" />
-        } @else if (!pnl.hasValue()) {
-          <app-loading-state label="Loading P&L" [rows]="6" />
-        } @else if (rows().length === 0) {
+<div class="cols">
+  <div class="section-stack">
+    @if (book() !== 'none') {
+      <!-- Performance ---------------------------------------------------------->
+      <section class="page-section" aria-labelledby="perf-title">
+        <header class="section-head">
+          <h2 id="perf-title">
+            Value and drawdown
+            @if (rows().length) {
+              <span class="count"
+                >{{ rows().length }} {{ rows().length === 1 ? 'day' : 'days' }}</span
+              >
+            }
+          </h2>
+        </header>
+        <div class="panel-body">
+          @if (pnl.error(); as err) {
+            <app-error-state title="Could not load P&L" [error]="err" (retry)="pnl.reload()" />
+          } @else if (!pnl.hasValue()) {
+            <app-loading-state label="Loading P&L" [rows]="6" />
+          } @else if (rows().length === 0) {
+            <app-empty-state
+              title="No P&L yet"
+              message="The series starts after the first trading run saves a portfolio snapshot."
+            >
+              <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+            </app-empty-state>
+          } @else {
+            <app-time-series-chart
+              ariaLabel="Portfolio value, with drawdown below"
+              [summary]="chartSummary()"
+              [series]="chartSeries()"
+              [height]="300"
+            />
+            <p class="snapshot">{{ asOf() }}</p>
+          }
+        </div>
+      </section>
+    }
+
+    @if (book() !== 'none') {
+      <!-- Positions ------------------------------------------------------------>
+      <section class="page-section section-flush" aria-labelledby="positions-title">
+        <header class="section-head">
+          <h2 id="positions-title">
+            Positions
+            @if (portfolio.hasValue() && portfolio.value().positions.length) {
+              <span class="count">{{ portfolio.value().positions.length }}</span>
+            }
+          </h2>
+          <a routerLink="/insights" class="text-link">All holdings</a>
+        </header>
+        @if (portfolio.error()) {
+          <p class="panel-body muted">Positions are unavailable until the portfolio loads.</p>
+        } @else if (!portfolio.hasValue()) {
+          <app-loading-state label="Loading positions" [rows]="5" />
+        } @else if (portfolio.value().positions.length === 0) {
           <app-empty-state
-            title="No P&L yet"
-            message="The series starts after the first trading run saves a portfolio snapshot."
+            title="No open positions"
+            message="The portfolio is all cash. Positions appear after a trading run fills orders."
           >
-            <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+            <a class="btn" routerLink="/orders">See orders</a>
           </app-empty-state>
         } @else {
-          <app-time-series-chart
-            ariaLabel="Portfolio value, with drawdown below"
-            [summary]="chartSummary()"
-            [series]="chartSeries()"
-            [height]="320"
+          <app-data-table
+            caption="Open positions valued at the latest prices"
+            [rows]="portfolio.value().positions"
+            [columns]="positionColumns"
+            [rowKey]="positionKey"
+            [initialSort]="{ key: 'market_value', dir: 'desc' }"
+            [pageSize]="10"
           />
         }
-      </div>
-    </section>
-  }
-
-  <!-- Health --------------------------------------------------------------->
-  <section class="panel span-4" aria-labelledby="health-title">
-    <div class="panel-head">
-      <h2 id="health-title">Health</h2>
-      <a routerLink="/health" class="panel-link">Open health</a>
-    </div>
-    @if (health.error(); as err) {
-      <app-error-state title="Could not load health" [error]="err" (retry)="health.reload()" />
-    } @else if (!health.hasValue()) {
-      <app-loading-state label="Loading health checks" [rows]="4" />
-    } @else {
-      <div class="health-summary">
-        <app-status-pill
-          [status]="health.value().healthy ? 'pass' : 'unhealthy'"
-          [label]="
-            health.value().healthy
-              ? 'All ' + checkCount() + ' checks passed'
-              : failingChecks() + ' of ' + checkCount() + ' checks failed'
-          "
-        />
-        @if (version.hasValue()) {
-          <span class="muted"
-            >API <span class="num">{{ version.value().version }}</span></span
-          >
-        }
-      </div>
-      <ul class="checks">
-        @if (freshness(); as f) {
-          <li>
-            <div class="check-text">
-              <p class="check-name">{{ checkTitle('freshness') }}</p>
-              <p class="check-detail">{{ f.detail }}</p>
-            </div>
-            <app-status-pill
-              [status]="f.ok ? 'pass' : 'fail'"
-              [label]="f.ok ? 'Passed' : 'Failed'"
-            />
-          </li>
-        }
-        @for (check of systemChecks(); track check.name) {
-          @let pill = checkPill(check);
-          <li>
-            <div class="check-text">
-              <p class="check-name">{{ checkTitle(check.name) }}</p>
-              <p class="check-detail">{{ plainDetail(check) }}</p>
-            </div>
-            <!-- Outcomes of a finished check: always a receipt, toned by the check's level. -->
-            <app-status-pill status="pass" [tone]="pill.tone" [label]="pill.label" />
-          </li>
-        } @empty {
-          @if (!freshness()) {
-            <li class="muted">The server sent no checks. Run them from the Health page.</li>
-          }
-        }
-      </ul>
+      </section>
     }
-  </section>
+  </div>
+  <div class="section-stack">
+    <!-- Health --------------------------------------------------------------->
+    <section class="page-section" aria-labelledby="health-title">
+      <header class="section-head">
+        <h2 id="health-title">Health</h2>
+        <a routerLink="/health" class="text-link">Open health</a>
+      </header>
+      @if (health.error(); as err) {
+        <app-error-state title="Could not load health" [error]="err" (retry)="health.reload()" />
+      } @else if (!health.hasValue()) {
+        <app-loading-state label="Loading health checks" [rows]="4" />
+      } @else {
+        <div class="health-summary">
+          <p class="health-figure">
+            <span class="stat-figure">{{ checkCount() - failingChecks() }}</span>
+            <span class="of num">of {{ checkCount() }}</span>
+            <span class="of">checks passed</span>
+          </p>
+          <app-status-pill
+            [status]="health.value().healthy ? 'pass' : 'unhealthy'"
+            [label]="health.value().healthy ? 'All good' : 'Needs a look'"
+          />
+          @if (version.hasValue()) {
+            <span class="muted"
+              >API <span class="num">{{ version.value().version }}</span></span
+            >
+          }
+        </div>
+        <ul class="checks">
+          @if (freshness(); as f) {
+            <li>
+              <div class="check-text">
+                <p class="check-name">{{ checkTitle('freshness') }}</p>
+                <p class="check-detail">{{ f.detail }}</p>
+              </div>
+              <app-status-pill
+                [status]="f.ok ? 'pass' : 'fail'"
+                [label]="f.ok ? 'Passed' : 'Failed'"
+              />
+            </li>
+          }
+          @for (check of systemChecks(); track check.name) {
+            @let pill = checkPill(check);
+            <li>
+              <div class="check-text">
+                <p class="check-name">{{ checkTitle(check.name) }}</p>
+                <p class="check-detail">{{ plainDetail(check) }}</p>
+              </div>
+              <!-- Outcomes of a finished check: always a receipt, toned by the check's level. -->
+              <app-status-pill status="pass" [tone]="pill.tone" [label]="pill.label" />
+            </li>
+          } @empty {
+            @if (!freshness()) {
+              <li class="muted">The server sent no checks. Run them from the Health page.</li>
+            }
+          }
+        </ul>
+      }
+    </section>
 
-  @if (book() !== 'none') {
-    <!-- Positions ------------------------------------------------------------>
-    <section class="panel panel-flush span-7" aria-labelledby="positions-title">
-      <div class="panel-head">
-        <h2 id="positions-title">Positions</h2>
-        <a routerLink="/insights" class="panel-link">All holdings</a>
-      </div>
-      @if (portfolio.error()) {
-        <p class="panel-body muted">Positions are unavailable until the portfolio loads.</p>
-      } @else if (!portfolio.hasValue()) {
-        <app-loading-state label="Loading positions" [rows]="5" />
-      } @else if (portfolio.value().positions.length === 0) {
+    <!-- Ticks ---------------------------------------------------------------->
+    <section class="page-section section-flush" aria-labelledby="ticks-title">
+      <header class="section-head">
+        <h2 id="ticks-title">Recent trading runs</h2>
+        <a routerLink="/orders/ticks" class="text-link">
+          @if (ticks.hasValue()) {
+            All {{ ticks.value().total }}
+          } @else {
+            All trading runs
+          }
+        </a>
+      </header>
+      @if (ticks.error(); as err) {
+        <app-error-state
+          title="Could not load trading runs"
+          [error]="err"
+          (retry)="ticks.reload()"
+        />
+      } @else if (!ticks.hasValue()) {
+        <app-loading-state label="Loading trading runs" [rows]="5" />
+      } @else if (ticks.value().items.length === 0) {
         <app-empty-state
-          title="No open positions"
-          message="The portfolio is all cash. Positions appear after a trading run fills orders."
+          title="No trading runs yet"
+          message="Nothing has run yet. Try a dry run first. It shows what the strategies would trade without sending orders."
         >
-          <a class="btn" routerLink="/orders">See orders</a>
+          <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
         </app-empty-state>
       } @else {
         <app-data-table
-          caption="Open positions valued at the latest prices"
-          [rows]="portfolio.value().positions"
-          [columns]="positionColumns"
-          [rowKey]="positionKey"
-          [initialSort]="{ key: 'market_value', dir: 'desc' }"
-          [pageSize]="10"
-        />
+          caption="Most recent trading runs"
+          [rows]="ticks.value().items"
+          [columns]="tickColumns"
+          [rowKey]="tickKey"
+          [pageSize]="0"
+        >
+          <ng-template appCell="as_of" [appCellOf]="ticks.value().items" let-tick>
+            <a
+              class="cell-link table-link num"
+              [routerLink]="['/orders/ticks', tick.id]"
+              [attr.title]="'Ran ' + (tick.started_at | dateTime)"
+              >{{ tick.as_of ? (tick.as_of | day) : (tick.started_at | dateTime) }}</a
+            >
+          </ng-template>
+          <ng-template appCell="status" [appCellOf]="ticks.value().items" let-tick>
+            <app-status-pill
+              [status]="runWords(tick.status).status"
+              [label]="runWords(tick.status).label"
+            />
+          </ng-template>
+        </app-data-table>
       }
     </section>
-  }
-
-  <!-- Ticks ---------------------------------------------------------------->
-  <section class="panel panel-flush span-5" aria-labelledby="ticks-title">
-    <div class="panel-head">
-      <h2 id="ticks-title">Recent trading runs</h2>
-      <a routerLink="/orders/ticks" class="panel-link">
-        @if (ticks.hasValue()) {
-          All {{ ticks.value().total }}
-        } @else {
-          All trading runs
-        }
-      </a>
-    </div>
-    @if (ticks.error(); as err) {
-      <app-error-state title="Could not load trading runs" [error]="err" (retry)="ticks.reload()" />
-    } @else if (!ticks.hasValue()) {
-      <app-loading-state label="Loading trading runs" [rows]="5" />
-    } @else if (ticks.value().items.length === 0) {
-      <app-empty-state
-        title="No trading runs yet"
-        message="Nothing has run yet. Try a dry run first. It shows what the strategies would trade without sending orders."
-      >
-        <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
-      </app-empty-state>
-    } @else {
-      <app-data-table
-        caption="Most recent trading runs"
-        [rows]="ticks.value().items"
-        [columns]="tickColumns"
-        [rowKey]="tickKey"
-        [pageSize]="0"
-      >
-        <ng-template appCell="as_of" [appCellOf]="ticks.value().items" let-tick>
-          <a
-            class="cell-link table-link num"
-            [routerLink]="['/orders/ticks', tick.id]"
-            [attr.title]="'Ran ' + (tick.started_at | dateTime)"
-            >{{ tick.as_of ? (tick.as_of | day) : (tick.started_at | dateTime) }}</a
-          >
-        </ng-template>
-        <ng-template appCell="status" [appCellOf]="ticks.value().items" let-tick>
-          <app-status-pill
-            [status]="runWords(tick.status).status"
-            [label]="runWords(tick.status).label"
-          />
-        </ng-template>
-      </app-data-table>
-    }
-  </section>
+  </div>
 </div>

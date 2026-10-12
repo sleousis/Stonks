@@ -64,14 +64,19 @@ describe('BreadthCard', () => {
     const text = el.textContent ?? '';
     expect(el.querySelector('h2')?.textContent).toContain('Market breadth');
     expect(text).toContain('320 up, 160 down');
-    expect(text).toContain('60% (300 of 500)');
+    expect(text).toContain('60%');
+    expect(text).toContain('300 of 500');
+    // Rises against falls, as a split bar with words for screen readers.
+    expect(el.querySelector('.split')?.getAttribute('aria-label')).toBe('320 up, 160 down');
+    // The up per down ratio is visible again (old breadth-card.ts:46).
+    expect(el.querySelector('.split-labels .ratio')?.textContent).toBe('2 up per down');
     expect(text).toContain('25 highs, 4 lows');
     expect(text).toContain('Distribution days');
     expect(text).toContain('Down days on heavy volume on SPY');
     // Never our storage word (FR-18).
     expect(text).toContain('Measured over every stock Stonks tracks.');
     expect(text).not.toContain('lake');
-    expect(text).toContain('3 in 25 sessions');
+    expect(text).toContain('in 25 sessions');
     expect(text).toContain('More stocks rose than fell');
     expect(text).toContain('nothing trades on it');
     const lines = el.querySelectorAll('ul[aria-label="What the numbers mean"] li');
@@ -90,7 +95,8 @@ describe('BreadthCard', () => {
       },
     };
     const { el } = await render(empty);
-    expect(el.querySelector('app-stat-tile')).toBeNull();
+    expect(el.querySelector('.figures')).toBeNull();
+    expect(el.querySelector('.split')).toBeNull();
     expect(el.textContent).toContain('No price data yet.');
   });
 
@@ -105,6 +111,7 @@ describe('BreadthCard', () => {
   });
 
   it('says when a stock has no average yet', () => {
+    expect(aboveText({ days: 50, count: 300, eligible: 500, pct: 0.6 })).toBe('60% (300 of 500)');
     expect(aboveText({ days: 200, count: 0, eligible: 0, pct: null })).toBe('Not enough history');
   });
 });

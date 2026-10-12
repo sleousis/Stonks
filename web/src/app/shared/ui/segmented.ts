@@ -8,6 +8,9 @@ import {
   model,
 } from '@angular/core';
 
+/** Labels up to this long (1W, 3M, All) fit five to a phone row. */
+const SHORT_LABEL = 4;
+
 export interface SegmentOption<T extends string = string> {
   value: T;
   label: string;
@@ -21,11 +24,13 @@ export interface SegmentOption<T extends string = string> {
  *
  *   <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
  *
- * `emphasis="strong"` fills the picked option solid, for choices that must
- * not be misread (Buy or Sell on an order ticket).
+ * The track is sunk and the picked option a raised chip in accent.
+ * `emphasis="strong"` fills the picked option with ink, for a chart range
+ * and for choices that must not be misread (Buy or Sell on an order ticket).
  *
  * On phones, more than three options form an equal two-column grid (a last
  * odd option takes the whole row), so no option is left alone on a line.
+ * Short labels (a chart range: 1W, 1M, 3M, 1Y, All) stay on one row.
  */
 @Component({
   selector: 'app-segmented',
@@ -36,7 +41,7 @@ export interface SegmentOption<T extends string = string> {
       role="radiogroup"
       [attr.aria-label]="label()"
       [attr.data-emphasis]="emphasis()"
-      [attr.data-many]="options().length > 3 ? '' : null"
+      [attr.data-many]="wraps() ? '' : null"
     >
       @for (o of options(); track o.value; let i = $index) {
         <button
@@ -64,51 +69,47 @@ export interface SegmentOption<T extends string = string> {
       display: flex;
       flex-wrap: wrap;
       gap: 2px;
-      padding: 2px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      padding: 3px;
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
     }
     .segment {
       flex: 1 1 auto;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: calc(var(--control-h) - 4px);
+      min-height: 30px;
       padding: 0 var(--space-3);
-      border: 0;
-      border-radius: var(--radius-xs);
+      border: 1px solid transparent;
+      border-radius: var(--r-tag);
       background: transparent;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font: inherit;
       font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      font-weight: var(--weight-label);
       white-space: nowrap;
       cursor: pointer;
       transition:
-        background-color var(--dur-fast) var(--ease),
-        color var(--dur-fast) var(--ease);
+        background-color var(--dur-fast) var(--ease-out),
+        color var(--dur-fast) var(--ease-out);
     }
     .segment:hover {
-      background: var(--color-hover);
-      color: var(--color-ink);
+      color: var(--ink);
     }
-    /* Subtle: a surface chip with a strong ring, readable at a glance. */
+    /* Subtle: the picked option is a raised chip with an accent line. */
     .segment[aria-checked='true'] {
-      background: var(--color-surface);
-      color: var(--color-ink);
-      box-shadow: inset 0 0 0 1px var(--color-border-strong);
-      font-weight: var(--weight-semibold);
+      border-color: var(--accent-line);
+      background: var(--raise);
+      color: var(--accent);
     }
-    /* Strong: the picked option is a solid block, like the B side tag (M13). */
+    /* Strong: the picked option is filled with ink (a range, Buy or Sell, M13). */
     .segmented[data-emphasis='strong'] .segment[aria-checked='true'] {
-      background: var(--color-slab);
-      color: var(--color-slab-ink);
-      box-shadow: none;
-      font-weight: var(--weight-bold);
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--bg);
     }
     .segment:focus-visible {
-      outline: 2px solid var(--color-focus);
+      outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
     @include bp.phone {
@@ -145,6 +146,12 @@ export class Segmented<T extends string = string> {
   readonly emphasis = input<'subtle' | 'strong'>('subtle');
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** On phones: a two-column grid for four or more options, unless every label is short. */
+  protected readonly wraps = computed(() => {
+    const opts = this.options();
+    return opts.length > 3 && opts.some((o) => o.label.length > SHORT_LABEL);
+  });
 
   /** The picked option takes the tab stop; the first one when none is picked. */
   protected readonly focusIndex = computed(() =>

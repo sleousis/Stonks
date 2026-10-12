@@ -159,7 +159,7 @@ export function updatedLabel(at: number | null, now: number): string {
       display: inline-block;
       margin-top: var(--space-1);
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

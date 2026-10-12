@@ -24,10 +24,10 @@ export type BrandMarkMode = 'still' | 'loading' | 'broken';
     :host {
       display: inline-flex;
       flex: none;
-      color: var(--color-accent);
+      color: var(--accent);
     }
     :host([data-mode='broken']) {
-      color: var(--color-loss);
+      color: var(--down);
     }
     svg {
       overflow: visible;

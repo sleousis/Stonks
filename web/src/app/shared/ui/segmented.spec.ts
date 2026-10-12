@@ -38,6 +38,26 @@ describe('Segmented', () => {
     expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1]);
   });
 
+  it('wraps four or more long labels into a phone grid but keeps short ones on a row', () => {
+    const fixture = TestBed.createComponent(Segmented<string>);
+    const group = () =>
+      (fixture.nativeElement as HTMLElement).querySelector('[role="radiogroup"]')!;
+    fixture.componentRef.setInput('label', 'Pick');
+    fixture.componentRef.setInput('value', 'a');
+    fixture.componentRef.setInput(
+      'options',
+      [...'abcd'].map((v) => ({ value: v, label: `Option ${v}` })),
+    );
+    fixture.detectChanges();
+    expect(group().hasAttribute('data-many')).toBe(true);
+    fixture.componentRef.setInput(
+      'options',
+      ['1W', '1M', '3M', '1Y', 'All'].map((l) => ({ value: l, label: l })),
+    );
+    fixture.detectChanges();
+    expect(group().hasAttribute('data-many')).toBe(false);
+  });
+
   it('marks the group subtle unless asked for strong emphasis', () => {
     const { el } = render();
     expect(el.querySelector('[role="radiogroup"]')!.getAttribute('data-emphasis')).toBe('subtle');

@@ -48,6 +48,8 @@
               [class.end]="alignEnd(col)"
               [class.num]="isFigure(col)"
               [class.cell-title]="col.mobile === 'title'"
+              [class.cell-figure]="col.mobile === 'figure'"
+              [class.cell-inline]="col.mobile === 'inline'"
               [class.hide-phone]="col.mobile === 'hide'"
               [class.wrap]="col.wrap"
               [class]="tone(row, col)"

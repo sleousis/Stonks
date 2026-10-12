@@ -83,7 +83,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
           </div>
           <div class="panel-body body">
             <p class="lead">
-              Everything always shows in the Feed. These choose what else reaches you.
+              Everything always shows in the Inbox. These choose what else reaches you.
             </p>
             <app-permission-note permission="notifications.manage" />
             @if (offered().length === 0) {
@@ -161,7 +161,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
                 <legend class="visually-hidden">Upcoming events</legend>
                 <p class="hint">
                   Alerts before events on what you hold or watch. Turn a kind off and you get none
-                  of it, not even in the Feed.
+                  of it, not even in the Inbox.
                 </p>
                 <div class="kinds">
                   @for (e of eventAlerts(); track e.topic) {
@@ -403,14 +403,14 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
     }
     .row-hint {
       display: block;
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
       font-weight: var(--weight-regular);
     }
     .countries-fold summary::before {
       content: '▸';
       margin-right: var(--space-2);
-      color: var(--color-ink-3);
+      color: var(--muted);
       transition: transform 0.15s ease;
     }
     .countries-fold[open] summary::before {
@@ -436,13 +436,13 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
       gap: var(--space-2) var(--space-3);
     }
     .lead {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .note {
       padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-info);
+      border-left: 3px solid var(--accent);
       border-radius: var(--radius-sm);
-      background: var(--color-info-soft);
+      background: var(--accent-soft);
       font-size: var(--text-sm);
     }
     /* Four or more channels are wider than a phone: the table scrolls in its own box. */
@@ -459,7 +459,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
     .grid th,
     .grid td {
       padding: var(--space-1) var(--space-2);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
       text-align: center;
     }
     .grid th[scope='row'],
@@ -468,7 +468,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
       font-weight: var(--weight-medium);
     }
     .grid thead th {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-weight: var(--weight-semibold);
     }
     .cell {
@@ -482,7 +482,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
     .cell input {
       width: 22px;
       height: 22px;
-      accent-color: var(--color-primary);
+      accent-color: var(--accent);
     }
     .more-fold > summary {
       cursor: pointer;
@@ -500,9 +500,9 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
       margin-right: 4px;
       border-right: 1.5px solid currentColor;
       border-bottom: 1.5px solid currentColor;
-      color: var(--color-ink-3);
+      color: var(--muted);
       transform: rotate(-45deg);
-      transition: transform var(--dur-fast) var(--ease);
+      transition: transform var(--dur-fast) var(--ease-out);
     }
     .more-fold[open] .chev {
       transform: rotate(45deg);
@@ -520,7 +520,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
     }
     .hint {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .kinds {
       display: grid;
@@ -549,7 +549,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
     .kind input {
       width: 18px;
       height: 18px;
-      accent-color: var(--color-primary);
+      accent-color: var(--accent);
     }
     .times {
       display: grid;
@@ -559,7 +559,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
     }
     .error {
       font-size: var(--text-sm);
-      color: var(--color-loss);
+      color: var(--down);
     }
     .current {
       font-size: var(--text-sm);

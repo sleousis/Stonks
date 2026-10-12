@@ -26,32 +26,31 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
   template: `
     @if (reserve()) {
       <!-- While the guide loads, hold its place so Today does not jump. -->
-      <div class="setup callout reserve" data-tone="info" aria-hidden="true">
+      <div class="setup band reserve" aria-hidden="true">
         <div class="text">
-          <span class="h2">&nbsp;</span>
+          <span class="title">&nbsp;</span>
           <span class="line">&nbsp;</span>
-          <span class="ticks-bar"></span>
         </div>
         <div class="actions"><span class="btn">&nbsp;</span></div>
       </div>
     } @else if (view(); as v) {
-      <section class="setup callout" data-tone="info" aria-labelledby="setup-title">
+      <section class="setup band" aria-labelledby="setup-title">
         <div class="text">
-          <h2 id="setup-title" class="display-sm">Get set up</h2>
-          <p class="line">
-            <span class="num">{{ progress() }}</span
-            >. Next: {{ next() }}.
-          </p>
-          <ol class="ticks" aria-hidden="true">
-            @for (s of counted(); track s.id) {
-              <li [attr.data-state]="s.state"></li>
-            }
-          </ol>
+          <div class="title-row">
+            <h2 id="setup-title" class="title">Get set up</h2>
+            <span class="num progress">{{ progress() }}</span>
+          </div>
+          <p class="line">Next: {{ next() }}.</p>
         </div>
+        <ol class="ticks" aria-hidden="true">
+          @for (s of counted(); track s.id) {
+            <li [attr.data-state]="s.state"></li>
+          }
+        </ol>
         <div class="actions">
           <a routerLink="/welcome" class="btn btn-primary">Continue setup</a>
           <a routerLink="/demo" class="btn">See a demo</a>
-          <button type="button" class="btn btn-tertiary" [disabled]="hiding()" (click)="hide()">
+          <button type="button" class="btn btn-ghost" [disabled]="hiding()" (click)="hide()">
             Hide
           </button>
         </div>
@@ -59,64 +58,71 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
     }
   `,
   styles: `
+    @use 'breakpoints' as bp;
     :host {
       display: block;
     }
-    /* An info callout: a note set apart from the page, not another panel. */
+    /* The setup band: text, a progress line and the actions in one row. */
     .setup {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3) var(--space-4);
-    }
-    .setup > * {
-      max-width: none;
-    }
-    .setup > * + * {
-      margin-top: 0;
+      gap: var(--space-3) var(--space-6);
     }
     .text {
       display: grid;
-      gap: var(--space-1);
+      gap: 2px;
       min-width: 0;
       flex: 1 1 16rem;
     }
-    h2 {
-      font-size: var(--text-lg);
-      font-weight: var(--weight-bold);
-      line-height: var(--leading-tight);
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2);
+    }
+    .title {
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+    }
+    .progress {
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
     .line {
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
+      color: var(--ink-2);
+      font-size: var(--text-md);
     }
     .ticks {
       display: flex;
       gap: var(--space-1);
-      margin: var(--space-1) 0 0;
+      margin: 0;
       padding: 0;
       list-style: none;
     }
     .ticks li {
-      width: 2rem;
+      width: 28px;
       height: 4px;
-      border-radius: var(--radius-xs);
-      background: color-mix(in srgb, var(--color-border-strong) 45%, transparent);
+      border-radius: 2px;
+      background: var(--accent-line);
     }
     .ticks li[data-state='done'] {
-      background: var(--color-accent);
+      background: var(--accent);
     }
     .ticks li[data-state='skipped'] {
-      background: var(--color-border-strong);
+      background: var(--rule-control);
     }
     .actions {
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-2);
     }
-    /* Phones: Continue setup takes the row, the other two share the next. */
-    @media (max-width: 767.98px) {
+    /* Phones: stacked, Continue setup across the row, the other two share the next. */
+    @include bp.phone {
+      .setup {
+        display: grid;
+        gap: var(--space-3);
+      }
       .actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -129,16 +135,9 @@ import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welc
     .reserve {
       visibility: hidden;
     }
-    .reserve .h2 {
-      font-size: var(--text-lg);
-    }
+    .reserve .title,
     .reserve .line {
-      font-size: var(--text-sm);
-    }
-    .reserve .ticks-bar {
       display: block;
-      height: 4px;
-      margin-top: var(--space-1);
     }
   `,
 })

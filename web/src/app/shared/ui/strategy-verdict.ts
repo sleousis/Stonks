@@ -91,19 +91,19 @@ export const REASONS_SHOWN = 4;
       display: grid;
       gap: var(--space-2);
       padding: var(--space-4);
-      border-left: 4px solid var(--color-border-strong);
+      border-left: 4px solid var(--rule-control);
     }
     :host([data-level='worth']) .verdict {
-      border-left-color: var(--color-gain);
+      border-left-color: var(--up);
     }
     :host([data-level='promising']) .verdict {
-      border-left-color: var(--color-warn);
+      border-left-color: var(--warn);
     }
     :host([data-level='on_trial']) .verdict {
-      border-left-color: var(--color-info);
+      border-left-color: var(--accent);
     }
     :host([data-level='not_yet']) .verdict {
-      border-left-color: var(--color-loss);
+      border-left-color: var(--down);
     }
     .verdict-head {
       margin: 0;
@@ -120,10 +120,10 @@ export const REASONS_SHOWN = 4;
       gap: var(--space-1);
       margin: 0;
       padding-left: var(--space-4);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .details {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
       padding-top: var(--space-1);
     }
     .details summary {
@@ -140,7 +140,7 @@ export const REASONS_SHOWN = 4;
     }
     .more {
       margin-left: var(--space-1);
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-weight: var(--weight-regular);
     }
   `,

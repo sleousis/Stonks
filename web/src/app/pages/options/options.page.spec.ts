@@ -113,7 +113,7 @@ describe('OptionsPage', () => {
   }
 
   function panel(title: string): HTMLElement {
-    const h = [...el.querySelectorAll('h2')].find((x) => x.textContent!.trim() === title);
+    const h = [...el.querySelectorAll('h2')].find((x) => x.textContent!.trim().startsWith(title));
     if (!h) throw new Error(`no panel ${title}`);
     return h.closest('section')!;
   }
@@ -126,8 +126,9 @@ describe('OptionsPage', () => {
 
   it('says it is research only and opens the first stored chain', async () => {
     await open();
-    expect(el.querySelector('app-page-header')!.textContent).toContain(
-      'Look at option prices and test option strategies on past prices. Nothing here trades.',
+    // The standfirst is built from the chain it opened.
+    expect(el.querySelector('app-page-header .standfirst')!.textContent).toMatch(
+      /^AAPL\.US at [\d.]+\. \d+ strikes, expiry in \d+ days\. Nothing here trades\.$/,
     );
     expect(el.querySelector('app-page-header')!.textContent).not.toContain('Greeks');
     expect(el.querySelector('[role="note"]')!.textContent).toContain(
@@ -140,6 +141,17 @@ describe('OptionsPage', () => {
     const headers = [...chain.querySelectorAll('th')].map((th) => th.textContent!.trim());
     expect(headers).toContain('Call bid');
     expect(headers).toContain('Put delta');
+    // Every header sorts the chain; the strike order comes first.
+    const strikeHead = chain.querySelector('th.strike')!;
+    expect(strikeHead.getAttribute('aria-sort')).toBe('ascending');
+    const bid = [...chain.querySelectorAll('thead th')].find(
+      (th) => th.textContent!.trim() === 'Call bid',
+    )!;
+    bid.querySelector<HTMLButtonElement>('button.sort')!.click();
+    fixture.detectChanges();
+    expect(bid.getAttribute('aria-sort')).toBe('descending');
+    expect(strikeHead.getAttribute('aria-sort')).toBeNull();
+    expect(chain.querySelector('.spot-row')).toBeNull();
     expect(chain.textContent).toContain('Barone-Adesi Whaley (American)');
     expect(chainQueries).toEqual(['']);
   });

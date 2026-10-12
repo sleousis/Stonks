@@ -1,4 +1,4 @@
-<app-page-header title="Insights" [description]="description">
+<app-page-header title="Insights" [description]="description()">
   <app-updated-ago [at]="auto.updatedAt()" />
   <app-export-button actions kind="pnl" label="P&amp;L CSV" [ghost]="true" />
   <app-export-button actions kind="snapshots" label="Snapshots CSV" [ghost]="true" />
@@ -86,7 +86,7 @@
       <p class="base-line">{{ line }}</p>
     }
     @if (notes().length || i.unpriced.length || i.uncovered.length) {
-      <ul class="notes" aria-label="About these numbers">
+      <ul class="callout notes" aria-label="About these numbers">
         @for (note of notes(); track note) {
           <li>{{ note }}</li>
         }
@@ -100,300 +100,344 @@
     }
   }
 
-  <div class="page-grid">
-    <!-- Allocation ---------------------------------------------------------->
-    <section class="panel span-7" aria-labelledby="alloc-title">
-      <div class="panel-head">
-        <h2 id="alloc-title">Where the money sits</h2>
-      </div>
-      <div class="panel-body">
-        <app-segmented
-          class="segments"
-          label="Group by"
-          [options]="dimensions"
-          [(value)]="dimension"
-        />
-        @if (insights.error()) {
-          <p class="muted">The allocation shows once insights load.</p>
-        } @else if (!insights.hasValue()) {
-          <app-loading-state label="Loading the allocation" [rows]="4" />
-        } @else if (slices().length === 0) {
-          <app-empty-state
-            title="Nothing to group"
-            message="The portfolio holds no positions yet. Holdings appear after a trading run or a broker sync."
+  <div class="cols overview">
+    <div class="main section-stack">
+      <!-- Allocation ---------------------------------------------------------->
+      <section class="page-section alloc" aria-labelledby="alloc-title">
+        <header class="section-head">
+          <h2 id="alloc-title">Where the money sits</h2>
+          <app-segmented
+            class="segments"
+            label="Group by"
+            [options]="dimensions"
+            [(value)]="dimension"
           />
-        } @else {
-          <ul class="slices" aria-label="Allocation">
-            @for (s of slices(); track sliceKey(s)) {
-              <li>
-                <span class="slice-key">{{ sliceLabel(s) }}</span>
-                <span class="num slice-value">{{ money(s.value) }}</span>
-                <span class="num slice-weight">{{ pct(s.weight) }}</span>
-                <span class="bar" aria-hidden="true"
-                  ><span [style.width]="barWidth(s)"></span
-                ></span>
-              </li>
-            }
-          </ul>
-        }
-      </div>
-    </section>
-
-    <!-- Returns ------------------------------------------------------------->
-    <section class="panel span-5" aria-labelledby="returns-title">
-      <div class="panel-head">
-        <h2 id="returns-title">Returns</h2>
-      </div>
-      <div class="panel-body">
-        @if (insights.error()) {
-          <p class="muted">Returns show once insights load.</p>
-        } @else if (!insights.hasValue()) {
-          <app-loading-state label="Loading returns" [rows]="5" />
-        } @else {
-          @let iv = insights.value();
-          <dl class="figures returns">
-            @for (p of iv.pnl; track p.period) {
-              <div>
-                <dt>{{ periodLabel(p) }}</dt>
-                <dd
-                  class="num"
-                  [class.gain]="(p.change ?? 0) > 0"
-                  [class.loss]="(p.change ?? 0) < 0"
-                >
-                  @if (p.change === null) {
-                    <span class="muted">n/a</span>
-                  } @else {
-                    {{ signedMoney(p.change) }}
-                  }
-                  @if (p.twr !== null && p.twr !== undefined) {
-                    <span class="twr">{{ twrText(p) }}</span>
-                  }
-                </dd>
-              </div>
-            }
-          </dl>
-          <dl class="figures">
-            <div>
-              <dt>Money-weighted, per year <app-help-tip term="mwr" /></dt>
-              <dd class="num">{{ mwrText(iv.mwr) }}</dd>
-            </div>
-            <div>
-              <dt>Net deposits</dt>
-              <dd class="num">{{ signedMoney(iv.net_flows ?? 0) }}</dd>
-            </div>
-          </dl>
-          <p class="hint">
-            The money change counts deposits and withdrawals. The return under it is time-weighted
-            <app-help-tip term="twr" />, so they are left out.
-            <a class="touch-link" routerLink="/insights/cash-flows" fragment="two-returns"
-              >Why two returns?</a
-            >
-            <a class="touch-link" routerLink="/insights/cash-flows"
-              >Record a deposit or withdrawal</a
-            >
-          </p>
-        }
-      </div>
-    </section>
-
-    <app-look-through [portfolio]="lookThroughFor()" />
-
-    <!-- Monthly returns ----------------------------------------------------->
-    <section class="panel span-12" aria-labelledby="months-title">
-      <div class="panel-head">
-        <h2 id="months-title">Monthly returns</h2>
-        <span class="muted">Time-weighted <app-help-tip term="twr" /></span>
-      </div>
-      @if (insights.error()) {
-        <p class="panel-body muted">Monthly returns show once insights load.</p>
-      } @else if (!insights.hasValue()) {
-        <div class="panel-body">
-          <app-loading-state label="Loading monthly returns" [rows]="2" />
-        </div>
-      } @else if (!hasMonths()) {
-        <p class="panel-body muted">
-          Each month gets a return once the portfolio has daily values in it. Deposits and
-          withdrawals never count as return.
-        </p>
-      } @else {
-        <app-monthly-returns
-          caption="Time-weighted return by month; deposits and withdrawals left out"
-          [months]="insights.value().monthly_returns ?? []"
-        />
-      }
-    </section>
-
-    <!-- Risk summary -------------------------------------------------------->
-    <section class="panel span-5" aria-labelledby="risk-title">
-      <div class="panel-head">
-        <h2 id="risk-title">Risk</h2>
-        <a routerLink="/insights/risk" class="panel-link">Against your limits</a>
-      </div>
-      <div class="panel-body">
-        @if (insights.error()) {
-          <p class="muted">Risk shows once insights load.</p>
-        } @else if (!insights.hasValue()) {
-          <app-loading-state label="Loading risk" [rows]="4" />
-        } @else {
-          @let r = insights.value().risk;
-          @let stats = r.holdings ?? r.history;
-          @if (!stats) {
-            <p class="muted">Risk needs a few days of prices or portfolio values.</p>
+        </header>
+        <div class="section-body">
+          @if (insights.error()) {
+            <p class="muted">The allocation shows once insights load.</p>
+          } @else if (!insights.hasValue()) {
+            <app-loading-state label="Loading the allocation" [rows]="4" />
+          } @else if (slices().length === 0) {
+            <app-empty-state
+              title="Nothing to group"
+              message="The portfolio holds no positions yet. Holdings appear after a trading run or a broker sync."
+            />
           } @else {
-            <dl class="figures">
+            <div class="split" aria-hidden="true">
+              @for (s of splitSlices(); track sliceKey(s)) {
+                <span
+                  class="split-part"
+                  [style.flex-grow]="share(s)"
+                  [style.background]="shade(s)"
+                ></span>
+              }
+            </div>
+            <div class="split-labels num" aria-hidden="true">
+              @for (s of splitSlices(); track sliceKey(s)) {
+                <span [style.flex-grow]="share(s)">{{
+                  share(s) >= 0.08 ? pct(s.weight) : ''
+                }}</span>
+              }
+            </div>
+            <table class="table slices" aria-label="Allocation">
+              <thead>
+                <tr>
+                  <th scope="col">{{ dimension() === 'ticker' ? 'Holding' : 'Group' }}</th>
+                  <th scope="col" class="num">Value</th>
+                  <th scope="col" class="num">Weight</th>
+                  <th scope="col" class="bar-col">
+                    <span class="visually-hidden">Weight bar</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of slices(); track sliceKey(s)) {
+                  <tr>
+                    <th scope="row" class="slice-key">
+                      <span class="swatch" aria-hidden="true" [style.background]="shade(s)"></span>
+                      {{ sliceLabel(s) }}
+                    </th>
+                    <td class="num slice-value">{{ money(s.value) }}</td>
+                    <td class="num slice-weight">{{ pct(s.weight) }}</td>
+                    <td class="bar-col">
+                      <span class="bar" aria-hidden="true" [style.width]="barWidth(s)"></span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </section>
+
+      <app-look-through [portfolio]="lookThroughFor()" />
+
+      <!-- Monthly returns ----------------------------------------------------->
+      <section class="page-section" aria-labelledby="months-title">
+        <header class="section-head">
+          <h2 id="months-title">Monthly returns</h2>
+          <span class="muted head-note">Time-weighted <app-help-tip term="twr" /></span>
+        </header>
+        @if (insights.error()) {
+          <p class="section-body muted">Monthly returns show once insights load.</p>
+        } @else if (!insights.hasValue()) {
+          <div class="section-body">
+            <app-loading-state label="Loading monthly returns" [rows]="2" />
+          </div>
+        } @else if (!hasMonths()) {
+          <p class="section-body muted">
+            Each month gets a return once the portfolio has daily values in it. Deposits and
+            withdrawals never count as return.
+          </p>
+        } @else {
+          <app-monthly-returns
+            class="months"
+            caption="Time-weighted return by month; deposits and withdrawals left out"
+            [months]="insights.value().monthly_returns ?? []"
+          />
+        }
+      </section>
+
+      <!-- Strategy agreement -------------------------------------------------->
+      <section class="page-section" aria-labelledby="agree-title">
+        <header class="section-head">
+          <h2 id="agree-title">Do the strategies agree?</h2>
+          @if (agreement.hasValue() && agreement.value().as_of) {
+            <span class="muted num head-note">Scored {{ agreement.value().as_of }}</span>
+          }
+        </header>
+        <div class="section-body">
+          @if (agreement.error(); as err) {
+            <app-error-state
+              title="Could not load the agreement"
+              [error]="err"
+              (retry)="agreement.reload()"
+            />
+          } @else if (!agreement.hasValue()) {
+            <app-loading-state label="Loading the agreement" [rows]="4" />
+          } @else if (agreement.value().holdings.length === 0) {
+            <app-empty-state
+              title="No holdings to check"
+              message="Each holding gets the view of every approved strategy once the portfolio holds positions."
+            />
+          } @else {
+            <ul class="holdings" aria-label="Holdings and what the strategies think">
+              @for (h of agreement.value().holdings; track h.symbol) {
+                <li>
+                  <p class="holding-head">
+                    <span class="num holding-symbol">{{ h.symbol }}</span>
+                    <span class="muted">{{ h.side === 'short' ? 'short' : 'long' }}</span>
+                    <span>{{ agreementLine(h) }}</span>
+                  </p>
+                  <ul class="opinions">
+                    @for (o of h.opinions; track o.strategy_id) {
+                      <li [class]="'stance stance-' + o.stance">
+                        <span class="mark" aria-hidden="true">{{ stance[o.stance].mark }}</span>
+                        <span>
+                          <strong>{{ strategyName(o.strategy_id) }}</strong>
+                          {{ stance[o.stance].text }}.
+                          <span class="muted">{{ o.reason }}</span>
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                </li>
+              }
+            </ul>
+            @if (agreement.value().skipped.length) {
+              <p class="hint">Could not load: {{ agreement.value().skipped.join(', ') }}.</p>
+            }
+          }
+        </div>
+      </section>
+    </div>
+    <aside class="side section-stack">
+      <!-- Returns ------------------------------------------------------------->
+      <section class="page-section" aria-labelledby="returns-title">
+        <header class="section-head">
+          <h2 id="returns-title">Returns</h2>
+        </header>
+        <div class="section-body">
+          @if (insights.error()) {
+            <p class="muted">Returns show once insights load.</p>
+          } @else if (!insights.hasValue()) {
+            <app-loading-state label="Loading returns" [rows]="5" />
+          } @else {
+            @let iv = insights.value();
+            <dl class="figures fact-rows returns">
+              @for (p of iv.pnl; track p.period) {
+                <div>
+                  <dt>{{ periodLabel(p) }}</dt>
+                  <dd
+                    class="num"
+                    [class.gain]="(p.change ?? 0) > 0"
+                    [class.loss]="(p.change ?? 0) < 0"
+                  >
+                    @if (p.change === null) {
+                      <span class="muted">n/a</span>
+                    } @else {
+                      {{ signedMoney(p.change) }}
+                    }
+                    @if (p.twr !== null && p.twr !== undefined) {
+                      <span class="twr">{{ twrText(p) }}</span>
+                    }
+                  </dd>
+                </div>
+              }
+            </dl>
+            <dl class="figures fact-rows">
               <div>
-                <dt>Volatility <app-help-tip term="volatility" /></dt>
-                <dd class="num">{{ pct(stats.volatility) }}</dd>
+                <dt>Money-weighted, per year <app-help-tip term="mwr" /></dt>
+                <dd class="num">{{ mwrText(iv.mwr) }}</dd>
               </div>
               <div>
-                <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
-                <dd class="num">Could lose {{ loss(stats.var_95) }}</dd>
-              </div>
-              <div>
-                <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
-                <dd class="num">Could lose {{ loss(stats.expected_shortfall_95) }}</dd>
-              </div>
-              <div>
-                <dt>Max drawdown <app-help-tip term="max_drawdown" /></dt>
-                <dd class="num">{{ pct(stats.max_drawdown) }}</dd>
-              </div>
-              <div>
-                <dt>Drawdown now <app-help-tip term="drawdown" /></dt>
-                <dd class="num">{{ pct(stats.current_drawdown) }}</dd>
+                <dt>Net deposits</dt>
+                <dd class="num">{{ signedMoney(iv.net_flows ?? 0) }}</dd>
               </div>
             </dl>
+            <p class="hint">
+              The money change counts deposits and withdrawals. The return under it is time-weighted
+              <app-help-tip term="twr" />, so they are left out.
+            </p>
+            <p class="hint-links">
+              <a
+                class="text-link touch-link"
+                routerLink="/insights/cash-flows"
+                fragment="two-returns"
+                >Why two returns?</a
+              >
+              <a class="text-link touch-link" routerLink="/insights/cash-flows"
+                >Record a deposit or withdrawal</a
+              >
+            </p>
           }
-          <dl class="figures">
-            <div>
-              <dt>Effective holdings <app-help-tip term="concentration" /></dt>
-              <dd class="num">{{ num(r.concentration.effective_holdings) }}</dd>
-            </div>
-            <div>
-              <dt>Top 5 weight <app-help-tip term="concentration" /></dt>
-              <dd class="num">{{ pct(r.concentration.top5_weight) }}</dd>
-            </div>
-          </dl>
-          <p class="hint">
-            @if (r.holdings) {
-              Today's weights over the last year of prices.
-            }
-            On 19 days out of 20 a day's loss should be smaller than the likely worst day.
-          </p>
-        }
-      </div>
-    </section>
+        </div>
+      </section>
 
-    <!-- Strategy agreement -------------------------------------------------->
-    <section class="panel span-7" aria-labelledby="agree-title">
-      <div class="panel-head">
-        <h2 id="agree-title">Do the strategies agree?</h2>
-        @if (agreement.hasValue() && agreement.value().as_of) {
-          <span class="muted num">Scored {{ agreement.value().as_of }}</span>
-        }
-      </div>
-      <div class="panel-body">
-        @if (agreement.error(); as err) {
-          <app-error-state
-            title="Could not load the agreement"
-            [error]="err"
-            (retry)="agreement.reload()"
-          />
-        } @else if (!agreement.hasValue()) {
-          <app-loading-state label="Loading the agreement" [rows]="4" />
-        } @else if (agreement.value().holdings.length === 0) {
-          <app-empty-state
-            title="No holdings to check"
-            message="Each holding gets the view of every approved strategy once the portfolio holds positions."
-          />
-        } @else {
-          <ul class="holdings" aria-label="Holdings and what the strategies think">
-            @for (h of agreement.value().holdings; track h.symbol) {
-              <li>
-                <p class="holding-head">
-                  <span class="num holding-symbol">{{ h.symbol }}</span>
-                  <span class="muted">{{ h.side === 'short' ? 'short' : 'long' }}</span>
-                  <span>{{ agreementLine(h) }}</span>
-                </p>
-                <ul class="opinions">
-                  @for (o of h.opinions; track o.strategy_id) {
-                    <li [class]="'stance stance-' + o.stance">
-                      <span class="mark" aria-hidden="true">{{ stance[o.stance].mark }}</span>
-                      <span>
-                        <strong>{{ strategyName(o.strategy_id) }}</strong>
-                        {{ stance[o.stance].text }}.
-                        <span class="muted">{{ o.reason }}</span>
-                      </span>
-                    </li>
-                  }
-                </ul>
-              </li>
-            }
-          </ul>
-          @if (agreement.value().skipped.length) {
-            <p class="hint">Could not load: {{ agreement.value().skipped.join(', ') }}.</p>
-          }
-        }
-      </div>
-    </section>
-
-    <!-- History ------------------------------------------------------------->
-    <section class="panel span-12" aria-labelledby="history-title">
-      <div class="panel-head">
-        <h2 id="history-title">Portfolio history</h2>
-        @if (historyPage(); as p) {
-          <span class="muted num">{{ p.total }} snapshots</span>
-        }
-      </div>
-      @let hp = historyPage();
-      @if (history.error(); as err) {
-        <app-error-state
-          title="Could not load the history"
-          [error]="err"
-          (retry)="history.reload()"
-        />
-      } @else if (!hp) {
-        <app-loading-state label="Loading the history" [rows]="5" />
-      } @else if (hp.items.length === 0) {
-        <app-empty-state
-          title="No snapshots yet"
-          message="Each trading run or broker sync saves one snapshot of the portfolio."
-        />
-      } @else {
-        <app-data-table
-          caption="Portfolio snapshots, newest first"
-          [rows]="hp.items"
-          [columns]="historyColumns"
-          [rowKey]="snapshotKey"
-          [total]="hp.total"
-          [offset]="hp.offset"
-          [pageSize]="historyPageSize"
-          [busy]="history.isLoading()"
-          (pageChange)="historyOffset.set($event.offset)"
-        >
-          <!-- The trading day first; a snapshot from a trading run links to that run (UX-27). -->
-          <ng-template appCell="as_of" [appCellOf]="hp.items" let-snap>
-            @if (snap.tick_id) {
-              <a class="cell-link num" [routerLink]="['/orders/ticks', snap.tick_id]">{{
-                snapshotDay(snap)
-              }}</a>
+      <!-- Risk summary -------------------------------------------------------->
+      <section class="page-section" aria-labelledby="risk-title">
+        <header class="section-head">
+          <h2 id="risk-title">Risk</h2>
+          <a routerLink="/insights/risk" class="text-link panel-link">Against your limits</a>
+        </header>
+        <div class="section-body">
+          @if (insights.error()) {
+            <p class="muted">Risk shows once insights load.</p>
+          } @else if (!insights.hasValue()) {
+            <app-loading-state label="Loading risk" [rows]="4" />
+          } @else {
+            @let r = insights.value().risk;
+            @let stats = r.holdings ?? r.history;
+            @if (!stats) {
+              <p class="muted">Risk needs a few days of prices or portfolio values.</p>
             } @else {
-              <span class="num">{{ snapshotDay(snap) }}</span>
+              <dl class="figures fact-rows">
+                <div>
+                  <dt>Volatility <app-help-tip term="volatility" /></dt>
+                  <dd class="num">{{ pct(stats.volatility) }}</dd>
+                </div>
+                <div>
+                  <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
+                  <dd>
+                    Could lose <span class="num">{{ loss(stats.var_95) }}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
+                  <dd>
+                    Could lose <span class="num">{{ loss(stats.expected_shortfall_95) }}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Max drawdown <app-help-tip term="max_drawdown" /></dt>
+                  <dd class="num">{{ pct(stats.max_drawdown) }}</dd>
+                </div>
+                <div>
+                  <dt>Drawdown now <app-help-tip term="drawdown" /></dt>
+                  <dd class="num">{{ pct(stats.current_drawdown) }}</dd>
+                </div>
+              </dl>
             }
-          </ng-template>
-        </app-data-table>
-      }
-    </section>
+            <dl class="figures fact-rows">
+              <div>
+                <dt>Effective holdings <app-help-tip term="concentration" /></dt>
+                <dd class="num">{{ num(r.concentration.effective_holdings) }}</dd>
+              </div>
+              <div>
+                <dt>Top 5 weight <app-help-tip term="concentration" /></dt>
+                <dd class="num">{{ pct(r.concentration.top5_weight) }}</dd>
+              </div>
+            </dl>
+            <p class="hint">
+              @if (r.holdings) {
+                Today's weights over the last year of prices.
+              }
+              On 19 days out of 20 a day's loss should be smaller than the likely worst day.
+            </p>
+          }
+        </div>
+      </section>
+    </aside>
   </div>
+
+  <!-- History ------------------------------------------------------------->
+  <section class="page-section section-flush history" aria-labelledby="history-title">
+    <header class="section-head">
+      <h2 id="history-title">Portfolio history</h2>
+      @if (historyPage(); as p) {
+        <span class="muted num head-note">{{ p.total }} snapshots</span>
+      }
+    </header>
+    @let hp = historyPage();
+    @if (history.error(); as err) {
+      <app-error-state
+        title="Could not load the history"
+        [error]="err"
+        (retry)="history.reload()"
+      />
+    } @else if (!hp) {
+      <app-loading-state label="Loading the history" [rows]="5" />
+    } @else if (hp.items.length === 0) {
+      <app-empty-state
+        title="No snapshots yet"
+        message="Each trading run or broker sync saves one snapshot of the portfolio."
+      />
+    } @else {
+      <app-data-table
+        caption="Portfolio snapshots, newest first"
+        [rows]="hp.items"
+        [columns]="historyColumns"
+        [rowKey]="snapshotKey"
+        [total]="hp.total"
+        [offset]="hp.offset"
+        [pageSize]="historyPageSize"
+        [busy]="history.isLoading()"
+        (pageChange)="historyOffset.set($event.offset)"
+      >
+        <!-- The trading day first; a snapshot from a trading run links to that run (UX-27). -->
+        <ng-template appCell="as_of" [appCellOf]="hp.items" let-snap>
+          @if (snap.tick_id) {
+            <a class="cell-link num" [routerLink]="['/orders/ticks', snap.tick_id]">{{
+              snapshotDay(snap)
+            }}</a>
+          } @else {
+            <span class="num">{{ snapshotDay(snap) }}</span>
+          }
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
 }
 
 <!-- Admin totals -------------------------------------------------------->
 @if (canSeeTotals()) {
-  <div class="page-grid totals-grid">
-    <section class="panel span-12" aria-labelledby="totals-title">
-      <div class="panel-head">
+  <div class="totals-grid">
+    <section class="page-section" aria-labelledby="totals-title">
+      <header class="section-head">
         <h2 id="totals-title">All portfolios</h2>
-      </div>
-      <div class="panel-body">
+      </header>
+      <div class="section-body">
         @if (totals.error(); as err) {
           <app-error-state title="Could not load totals" [error]="err" (retry)="totals.reload()" />
         } @else if (!totals.hasValue()) {
@@ -405,7 +449,7 @@
           </p>
         } @else {
           @let t = totals.value();
-          <dl class="figures">
+          <dl class="figures totals-strip">
             <div>
               <dt>Total value</dt>
               <dd class="num">{{ money(t.total_value) }}</dd>

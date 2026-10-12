@@ -20,7 +20,7 @@ import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
@@ -61,6 +61,34 @@ export function endedText(h: HaltView, meId: string | null, names?: ReadonlyMap<
   return h.cleared_at ? `${who}, ${formatDateTime(h.cleared_at)}` : who;
 }
 
+export type HaltSort = 'newest' | 'oldest' | 'kind' | 'scope' | 'stops';
+
+export const HALT_SORTS: readonly { value: HaltSort; label: string }[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'kind', label: 'Kind' },
+  { value: 'scope', label: 'Scope' },
+  { value: 'stops', label: 'What it stops' },
+];
+
+/** Orders halts the way the old sortable table could (old halts table, initialSort tripped_at desc). */
+export function sortHalts<H extends Pick<HaltView, 'kind' | 'halt' | 'tripped_at'>>(
+  rows: readonly H[],
+  by: HaltSort,
+  scope: (h: H) => string,
+): H[] {
+  const newest = (a: H, b: H) => Date.parse(b.tripped_at) - Date.parse(a.tripped_at);
+  const text = (f: (h: H) => string) => (a: H, b: H) => f(a).localeCompare(f(b)) || newest(a, b);
+  const cmp: Record<HaltSort, (a: H, b: H) => number> = {
+    newest,
+    oldest: (a, b) => -newest(a, b),
+    kind: text((h) => HALT_KIND_LABEL[h.kind] ?? h.kind),
+    scope: text(scope),
+    stops: text((h) => HALT_STOPS_LABEL[h.halt] ?? h.halt),
+  };
+  return [...rows].sort(cmp[by]);
+}
+
 /**
  * Halts stop new orders before they reach the broker. Shows the active
  * ones with their way out (resume a kill switch, clear the others), opens
@@ -76,7 +104,6 @@ export function endedText(h: HaltView, meId: string | null, names?: ReadonlyMap<
   imports: [
     PageHeader,
     DataTable,
-    TableCell,
     StatusPill,
     LoadingState,
     EmptyState,
@@ -113,9 +140,16 @@ export class HaltsPage {
 
   /** Every halt, cleared ones included; split into active and past below. */
   protected readonly halts = resource({ loader: () => this.api.list(true) });
-  protected readonly active = computed(() =>
-    this.halts.hasValue() ? this.halts.value().filter((h) => h.active) : [],
-  );
+  /**
+   * How the active halts are ordered. Newest first by default, as the old
+   * table's initial sort, and by kind, scope or what they stop on demand.
+   */
+  protected readonly activeSort = signal<HaltSort>('newest');
+  protected readonly sortOptions = HALT_SORTS;
+  protected readonly active = computed(() => {
+    const rows = this.halts.hasValue() ? this.halts.value().filter((h) => h.active) : [];
+    return sortHalts(rows, this.activeSort(), (h) => this.scopeText(h));
+  });
   protected readonly past = computed(() =>
     this.halts.hasValue() ? this.halts.value().filter((h) => !h.active) : [],
   );
@@ -177,19 +211,24 @@ export class HaltsPage {
   protected readonly scopeText = (h: Pick<HaltView, 'scope' | 'portfolio_id' | 'user_id'>) =>
     this.state.scopeText()(h);
   protected readonly haltKey = (h: HaltView) => String(h.id);
+  /** "You, 10 Oct 15:39": who started a halt and when, in words. */
+  protected readonly started = (h: HaltView) => startedText(h, this.meId(), this.names());
 
-  protected readonly activeColumns: TableColumn<HaltView>[] = [
-    { key: 'kind', label: 'Kind', value: (h) => HALT_KIND_LABEL[h.kind], mobile: 'title' },
-    { key: 'scope', label: 'Scope', value: this.scopeText },
-    { key: 'halt', label: 'Stops', value: (h) => HALT_STOPS_LABEL[h.halt] },
-    { key: 'reason', label: 'Reason' },
-    {
-      key: 'tripped_at',
-      label: 'Started',
-      display: (h) => startedText(h, this.meId(), this.names()),
-    },
-    { key: 'action', label: 'Action', sortable: false, value: () => '' },
-  ];
+  /** One sentence from the list: whether trading is stopped, and how much history there is. */
+  protected readonly standfirst = computed(() => {
+    if (!this.halts.hasValue()) {
+      return 'Halts stop new orders before they reach the broker. Stop trading is the one you turn on yourself.';
+    }
+    const n = this.active().length;
+    const past = this.past().length;
+    const history =
+      past === 0 ? 'no past halts' : past === 1 ? '1 past halt' : `${past} past halts`;
+    if (this.killOn())
+      return `Trading is stopped. ${n === 1 ? '1 halt' : n + ' halts'} active, ${history}.`;
+    if (n)
+      return `${n === 1 ? '1 halt holds' : n + ' halts hold'} some orders back. ${history[0].toUpperCase()}${history.slice(1)}.`;
+    return `Trading is not halted. ${history[0].toUpperCase()}${history.slice(1)}.`;
+  });
 
   protected readonly pastColumns: TableColumn<HaltView>[] = [
     { key: 'kind', label: 'Kind', value: (h) => HALT_KIND_LABEL[h.kind], mobile: 'title' },

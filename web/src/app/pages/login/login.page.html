@@ -1,9 +1,30 @@
 <div class="wrap">
   <p class="brand" aria-hidden="true">
-    <svg viewBox="0 0 32 32" width="28" height="28"><path d="M6 22l6-6 5 4 9-10" /></svg>
+    <span class="brand-mark">
+      <svg viewBox="0 0 16 16">
+        <path d="M2 11.5 6 7.5l3 3 5-6" />
+        <path d="M10.5 4.5H14V8" />
+      </svg>
+    </span>
     Stonks
   </p>
   <section class="card" aria-labelledby="login-title">
+    @if (flowStep(); as f) {
+      <ol class="flow" aria-label="Sign-in steps">
+        <li
+          [attr.data-state]="f === 1 ? 'current' : 'done'"
+          [attr.aria-current]="f === 1 ? 'step' : null"
+        >
+          <span class="flow-mark num" aria-hidden="true">1</span>Password
+        </li>
+        <li
+          [attr.data-state]="f === 2 ? 'current' : f > 2 ? 'done' : 'todo'"
+          [attr.aria-current]="f === 2 ? 'step' : null"
+        >
+          <span class="flow-mark num" aria-hidden="true">2</span>Code
+        </li>
+      </ol>
+    }
     <h1 id="login-title" #headingRef tabindex="-1">{{ heading() }}</h1>
 
     @if (error(); as err) {

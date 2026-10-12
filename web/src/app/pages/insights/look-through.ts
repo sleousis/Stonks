@@ -97,17 +97,17 @@ export function lookThroughRows(
   selector: 'app-look-through',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Segmented, LoadingState, ErrorState, EmptyState],
-  host: { class: 'span-12', '[class.is-hidden]': 'hidden()' },
+  host: { '[class.is-hidden]': 'hidden()' },
   template: `
-    <section class="panel" aria-labelledby="look-title">
-      <div class="panel-head">
+    <section class="page-section" aria-labelledby="look-title">
+      <header class="section-head">
         <h2 id="look-title">Inside your funds</h2>
-      </div>
-      <div class="panel-body body">
+        <app-segmented label="Show" [options]="dimensions" [(value)]="dimension" />
+      </header>
+      <div class="section-body body">
         <p class="hint">
           Each fund you hold counts as the companies it owns, by its latest published weights.
         </p>
-        <app-segmented label="Show" [options]="dimensions" [(value)]="dimension" />
         @if (data.error(); as err) {
           <app-error-state
             title="Could not look inside your funds"
@@ -122,18 +122,29 @@ export function lookThroughRows(
             message="The book holds no priced positions yet."
           />
         } @else {
-          <ul class="rows" [attr.aria-label]="listLabel()">
-            @for (r of rows(); track r.key) {
-              <li>
-                <span class="key">{{ r.label }}</span>
-                <span class="num">{{ money(r.value) }}</span>
-                <span class="num weight">{{ pct(r.weight) }}</span>
-                @if (r.detail) {
-                  <span class="detail">{{ r.detail }}</span>
-                }
-              </li>
-            }
-          </ul>
+          <table class="table rows" [attr.aria-label]="listLabel()">
+            <thead>
+              <tr>
+                <th scope="col">{{ listLabel() }}</th>
+                <th scope="col" class="num">Value</th>
+                <th scope="col" class="num">Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of rows(); track r.key) {
+                <tr>
+                  <th scope="row" class="key">
+                    {{ r.label }}
+                    @if (r.detail) {
+                      <span class="detail">{{ r.detail }}</span>
+                    }
+                  </th>
+                  <td class="num">{{ money(r.value) }}</td>
+                  <td class="num weight">{{ pct(r.weight) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
           @for (f of funds(); track f.fund) {
             <p class="hint">
               {{ f.fund }}: {{ share(f.covered) }} of its holdings are listed, as of
@@ -160,37 +171,25 @@ export function lookThroughRows(
       display: grid;
       gap: var(--space-3);
     }
-    .rows {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .rows li {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
-      gap: var(--space-1) var(--space-3);
-      align-items: baseline;
-      padding: var(--space-2) 0;
-      border-top: 1px solid var(--color-border);
-      font-size: var(--text-sm);
-    }
     .key {
+      font-weight: var(--weight-semibold);
+      text-align: left;
       overflow-wrap: anywhere;
     }
     .weight {
-      min-width: 5ch;
-      text-align: end;
+      min-width: 6ch;
     }
     .detail {
-      grid-column: 1 / -1;
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      display: block;
+      color: var(--muted);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-regular);
     }
     .hint {
-      max-width: 70ch;
+      max-width: 68ch;
       margin: 0;
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
+      font-size: var(--text-sm);
     }
   `,
 })

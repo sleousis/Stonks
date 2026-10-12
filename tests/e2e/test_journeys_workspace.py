@@ -50,7 +50,7 @@ def test_a_new_trader_walks_the_first_run_guide(browse, stack, viewport):
     # Skip alerts: the steps that matter are handled, the optional ones wait.
     page.locator(".step.open").get_by_role("button", name="Skip this step").click()
     expect(page.get_by_text("You are set up")).to_be_visible()
-    expect(page.locator(".progress")).to_contain_text("2 of 3 done, 1 skipped")
+    expect(page.locator(".standfirst")).to_contain_text("2 of 3 done, 1 skipped")
     expect(page.locator(".step.open")).to_contain_text("Open a paper portfolio")
     v.check_page("welcome-done")
 

@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  resource,
+  signal,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import type { FillView, OrderView } from '../../api/models';
@@ -13,14 +20,14 @@ import {
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import { autoRefresh } from '../../shared/auto-refresh';
-import { BrandMark } from '../../shared/ui/brand-mark';
 import { SideTag } from '../../shared/ui/side-tag';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
+import { HomeStore } from './home-store';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FILLS_LIMIT = 50;
-/** The tape moves once it holds this many fills; fewer sit still. */
-export const TAPE_MOVES_FROM = 4;
+/** A phone lists this many fills; the rest are one tap away. */
+export const PHONE_FILLS = 4;
 
 /**
  * The fills of the latest trading day that had any (within a week), oldest
@@ -63,71 +70,65 @@ interface TapeItem {
 }
 
 /**
- * A thin tape of the latest session's fills: side, ticker, quantity at
- * price, and the time (or the weekday on the label for an earlier session). It scrolls slowly when there are enough fills to fill it, stops
- * while hovered or focused, and stays still under reduced motion.
+ * The fills tape: one row between hairlines under the overview. "Fills" and
+ * a count badge, then each fill of the latest session (side tag, ticker,
+ * quantity at price, time) with thin rules between, fading out on the
+ * right. The row scrolls sideways inside itself, never the page. On a phone
+ * it becomes a short list of the first fills.
  */
 @Component({
   selector: 'app-fills-tape',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SideTag, BrandMark],
+  imports: [RouterLink, SideTag],
   template: `
     @if (show()) {
-      <section class="tape" aria-label="Latest fills">
-        <span class="label"
-          >Fills
+      <section class="tape" aria-labelledby="home-fills">
+        <h2 id="home-fills" class="label">
+          Fills
+          @if (items().length) {
+            <span class="count-badge">{{ items().length }}</span>
+          }
           @if (dayLabel(); as d) {
             <span class="day">{{ d }}</span>
           }
-        </span>
-        <div class="window">
+        </h2>
+        <div class="window" [class.scrolls]="items().length > 0">
           @if (fills.error()) {
             <p class="note">
               Could not load fills.
-              <button type="button" class="link" (click)="fills.reload()">Try again</button>
+              <button type="button" class="btn btn-link" (click)="fills.reload()">Try again</button>
             </p>
-          } @else if (!fills.hasValue()) {
-            <p class="note">
-              <app-brand-mark mode="loading" [size]="16" /> <span>Loading fills</span>
-            </p>
+          } @else if (!fills.hasValue() || !store.orders.hasValue()) {
+            <p class="note">Loading fills</p>
           } @else if (items().length === 0) {
             <p class="note">No fills this week. They show here as trading runs fill orders.</p>
           } @else {
-            <div class="track" [class.moving]="moving()">
-              <ul class="run">
-                @for (f of items(); track f.id) {
-                  <li>
-                    <app-side-tag [side]="f.side" />
-                    <span class="ticker">{{ f.ticker }}</span>
-                    <span class="num">{{ f.quantity }}</span>
-                    <span class="at">at</span>
-                    <span class="num">{{ f.price }}</span>
-                    @if (f.time) {
-                      <span class="num time">{{ f.time }}</span>
-                    }
-                  </li>
-                }
-              </ul>
-              @if (moving()) {
-                <ul class="run" aria-hidden="true">
-                  @for (f of items(); track f.id) {
-                    <li>
-                      <app-side-tag [side]="f.side" />
-                      <span class="ticker">{{ f.ticker }}</span>
-                      <span class="num">{{ f.quantity }}</span>
-                      <span class="at">at</span>
-                      <span class="num">{{ f.price }}</span>
-                      @if (f.time) {
-                        <span class="num time">{{ f.time }}</span>
-                      }
-                    </li>
+            <ul class="run" aria-label="Latest fills">
+              @for (f of items(); track f.id; let i = $index) {
+                <li [class.extra]="!expanded() && i >= phoneCount">
+                  <app-side-tag [side]="f.side" />
+                  <span class="ticker">{{ f.ticker }}</span>
+                  <span class="num">{{ f.quantity }}</span>
+                  <span class="at">at</span>
+                  <span class="num">{{ f.price }}</span>
+                  @if (f.time) {
+                    <span class="num time">{{ f.time }}</span>
                   }
-                </ul>
+                </li>
               }
-            </div>
+            </ul>
+            @if (!expanded() && items().length > phoneCount) {
+              <button
+                type="button"
+                class="btn btn-ghost btn-compact more"
+                (click)="expanded.set(true)"
+              >
+                Show {{ items().length - phoneCount }} more
+              </button>
+            }
           }
         </div>
-        <a class="all" routerLink="/orders/fills">All fills</a>
+        <a class="all text-link" routerLink="/orders/fills">All fills</a>
       </section>
     }
   `,
@@ -137,136 +138,131 @@ interface TapeItem {
       display: block;
       min-width: 0;
     }
-    /* One hairline bar: a dark slab names it, the window runs the fills. */
+    /* Show more is for phones only: wider screens scroll the whole row. */
+    .more {
+      display: none;
+    }
     .tape {
       display: flex;
-      align-items: stretch;
-      min-height: var(--touch-min);
-      overflow: hidden;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
-      font-size: var(--text-sm);
-    }
-    /* A dark slab in both themes, never an inverted light block. In dark it
-       is a raised slate so it still stands off the surface. */
-    .label {
-      display: flex;
       align-items: center;
-      padding: 0 var(--space-3);
-      background: var(--color-slab);
-      color: var(--color-slab-ink);
-      font-family: var(--font-display);
-      font-stretch: var(--display-stretch);
-      font-weight: var(--weight-bold);
-      letter-spacing: var(--tracking-display-sm);
+      gap: var(--space-4);
+      min-height: 52px;
+      border-block: 1px solid var(--rule);
+      font-size: var(--text-md);
+    }
+    .label {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
     }
     .day {
-      margin-left: var(--space-1);
-      color: var(--color-slab-ink);
+      color: var(--muted);
       font-weight: var(--weight-regular);
     }
     .window {
-      position: relative;
       flex: 1;
       min-width: 0;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      mask-image: linear-gradient(
-        90deg,
-        transparent,
-        black var(--space-4),
-        black calc(100% - var(--space-5)),
-        transparent
-      );
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .window::-webkit-scrollbar {
+      display: none;
+    }
+    .window.scrolls {
+      mask-image: linear-gradient(90deg, black calc(100% - 48px), transparent);
     }
     .note {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
       margin: 0;
-      padding: 0 var(--space-3);
-      color: var(--color-ink-2);
-    }
-    .link {
-      min-height: var(--touch-min);
-      padding: 0;
-      border: 0;
-      background: none;
-      color: var(--color-link);
-      text-decoration: underline;
-      cursor: pointer;
-    }
-    .track {
-      display: flex;
-      width: max-content;
+      color: var(--ink-2);
+      font-size: var(--text-sm);
     }
     .run {
       display: flex;
-      gap: var(--space-5);
+      width: max-content;
       margin: 0;
-      padding: 0 var(--space-5) 0 var(--space-3);
+      padding: 0 48px 0 0;
       list-style: none;
     }
-    /* Every item sits on the 20px line of its side tag. */
     li {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
-      line-height: 20px;
+      padding: 0 var(--space-5);
+      border-left: 1px solid var(--rule);
       white-space: nowrap;
     }
+    li:first-child {
+      padding-left: 0;
+      border-left: 0;
+    }
     .ticker {
-      font-family: var(--font-mono);
-      font-size: var(--mono-scale);
-      font-weight: var(--weight-semibold);
+      font-weight: var(--weight-bold);
     }
     .at,
     .time {
-      color: var(--color-ink-3);
-    }
-    .moving {
-      animation: tape var(--tape-speed) linear infinite;
-    }
-    .tape:hover .moving,
-    .tape:focus-within .moving {
-      animation-play-state: paused;
-    }
-    @keyframes tape {
-      to {
-        transform: translateX(-50%);
-      }
+      color: var(--muted);
     }
     .all {
-      display: flex;
+      flex: none;
+      display: inline-flex;
       align-items: center;
-      padding: 0 var(--space-3);
-      border-left: 1px solid var(--color-border);
       min-height: var(--touch-min);
-      white-space: nowrap;
+      padding-left: var(--space-4);
+      border-left: 1px solid var(--rule);
     }
-    /* The bar clips its edges, so focus rings draw inside. */
-    .all:focus-visible,
-    .link:focus-visible {
-      outline-offset: -2px;
-    }
-    /* Reduced motion: the tape sits still and scrolls by hand. */
-    @media (prefers-reduced-motion: reduce) {
+    /* Phones: a short stacked list, "All fills" beside the title. */
+    @include bp.phone {
+      .tape {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0 var(--space-3);
+      }
+      .label {
+        min-height: var(--touch-min);
+      }
+      .all {
+        grid-column: 2;
+        grid-row: 1;
+        padding-left: 0;
+        border-left: 0;
+      }
       .window {
-        overflow-x: auto;
+        grid-column: 1 / -1;
+        overflow: visible;
+      }
+      .window.scrolls {
         mask-image: none;
       }
-      .moving {
-        animation: none;
+      .note {
+        padding-bottom: var(--space-3);
       }
-      .run[aria-hidden='true'] {
+      .run {
+        display: grid;
+        width: auto;
+        padding: 0;
+      }
+      li {
+        min-height: var(--touch-min);
+        padding: 0;
+        border-left: 0;
+        border-top: 1px solid var(--rule);
+      }
+      li:first-child {
+        border-left: 0;
+      }
+      li.extra {
         display: none;
       }
-    }
-    @include bp.phone {
-      .label {
-        padding: 0 var(--space-2);
+      .more {
+        display: inline-flex;
+        min-height: var(--touch-min);
+        margin: var(--space-1) 0 var(--space-3);
+      }
+      .time {
+        margin-left: auto;
       }
     }
   `,
@@ -275,22 +271,27 @@ export class FillsTape {
   private readonly api = inject(OrdersService);
   private readonly ctx = inject(PortfolioContextService);
   private readonly watch = inject(WatchlistContextService);
+  protected readonly store = inject(HomeStore);
+  protected readonly phoneCount = PHONE_FILLS;
+  /**
+   * A phone lists the first fills, and Show more lists the rest right here,
+   * so every fill of the session stays on Today as the old tape had it.
+   */
+  protected readonly expanded = signal(false);
+
+  constructor() {
+    this.store.need('orders');
+  }
 
   /** Nothing to show (and nothing asked) for someone without a portfolio. */
-  protected readonly show = computed(
-    () => !(this.ctx.state() === 'ready' && this.ctx.options().length === 0),
-  );
+  protected readonly show = computed(() => this.store.hasPortfolios());
 
   protected readonly fills = resource({
     params: () => ({ portfolio: this.ctx.selectedId() }),
-    loader: async () => {
+    loader: async (): Promise<FillView[]> => {
       await this.ctx.load();
-      if (!this.show()) return { fills: [], sides: new Map<string, string>() };
-      const [fills, orders] = await Promise.all([
-        this.api.fills({ limit: FILLS_LIMIT }),
-        this.api.list({ limit: FILLS_LIMIT }),
-      ]);
-      return { fills: fills.items, sides: sideByOrder(orders.items) };
+      if (!this.show()) return [];
+      return (await this.api.fills({ limit: FILLS_LIMIT })).items;
     },
   });
   /** New fills show during the session, and right after a trading run starts (UX-12). */
@@ -300,7 +301,7 @@ export class FillsTape {
 
   private readonly latest = computed(() =>
     this.fills.hasValue()
-      ? latestFills(this.fills.value().fills)
+      ? latestFills(this.fills.value())
       : { day: null, today: false, fills: [] as FillView[] },
   );
   /** The weekday when the tape shows an earlier session's fills. */
@@ -310,7 +311,7 @@ export class FillsTape {
   });
   protected readonly items = computed<TapeItem[]>(() => {
     if (!this.fills.hasValue()) return [];
-    const sides = this.fills.value().sides;
+    const sides = sideByOrder(this.store.orders.hasValue() ? this.store.orders.value() : []);
     const { fills, today } = this.latest();
     return fills
       .filter((f) => this.watch.keeps(f.ticker))
@@ -323,5 +324,4 @@ export class FillsTape {
         time: today ? formatTime(f.filled_at) : null,
       }));
   });
-  protected readonly moving = computed(() => this.items().length >= TAPE_MOVES_FROM);
 }

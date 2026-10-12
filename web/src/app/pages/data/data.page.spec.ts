@@ -117,11 +117,27 @@ describe('DataPage', () => {
     expect(el.querySelector('a[href="/universes"]')?.textContent).toContain('Universes');
   });
 
+  it('sums up the last update and warns when tickers failed', () => {
+    expect(el.querySelector('.standfirst')?.textContent).toContain(
+      'The last update of daily prices ran',
+    );
+    const strip = el.querySelector('.summary-strip')!;
+    expect(strip.textContent).toContain('Tickers failed');
+    expect(strip.textContent).toContain('Partly done');
+    const band = el.querySelector('.band-warn')!;
+    expect(band.textContent).toContain('The last update had tickers that failed.');
+  });
+
   it('shows coverage with a freshness pill per series', () => {
     const coverage = el.querySelector('[aria-labelledby="coverage-title"]')!;
     expect(coverage.textContent).toContain('AAPL.US');
     expect(coverage.textContent).toContain('Fresh');
     expect(coverage.textContent).toContain('Old');
+    // The Prices count shows on phones too, as before the redesign.
+    const prices = [...coverage.querySelectorAll('td')].find(
+      (td) => (td as HTMLElement).dataset['label'] === 'Prices',
+    )!;
+    expect(prices.classList).not.toContain('hide-phone');
   });
 
   it('shows data updates with status and error text in trader words', () => {

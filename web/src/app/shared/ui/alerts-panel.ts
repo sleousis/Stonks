@@ -48,6 +48,8 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
         <app-loading-state label="Loading alerts" [rows]="4" />
       } @else if (page.items.length === 0) {
         <app-empty-state
+          icon="check"
+          tone="good"
           compact
           title="No system alerts"
           message="Problems the server notices, like missing data, a failed run or a broker it cannot reach, show here."
@@ -113,7 +115,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
       margin: 0;
       padding: 0;
       list-style: none;
-      transition: opacity var(--dur) var(--ease);
+      transition: opacity var(--dur) var(--ease-out);
     }
     .alerts.busy {
       opacity: 0.55;
@@ -122,7 +124,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
       display: grid;
       gap: var(--space-1);
       padding: var(--space-3) var(--space-4);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
       min-width: 0;
     }
     .top {
@@ -140,7 +142,7 @@ const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
       overflow-wrap: anywhere;
     }
     .message {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
