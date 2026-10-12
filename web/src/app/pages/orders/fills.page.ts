@@ -41,49 +41,49 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
   template: `
     <section class="page-section section-flush" aria-labelledby="fills-title">
       <div class="toolbar">
-      <form
-        class="filters always"
-        role="search"
-        aria-label="Filter fills"
-        (submit)="$event.preventDefault()"
-      >
-        <div class="field">
-          <label for="ff-ticker">Ticker</label>
-          <input
-            id="ff-ticker"
-            class="input"
-            placeholder="AAPL.US"
-            autocapitalize="characters"
-            [value]="ticker() ?? ''"
-            (change)="setFilter('ticker', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="ff-tick">Trading run</label>
-          <input
-            id="ff-tick"
-            class="input"
-            placeholder="Any run"
-            [value]="tick() ?? ''"
-            (change)="setFilter('tick', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="ff-order">Order</label>
-          <input
-            id="ff-order"
-            class="input"
-            placeholder="Any order"
-            [value]="order() ?? ''"
-            (change)="setFilter('order', $any($event.target).value)"
-          />
-        </div>
-        @if (hasFilters()) {
-          <button type="button" class="btn btn-ghost clear" (click)="clearFilters()">
-            Clear filters
-          </button>
-        }
-      </form>
+        <form
+          class="filters always"
+          role="search"
+          aria-label="Filter fills"
+          (submit)="$event.preventDefault()"
+        >
+          <div class="field">
+            <label for="ff-ticker">Ticker</label>
+            <input
+              id="ff-ticker"
+              class="input"
+              placeholder="AAPL.US"
+              autocapitalize="characters"
+              [value]="ticker() ?? ''"
+              (change)="setFilter('ticker', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="ff-tick">Trading run</label>
+            <input
+              id="ff-tick"
+              class="input"
+              placeholder="Any run"
+              [value]="tick() ?? ''"
+              (change)="setFilter('tick', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="ff-order">Order</label>
+            <input
+              id="ff-order"
+              class="input"
+              placeholder="Any order"
+              [value]="order() ?? ''"
+              (change)="setFilter('order', $any($event.target).value)"
+            />
+          </div>
+          @if (hasFilters()) {
+            <button type="button" class="btn btn-ghost clear" (click)="clearFilters()">
+              Clear filters
+            </button>
+          }
+        </form>
       </div>
 
       <header class="section-head">

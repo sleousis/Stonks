@@ -674,8 +674,8 @@ top of Settings, System. It reads `GET /api/settings/system` through
 |---|---|---|
 | Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
 | Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards (reads only, or reads and trades when you allow it), "When Stonks trades", connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
-| Trade costs | `/trades`, `/trades/orders/:clientId` | In the Advanced menu, under the Orders title and tabs: totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
-| Journal | `/journal`, `/journal/trades/:tradeId` | Found with Search (Ctrl K). Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
+| Trade costs | `/trades`, `/trades/orders/:clientId` | A tab of the Trade workspace with its own title: a summary strip of totals, the breakdown by strategy, ticker or portfolio beside a How to read this callout, the trade journal, and each order as a ticket with notes |
+| Journal | `/journal`, `/journal/trades/:tradeId` | A tab of the Trade workspace, its views as a tab row. Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
 | Sweep, Signal check | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Help | `/help/glossary` | How Stonks works in five short steps, then every term the help tips explain, with a Find a term box |
 
@@ -683,7 +683,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 
 | Page | Route | What it does |
 |---|---|---|
-| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
+| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one inbox row each (side tag, order, price, about, stamp), grouped by portfolio and run, with Approve, Reject and Approve all. Tick rows, or a whole run, and an action bar at the foot approves or rejects them together (one ticket to confirm, one reason to reject). **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
 
 - **Approve each trade** is the optional mode between Paper and
   Automatic in the follow control (Today and the strategy page). Turning it
@@ -742,13 +742,15 @@ top of Settings, System. It reads `GET /api/settings/system` through
   `portfolio.manage`.
 - **Trade costs.** Shortfall is the gap between the price when the order was
   decided and the price paid, fees included. Positive figures are costs.
-  The featured Total cost tile spans two columns so its figure is never
-  smaller than its neighbours'.
+  The totals are a summary strip, and the breakdown sits beside a callout
+  that explains shortfall and basis points.
   Orders and fills link to the order ticket. Notes need `portfolio.manage`.
 - **Journal.** A trade runs from the fill that opened it to the fill that
   closed it, and a partial exit is its own line. Views: Trades, Calendar,
-  Results and Playbooks. The calendar is a month grid, Monday first, with the
-  week's total at the end of each row. A review (tags, mistakes, playbook,
+  Results and Playbooks. The calendar is a month grid of radius 4 squares,
+  Monday first, tinted up soft or down soft by the day's realised P&L, with
+  the week's total at the end of each row and the months listed beside it.
+  Results group by filter pills, and playbooks show as chips. A review (tags, mistakes, playbook,
   followed or broke the plan, a note) needs `portfolio.manage`. See
   [the journal](journal.md).
 - **Order tickets.** `ConfirmService.confirm({ ticket: { lines, side, live } })`
@@ -1086,7 +1088,7 @@ drive paper portfolios too).
 
 | Page | Route | What it does |
 |---|---|---|
-| Intraday engine | `/live` | Each intraday engine: running or not, its market, the silent-engine alarm, the price stream, speed from bar close to decision and from decision to order, and steps that failed |
+| Intraday engine | `/live` | Each intraday engine: running or not and a standfirst built from the data, its status as a summary strip (market, last bar closed, bars closed, started, silent for), speed (latency in mono) beside the price stream, and steps that failed |
 
 - **Getting there.** System group, admins. The page reads `GET
   /api/stream/status` (`data.read`) every 15 seconds and on Refresh.
@@ -1101,7 +1103,7 @@ drive paper portfolios too).
 - **Speed.** Median and 95% upper estimates from the histograms, the
   slowest order and how many orders were measured. Nothing measured yet
   reads so.
-- **Intraday P&L.** A panel for P&L per portfolio. Until live marks exist
+- **Intraday P&L.** A section for P&L per portfolio: today's P&L as bars either side of zero (`role="img"` with a summary), then each portfolio's figures. Until live marks exist
   (21.3.3) it shows the API's note.
 - **No engine.** An empty state in an Engines panel says intraday
   trading is off (the default, and what turns it on), or that minute
@@ -1302,7 +1304,7 @@ flowchart LR
   T --> P[Place order] --> W[Your orders by hand: Change, Cancel]
 ```
 
-- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). Side and order type use `<app-segmented emphasis="strong">`: the picked option is a solid block, and a line under Side says "You are buying" or "You are selling" with the side tag (M13). **Review order** is the one step (PO-08): it calls `POST /api/orders/manual/preview`, where every halt and risk rule runs and nothing is placed, then opens the order ticket (`ConfirmService`, `ticket`) with any cut by the risk limits or a halt note. **Place order** on the ticket places it, **Cancel** sends nothing. A refusal reads in plain words (`order-refusal.ts`). A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
+- **Order ticket.** `pages/orders/manual-ticket.page.ts`. A side sheet on the right of your orders by hand (a bottom sheet first on phones), with the PAPER or LIVE stamp on top and a brass edge for real money. Side, ticker, quantity, market or limit, the trade plan and a reason (kept with the order). Side is a two-segment control: Buy turns green and Sell red when picked, and a line under it says "You are buying" or "You are selling" with the side tag (M13). Preview rows in mono say the order so far, and the confirm is brass (`btn-live`) on a LIVE portfolio, the primary otherwise. **Review order** is the one step (PO-08): it calls `POST /api/orders/manual/preview`, where every halt and risk rule runs and nothing is placed, then opens the order ticket (`ConfirmService`, `ticket`) with any cut by the risk limits or a halt note. **Place order** on the ticket places it, **Cancel** sends nothing. A refusal reads in plain words (`order-refusal.ts`). A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
 - **Refusals.** A 409 `order_refused` carries `risk_adjustments`. `refusalOf()` (`pages/orders/order-refusal.ts`) reads them from `ApiError.problem`, the whole problem body. `<app-order-refusal>` lists each rule with what it did ("Cuts 100 to 40", "Drops the order") and, when the rules allow a smaller order, offers **Accept a smaller order**, which sends `allow_reduce` and checks again. Preview, place and change are silent: the ticket shows the failure, so no toast repeats it.
 - **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
 - **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
@@ -1369,7 +1371,7 @@ flowchart LR
 
 - **Research note.** The page opens with "Research only, nothing trades options." No order, paper portfolio or real-money portfolio uses anything on it. With no chains stored it shows the data-plan note.
 - **Plain names.** Options strategies show their names in words (`optionsStrategyName`), pricing models by name ("Barone-Adesi Whaley (American)", `pricingModelName`), and chain columns keep short forms in capitals ("Call IV"). IV, delta, gamma, theta, vega and open interest carry glossary tips.
-- **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. The table is `<app-data-table>` with the strike as the card title on phones. With both sides, phone cards keep bid, ask and delta of each. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
+- **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. A dense table with calls and puts mirrored around the strike column (calls read outward from the strike), in-the-money cells shaded in accent soft and the underlying's price marked between two strikes. Phones keep bid, ask and delta each side. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
 - **Payoff.** Pick a structure from `GET /api/options/structures`. Its fields follow the parameters it reads (days to expiry, delta, long leg, short leg or wing delta). `<app-payoff-diagram>` (`payoff-diagram.ts`) draws the profit at expiry in SVG: the line, gain and loss shaded on either side of zero, today's price dashed. The cost, max loss, max gain ("Unlimited" when there is no bound) and breakevens sit above it and the legs below. The SVG has `role="img"` and a one sentence summary. A payoff the chain cannot supply shows inline with Retry.
 - **Strategies.** Each options strategy with its structures and hypothesis.
 - **Backtest.** `<app-options-backtest>` (`options-backtest.ts`) fills the underlying and window from the first stored underlying. Strategy parameters use `<app-param-form>`. It needs `lab.run` (a permission note otherwise), runs as a job followed with `JobFollower`, and shows return, Sharpe, drawdown, fills, the equity chart and each validation check with the verdict. On generated chains it says the result is never evidence.
@@ -1447,7 +1449,7 @@ flowchart LR
 | `FeatureFlagsService` | `core/features/` | Hide a page whose feature is off (the assistant) |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
-| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Three tabs that fit a phone: Orders, New order and Fills. Rebalance is a header button, See trading runs a link above the list, Trade costs sits in the Advanced menu and Journal is found with Search |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Three tabs that fit a phone: Orders, New order and Fills. Rebalance is a header button, See trading runs a link above the list, status filters are pills, and Trade costs and Journal are tabs of the Trade workspace |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few. `emphasis="strong"` fills the picked option solid, for Buy or Sell and the order type on the manual ticket |
 | `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
 | `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |

@@ -378,15 +378,19 @@ export function orderLines(
           <dl class="preview" aria-label="Your order so far">
             <div>
               <dt>Order</dt>
-              <dd>
-                <app-side-tag [side]="sideField()" />
-                <span class="num">{{ previewQty() }}</span>
-                <strong>{{ tickerField() || 'No ticker yet' }}</strong>
-              </dd>
+              @if (tickerField() && previewQty() !== '0') {
+                <dd>
+                  <app-side-tag [side]="sideField()" />
+                  <span class="num">{{ previewQty() }}</span>
+                  <strong>{{ tickerField() }}</strong>
+                </dd>
+              } @else {
+                <dd class="muted">Add a ticker and a quantity</dd>
+              }
             </div>
             <div>
               <dt>Price</dt>
-              <dd class="num">{{ previewPrice() }}</dd>
+              <dd [class.num]="orderType() === 'limit'">{{ previewPrice() }}</dd>
             </div>
             @if (previewValue(); as v) {
               <div>
@@ -467,14 +471,18 @@ export function orderLines(
       @include bp.from-desktop {
         grid-template-columns: minmax(0, 1fr) 440px;
         grid-template-areas: 'history ticket';
+        .history {
+          grid-area: history;
+        }
+        .ticket-sheet {
+          grid-area: ticket;
+        }
       }
     }
     .history {
-      grid-area: history;
       min-width: 0;
     }
     .ticket-sheet {
-      grid-area: ticket;
       display: grid;
       gap: var(--space-5);
       min-width: 0;
@@ -555,15 +563,19 @@ export function orderLines(
       font-size: var(--text-body);
       font-weight: var(--weight-semibold);
     }
-    .side-seg ::ng-deep .segment:nth-child(1)[aria-checked='true'] {
+    /* Doubled classes win over the segmented's strong emphasis. */
+    .side-seg ::ng-deep .segmented .segment.segment:nth-child(1)[aria-checked='true'] {
       border-color: var(--up);
       background: var(--up);
       color: var(--raise);
     }
-    .side-seg ::ng-deep .segment:nth-child(2)[aria-checked='true'] {
+    .side-seg ::ng-deep .segmented .segment.segment:nth-child(2)[aria-checked='true'] {
       border-color: var(--down);
       background: var(--down);
       color: var(--raise);
+    }
+    app-earnings-warning:not(:has(*)) {
+      display: none;
     }
     .side-now {
       display: inline-flex;

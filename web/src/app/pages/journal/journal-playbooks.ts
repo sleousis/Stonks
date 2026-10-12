@@ -24,10 +24,15 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
   imports: [PermissionNote, EmptyState, ErrorState, LoadingState],
   styleUrl: './journal.scss',
   template: `
-    <section class="panel" aria-labelledby="pb-title">
-      <div class="panel-head">
-        <h2 id="pb-title">Playbooks</h2>
-      </div>
+    <section class="page-section" aria-labelledby="pb-title">
+      <header class="section-head">
+        <h2 id="pb-title">
+          Playbooks
+          @if (playbooks.hasValue()) {
+            <span class="count">{{ playbooks.value().length }}</span>
+          }
+        </h2>
+      </header>
       <p class="lead">
         A playbook is a setup you trade, such as a breakout or an earnings gap, with the rules you
         mean to follow. Archived playbooks keep their trades.
@@ -50,11 +55,11 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
         <ul class="playbooks">
           @for (p of playbooks.value(); track p.id) {
             <li [class.archived]="p.archived">
-              <div>
+              <div class="pb-text">
                 <p class="pb-name">
-                  {{ p.name }}
+                  <span class="pb-chip">{{ p.name }}</span>
                   @if (p.archived) {
-                    <span class="muted">(archived)</span>
+                    <span class="muted">Archived</span>
                   }
                 </p>
                 @if (p.description) {
@@ -78,7 +83,8 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
       }
 
       @if (canWrite()) {
-        <form class="pb-form" (submit)="$event.preventDefault(); add()">
+        <form class="pb-form sheet-box" (submit)="$event.preventDefault(); add()">
+          <h3 class="form-title">New playbook</h3>
           <div class="field">
             <label for="pb-name">Name</label>
             <input

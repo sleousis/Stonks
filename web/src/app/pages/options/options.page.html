@@ -123,14 +123,22 @@
               <thead>
                 @if (layout().calls.length) {
                   <tr class="group">
-                    <th scope="colgroup" class="calls hide-phone" [attr.colspan]="layout().calls.length">
+                    <th
+                      scope="colgroup"
+                      class="calls hide-phone"
+                      [attr.colspan]="layout().calls.length"
+                    >
                       Calls
                     </th>
                     <th scope="colgroup" class="calls phone-only" [attr.colspan]="phoneCount()">
                       Calls
                     </th>
                     <td class="strike-gap"></td>
-                    <th scope="colgroup" class="puts hide-phone" [attr.colspan]="layout().puts.length">
+                    <th
+                      scope="colgroup"
+                      class="puts hide-phone"
+                      [attr.colspan]="layout().puts.length"
+                    >
                       Puts
                     </th>
                     <th scope="colgroup" class="puts phone-only" [attr.colspan]="phoneCount()">
@@ -166,9 +174,15 @@
                 @for (r of chainRows(); track r.row.strike) {
                   @if (r.spotBefore) {
                     <tr class="spot-row">
-                      <td [attr.colspan]="colCount()">
+                      @for (col of layout().calls; track col.key) {
+                        <td [class.hide-phone]="!col.phone"></td>
+                      }
+                      <td class="spot-cell">
                         <span class="spot-tag num">Price {{ spotText(c.spot) }}</span>
                       </td>
+                      @for (col of layout().puts; track col.key) {
+                        <td [class.hide-phone]="!col.phone"></td>
+                      }
                     </tr>
                   }
                   <tr>

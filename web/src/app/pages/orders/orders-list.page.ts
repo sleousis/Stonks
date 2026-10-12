@@ -66,7 +66,13 @@ const PAGE_SIZE = 50;
           [attr.aria-expanded]="filtersOpen()"
           (click)="filtersOpen.set(!filtersOpen())"
         >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"
+          >
             <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
           </svg>
           Filter
@@ -131,7 +137,13 @@ const PAGE_SIZE = 50;
               aria-label="Show orders from every run"
               (click)="setFilter('tick', '')"
             >
-              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <svg
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
                 <path d="M3 3l6 6M9 3l-6 6" />
               </svg>
             </button>

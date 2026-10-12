@@ -133,9 +133,9 @@ const KEY_LABELS: Record<Grouping, string> = {
         <aside class="callout reading" aria-label="How to read trade costs">
           <p class="callout-title">How to read this</p>
           <p class="lead">
-            Shortfall is the gap between the price when the order was decided and the price
-            actually paid, fees included. Positive figures are costs. A negative figure means the
-            price moved in your favour.
+            Shortfall is the gap between the price when the order was decided and the price actually
+            paid, fees included. Positive figures are costs. A negative figure means the price moved
+            in your favour.
           </p>
           <p>A basis point (bps) is one hundredth of a percent.</p>
         </aside>

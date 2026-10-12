@@ -180,25 +180,33 @@
     }
   }
 
-  // The underlying's price, marked between two strikes.
+  // The underlying's price, marked between two strikes: a 2px accent line
+  // with the price on a tag over the strike column.
   .spot-row td {
     height: 0;
     padding: 0;
     border-bottom: 2px solid var(--accent);
-    text-align: center;
+    line-height: 0;
+  }
+
+  .spot-cell {
+    position: relative;
+    overflow: visible;
   }
 
   .spot-tag {
-    position: relative;
-    top: 10px;
-    display: inline-block;
-    padding: 1px var(--space-2);
+    position: absolute;
+    top: 1px;
+    left: 50%;
+    z-index: 1;
+    padding: 2px var(--space-2);
     border-radius: var(--r-pill);
     background: var(--accent);
     color: var(--on-accent);
     font-size: var(--text-2xs);
     font-weight: var(--weight-semibold);
-    line-height: 1.5;
+    line-height: 1.4;
+    transform: translate(-50%, -50%);
   }
 
   .phone-only {
@@ -217,9 +225,15 @@
       display: table-cell;
     }
 
+    font-size: var(--text-xs);
+
     th,
     td {
-      padding: 0 6px;
+      padding: 0 4px;
+    }
+
+    .th-inner app-help-tip {
+      display: none;
     }
 
     .strike {

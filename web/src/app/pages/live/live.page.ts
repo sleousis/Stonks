@@ -95,14 +95,18 @@ export class LivePage {
     }
     const trouble = this.troubled();
     const lead =
-      list.length === 1 ? '1 engine reports.' : `${formatNumber(list.length, { digits: 0 })} engines report.`;
+      list.length === 1
+        ? '1 engine reports.'
+        : `${formatNumber(list.length, { digits: 0 })} engines report.`;
     if (trouble) return `${lead} ${trouble === 1 ? 'One needs' : `${trouble} need`} a look.`;
     const last = list
       .map((e) => e.last_dispatch_at)
       .filter((v): v is string => !!v)
       .sort()
       .at(-1);
-    return last ? `${lead} The last bar closed ${formatAgo(last)}.` : `${lead} No bar has closed yet.`;
+    return last
+      ? `${lead} The last bar closed ${formatAgo(last)}.`
+      : `${lead} No bar has closed yet.`;
   });
 
   /** P&L today per portfolio as bars either side of zero, scaled to the largest. */

@@ -103,12 +103,7 @@ export class OptionsPage {
   /** The mirrored chain's columns: calls, the strike, puts. */
   protected readonly layout = computed(() => chainLayout(this.side()));
   /** Columns each side keeps on phones (bid, ask, delta). */
-  protected readonly phoneCount = computed(
-    () => this.layout().puts.filter((c) => c.phone).length,
-  );
-  protected readonly colCount = computed(
-    () => this.layout().calls.length + this.layout().puts.length + 1,
-  );
+  protected readonly phoneCount = computed(() => this.layout().puts.filter((c) => c.phone).length);
   /** The rows by strike, with the underlying's price marked between two strikes. */
   protected readonly chainRows = computed(() => {
     if (!this.chain.hasValue()) return [];

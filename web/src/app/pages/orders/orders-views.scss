@@ -29,6 +29,10 @@
     flex-direction: column;
     align-items: stretch;
     margin-bottom: var(--space-5);
+
+    .filter-pills {
+      align-self: stretch;
+    }
   }
 }
 
@@ -332,6 +336,11 @@
       grid-column: 2 / -1;
     }
 
+    // The time reads on one line under the figures.
+    > td[data-label='Created'] {
+      grid-column: 1 / -1;
+    }
+
     > td[data-label='Side']::before,
     > td[data-label='Status']::before {
       content: none;
@@ -343,4 +352,3 @@
 .toolbar > .filters:only-child {
   margin-left: 0;
 }
-

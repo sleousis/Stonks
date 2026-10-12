@@ -218,7 +218,8 @@ interface Group {
                                 <span>{{ strategyName(t) }}</span>
                               }
                               <span
-                                >Decided at <span class="num">{{ money(t.reference_price, t) }}</span></span
+                                >Decided at
+                                <span class="num">{{ money(t.reference_price, t) }}</span></span
                               >
                               @if (scoreText(t); as s) {
                                 <span

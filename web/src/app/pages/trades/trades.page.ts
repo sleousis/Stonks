@@ -42,7 +42,6 @@ import { TradeJournal } from './trade-journal';
       }
     }
   `,
-
 })
 export class TradesPage {
   private readonly portfolioCtx = inject(PortfolioContextService);
