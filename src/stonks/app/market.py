@@ -149,7 +149,7 @@ class MarketDataService:
         records = df.head(limit).to_dict(orient="records")[::-1]
         bars = [
             BarView(
-                timestamp=pd.Timestamp(r["timestamp"]).to_pydatetime(),
+                timestamp=_pydatetime(r["timestamp"]),
                 **{k: finite(_nan_to_none(r[k])) for k in _PRICE_COLS},
             )
             for r in records
@@ -190,8 +190,8 @@ class MarketDataService:
             CoverageRow(
                 ticker=r["ticker"],
                 interval=r["interval"],
-                first_bar=pd.Timestamp(r["first_bar"]).to_pydatetime(),
-                last_bar=pd.Timestamp(r["last_bar"]).to_pydatetime(),
+                first_bar=_pydatetime(r["first_bar"]),
+                last_bar=_pydatetime(r["last_bar"]),
                 rows=int(r["rows"]),
             )
             for r in df.to_dict(orient="records")
@@ -279,6 +279,14 @@ def _parse_interval(code: str) -> Interval:
 def _escape_like(text: str) -> str:
     """Match user text literally inside ``ILIKE ... ESCAPE '!'``."""
     return text.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+
+
+def _pydatetime(value: Any) -> datetime:
+    """``value`` as a ``datetime``. Bar timestamps are never null."""
+    ts = pd.Timestamp(value)
+    if not isinstance(ts, pd.Timestamp):
+        raise ValueError(f"not a timestamp: {value!r}")
+    return ts.to_pydatetime()
 
 
 def _nan_to_none(value: Any) -> Any:

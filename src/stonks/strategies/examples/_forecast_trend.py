@@ -45,6 +45,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import AssetClass, Features, Order, Portfolio
 from stonks.features.forecast import combine_forecasts
+from stonks.features.library import log_prices
 from stonks.features.momentum import is_quarter_rebalance_day
 from stonks.features.sessions import is_session, week_index
 from stonks.features.volatility import annualize, ewma_vol, periods_per_year
@@ -362,7 +363,7 @@ class ForecastTrendStrategy(BaseStrategy):
         if forecast is None or not math.isfinite(forecast):
             return None
         closes = bars["close"].astype(float)
-        returns = np.log(closes).diff()
+        returns = log_prices(closes).diff()
         returns.index = pd.to_datetime(bars["timestamp"])
         sigma = ewma_vol(returns, span=SIZING_VOL_SPAN).iloc[-1]
         sigma_annual = (

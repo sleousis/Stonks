@@ -43,6 +43,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
 from stonks.core.interval import Interval
+from stonks.features.library import log_prices
 
 __all__ = [
     "ConditionContext",
@@ -270,7 +271,7 @@ class RealizedVolCondition(RegimeCondition):
     def triggered(self, as_of: Any, ctx: ConditionContext) -> bool | None:
         history = int(math.ceil(self.lookback_years * self.bars_per_year))
         closes = _closes(ctx, self.ticker, self.interval, as_of, history + self.window + 1)
-        log_returns = np.log(closes).diff()
+        log_returns = log_prices(closes).diff()
         vol = log_returns.rolling(self.window, min_periods=self.window).std(ddof=1).dropna()
         if len(vol) < min(history, self.bars_per_year):
             return None

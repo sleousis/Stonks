@@ -296,7 +296,7 @@ def route_permissions(routes: Iterable[Any]) -> list[tuple[str, str, Permission]
         if isinstance(route, APIRoute):
             perm = _declared_permission(route.dependant)
             if perm is not None:
-                out.extend((m, route.path, perm) for m in sorted(route.methods))
+                out.extend((m, route.path, perm) for m in sorted(route.methods or ()))
         elif hasattr(route, "original_router"):
             out.extend(route_permissions(route.original_router.routes))
     return out

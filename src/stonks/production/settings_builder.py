@@ -148,8 +148,10 @@ def build_tick_runtime(
     factory: BrokerFactory | None = None
     if settings.brokers.kind != "simulated":
 
-        def factory(portfolio: Portfolio) -> Broker:
+        def connect(portfolio: Portfolio) -> Broker:
             return make_broker(settings, portfolio)
+
+        factory = connect
 
     return TickRuntime(
         settings=build_tick_settings(settings, universe, scoped=scoped, bars_due=bars_due),

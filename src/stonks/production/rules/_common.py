@@ -12,12 +12,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from stonks.core.types import Order
 from stonks.features.indicators import atr
+from stonks.features.library import log_prices
 from stonks.features.volatility import ewma_vol
+from stonks.frames import column, rows
 from stonks.logging import get_logger
 from stonks.production.rules import EPS, Recorder, RiskAdjustment, RiskContext
 
@@ -45,7 +46,7 @@ def history(ctx: RiskContext, ticker: str) -> pd.DataFrame | None:
     if frame is None or frame.empty:
         return None
     if ctx.as_of is not None:
-        frame = frame[frame.index <= pd.Timestamp(ctx.as_of)]
+        frame = rows(frame, frame.index <= pd.Timestamp(ctx.as_of))
     return frame if not frame.empty else None
 
 
@@ -99,7 +100,8 @@ def last_atr(ctx: RiskContext, ticker: str, bars: int = ATR_BARS) -> float | Non
     frame = history(ctx, ticker)
     if frame is None or len(frame) <= bars:
         return None
-    value = atr(frame["high"], frame["low"], frame["close"], bars).iloc[-1]
+    high, low, close = (column(frame, c) for c in ("high", "low", "close"))
+    value = atr(high, low, close, bars).iloc[-1]
     return _positive(value)
 
 
@@ -108,7 +110,7 @@ def daily_sigma(ctx: RiskContext, ticker: str, span: int = SIGMA_SPAN) -> float 
     frame = history(ctx, ticker)
     if frame is None or len(frame) <= span:
         return None
-    returns = np.log(frame["close"]).diff()
+    returns = log_prices(frame["close"]).diff()
     return _positive(ewma_vol(returns, span=span).iloc[-1])
 
 

@@ -16,9 +16,20 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from datetime import date
+from typing import cast, overload
 
 import numpy as np
 import pandas as pd
+
+
+@overload
+def log_prices(prices: pd.Series) -> pd.Series: ...
+@overload
+def log_prices(prices: pd.DataFrame) -> pd.DataFrame: ...
+def log_prices(prices: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    """Natural log of ``prices``, keeping the index and columns
+    (``np.log`` on a pandas object, typed as one)."""
+    return cast("pd.Series | pd.DataFrame", np.log(prices))
 
 
 def ttm(series: pd.Series) -> pd.Series:

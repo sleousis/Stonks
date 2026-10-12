@@ -65,6 +65,7 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.store.filelock import FileLock
+from stonks.store.queries import fetch_scalar
 
 if TYPE_CHECKING:
     from stonks.store.lake import DuckDBLake
@@ -227,7 +228,7 @@ class DuckDBTableBarStore(BarStore):
         params = [ticker, interval.code, stamps]
         con = self._lake.con
         with self._lake.transaction():
-            n = int(con.execute(f"SELECT COUNT(*) {sql}", params).fetchone()[0])
+            n = int(fetch_scalar(con, f"SELECT COUNT(*) {sql}", params))
             con.execute(f"DELETE {sql}", params)
         return n
 
@@ -251,9 +252,9 @@ class DuckDBTableBarStore(BarStore):
         # own row count would include ON CONFLICT updates).
         count_sql = "SELECT COUNT(*) FROM bars WHERE ticker = ? AND interval = ?"
         with self._lake.transaction():
-            before = int(con.execute(count_sql, [ticker, target.code]).fetchone()[0])
+            before = int(fetch_scalar(con, count_sql, [ticker, target.code]))
             con.execute(sql)
-            after = int(con.execute(count_sql, [ticker, target.code]).fetchone()[0])
+            after = int(fetch_scalar(con, count_sql, [ticker, target.code]))
         return after - before
 
     def series_checksums(self) -> dict[tuple[str, str], tuple[int, int]]:
@@ -373,9 +374,7 @@ class ParquetBarStore(BarStore):
         files = sorted(self.series_dir(interval, ticker).glob("year=*/*.parquet"))
         if not files:
             return 0
-        return int(
-            self._con.execute(f"SELECT COUNT(*) FROM read_parquet({_list(files)})").fetchone()[0]
-        )
+        return int(fetch_scalar(self._con, f"SELECT COUNT(*) FROM read_parquet({_list(files)})"))
 
     def series_checksums(self) -> dict[tuple[str, str], tuple[int, int]]:
         return checksums(self._con, self.view_sql())
@@ -425,9 +424,7 @@ class ParquetBarStore(BarStore):
                 rows = f"read_parquet({_list(existing)}, union_by_name = true)"
                 keys = ", ".join(f"{_lit(t.isoformat(sep=' '))}::TIMESTAMP" for t in wanted)
                 where = f"CAST(timestamp AS TIMESTAMP) IN ({keys})"
-                n = int(
-                    self._con.execute(f"SELECT COUNT(*) FROM {rows} WHERE {where}").fetchone()[0]
-                )
+                n = int(fetch_scalar(self._con, f"SELECT COUNT(*) FROM {rows} WHERE {where}"))
                 if not n:
                     continue
                 query = (
@@ -516,10 +513,11 @@ class ParquetBarStore(BarStore):
         name = f"_bars_stage_{uuid.uuid4().hex}"
         self._con.execute(f"CREATE TEMP TABLE {name} AS {select_sql}")
         try:
-            nulls = self._con.execute(
+            nulls = fetch_scalar(
+                self._con,
                 f"SELECT COUNT(*) FROM {name} "
-                "WHERE ticker IS NULL OR interval IS NULL OR timestamp IS NULL"
-            ).fetchone()[0]
+                "WHERE ticker IS NULL OR interval IS NULL OR timestamp IS NULL",
+            )
             if nulls:
                 raise duckdb.ConstraintException(
                     "NOT NULL constraint failed: bars.ticker, bars.timestamp and "
