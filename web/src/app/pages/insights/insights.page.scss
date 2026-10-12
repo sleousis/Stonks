@@ -197,6 +197,13 @@
   font-size: var(--text-sm);
 }
 
+.hint-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin-top: var(--space-2);
+}
+
 .returns .twr {
   display: block;
   color: var(--muted);

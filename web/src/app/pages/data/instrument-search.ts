@@ -149,7 +149,7 @@ export class InstrumentSearch {
   ];
   /** "Stocks, US": the class and exchange under the name. */
   protected readonly meta = (r: InstrumentView) =>
-    [instrumentClassLabel(r), exchangeLabel(r.exchange)].filter(Boolean).join(', ');
+    [...new Set([instrumentClassLabel(r), exchangeLabel(r.exchange)].filter(Boolean))].join(', ');
   protected readonly key = (r: InstrumentView) => r.id;
 
   private timer: ReturnType<typeof setTimeout> | undefined;

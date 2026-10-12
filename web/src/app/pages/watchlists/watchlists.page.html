@@ -1,9 +1,11 @@
 <app-page-header title="Watchlists" [description]="standfirst()">
-  @if (selected(); as w) {
-    @if (w.tickers.length) {
-      <a actions class="btn" routerLink="/lab" [queryParams]="labLink(w)">Open in the lab</a>
+  <ng-container actions>
+    @if (selected(); as w) {
+      @if (w.tickers.length) {
+        <a class="btn" routerLink="/lab" [queryParams]="labLink(w)">Open in the lab</a>
+      }
     }
-  }
+  </ng-container>
 </app-page-header>
 
 <div class="cols-facts">
@@ -22,13 +24,37 @@
         message="Save the tickers you follow. Today and the charts can then show only them."
       />
     } @else {
-      <app-page-tabs
-        #tabBar
-        idPrefix="wl"
-        label="Your watchlists"
-        [tabs]="tabs()"
-        [(selected)]="selectedId"
-      />
+      <div class="tab-row">
+        <app-page-tabs
+          #tabBar
+          idPrefix="wl"
+          label="Your watchlists"
+          [tabs]="tabs()"
+          [(selected)]="selectedId"
+        />
+        @if (canEdit() && selected(); as w) {
+          @if (editing()?.id !== w.id) {
+            <div class="head-actions">
+              <button
+                type="button"
+                class="btn btn-ghost btn-compact"
+                [attr.aria-label]="'Edit ' + w.name"
+                (click)="edit(w)"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-compact danger"
+                [attr.aria-label]="'Delete ' + w.name"
+                (click)="remove(w)"
+              >
+                Delete
+              </button>
+            </div>
+          }
+        }
+      </div>
       @if (selected(); as w) {
         <section
           class="page-section section-flush list"
@@ -74,26 +100,8 @@
               </div>
             </form>
           } @else {
-            <header class="section-head">
-              <h2>
-                {{ w.name }} <span class="count">{{ w.tickers.length }}</span>
-              </h2>
-              @if (canEdit()) {
-                <div class="head-actions">
-                  <button type="button" class="btn btn-ghost btn-compact" (click)="edit(w)">
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-compact danger"
-                    (click)="remove(w)"
-                  >
-                    Delete
-                  </button>
-                </div>
-              }
-            </header>
-            <div class="section-body">
+            <h2 class="visually-hidden">{{ w.name }}, {{ w.tickers.length }} tickers</h2>
+            <div class="list-body">
               @if (w.tickers.length) {
                 <table class="table quotes" [attr.aria-label]="'Tickers in ' + w.name">
                   <thead>
