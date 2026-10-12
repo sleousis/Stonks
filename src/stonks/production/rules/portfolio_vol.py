@@ -35,7 +35,9 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
+from stonks.features.library import log_prices
 from stonks.features.volatility import periods_per_year
+from stonks.frames import columns
 from stonks.production.rules import (
     RiskAdjustment,
     RiskContext,
@@ -98,9 +100,11 @@ class PortfolioVol(RiskRule):
             return scale_opens(orders, ctx, 0.0, self.name, "no positive portfolio value")
 
         closes = _closes(ctx, {*ctx.portfolio.positions, *(o.ticker for o in buys)})
-        returns = np.log(closes).diff()
+        returns = log_prices(closes).diff()
         counts = returns.count()
-        short = sorted({o.ticker for o in buys if counts.get(o.ticker, 0) < MIN_RETURNS})
+        short = sorted(
+            {o.ticker for o in buys if o.ticker not in counts or counts[o.ticker] < MIN_RETURNS}
+        )
         adjustments: list[RiskAdjustment] = []
         kept: list[Order] = []
         buy_ids = {id(o) for o in buys}
@@ -127,7 +131,7 @@ class PortfolioVol(RiskRule):
         for order in buys:
             signed = order.quantity if order.side == "buy" else -order.quantity
             d[usable.index(order.ticker)] += signed * _price(ctx, order.ticker) / equity
-        cov = _covariance(returns[usable]) * _periods(ctx, usable)
+        cov = _covariance(columns(returns, usable)) * _periods(ctx, usable)
         sigma = np.sqrt(np.diag(cov))
 
         def vol(s: float) -> float:

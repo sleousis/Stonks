@@ -35,6 +35,7 @@ import pandas as pd
 from stonks.backtest.calendar import calendar_for
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
+from stonks.features.library import log_prices
 
 type Frame = pd.Series | pd.DataFrame
 
@@ -54,7 +55,7 @@ def _rolling_mean_sqrt(values: Frame, n: int) -> Frame:
 def close_to_close(close: Frame, n: int = 20) -> Frame:
     """Rolling sample std (ddof=1) of ``n`` log close-to-close returns."""
     _check_window(n)
-    returns = np.log(close).diff()
+    returns = log_prices(close).diff()
     return returns.rolling(n, min_periods=n).std(ddof=1)
 
 

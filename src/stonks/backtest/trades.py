@@ -59,7 +59,7 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -378,11 +378,13 @@ def _mark(
 
 def _utc(value: date) -> datetime:
     """Naive timestamps are UTC, as ``SimulatedBroker`` stamps fills."""
-    if not isinstance(value, datetime):
-        value = datetime(value.year, value.month, value.day)
-    if hasattr(value, "to_pydatetime"):
-        value = value.to_pydatetime()
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if isinstance(value, pd.Timestamp):
+        moment = value.to_pydatetime()
+    elif isinstance(value, datetime):
+        moment = value
+    else:
+        moment = datetime(value.year, value.month, value.day)
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 class Excursions:
@@ -414,7 +416,7 @@ class Excursions:
         data = self._by_ticker.get(ticker)
         if data is None or not len(data[0]):
             return None
-        return pd.Timestamp(data[0][-1], tz=UTC).to_pydatetime()
+        return cast(datetime, pd.Timestamp(data[0][-1], tz=UTC).to_pydatetime())
 
     def mae_mfe(
         self,

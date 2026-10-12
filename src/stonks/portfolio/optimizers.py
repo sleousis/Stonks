@@ -27,7 +27,7 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 from pydantic import Field
@@ -46,6 +46,9 @@ from stonks.portfolio.base import (
     register_constructor,
 )
 from stonks.portfolio.diversification import effective_number_of_bets
+
+if TYPE_CHECKING:
+    from cvxpy.constraints.constraint import Constraint
 
 _log = get_logger("stonks.portfolio.optimizers")
 
@@ -130,14 +133,16 @@ class CvxpySolver(QpSolver):
             if p.impact_cost is not None and np.any(p.impact_cost > 0):
                 costs = costs + p.impact_cost @ cp.power(cp.abs(z), 1.5)
             objective = objective - p.trade_aversion * costs
-        constraints = [w >= p.lower, w <= p.upper, cp.norm1(w) <= p.max_gross]
+        constraints: list[Constraint] = [w >= p.lower, w <= p.upper, cp.norm1(w) <= p.max_gross]
         if p.turnover_limit is not None:
             constraints.append(cp.norm1(z) <= p.turnover_limit)
         prob = cp.Problem(cp.Maximize(objective), constraints)
         solver = "CLARABEL" if "CLARABEL" in cp.installed_solvers() else None
+        from cvxpy.error import SolverError
+
         try:
             prob.solve(solver=solver)
-        except cp.error.SolverError as exc:
+        except SolverError as exc:
             return SolverResult(weights=p.current.copy(), status=f"solver_error: {exc}")
         status = str(prob.status)
         if status not in self._OK or w.value is None:

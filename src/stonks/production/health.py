@@ -131,7 +131,7 @@ def _freshness(
         [list(universe)],
     )
     latest: dict[str, date] = {
-        row.ticker: _as_date(row.latest) for row in df.itertuples(index=False)
+        ticker: _as_date(day) for ticker, day in zip(df["ticker"], df["latest"], strict=True)
     }
     today = now.astimezone(UTC).date()
     checks = []
@@ -179,7 +179,7 @@ def _stuck_ingest(lake: DuckDBLake, config: HealthConfig, now: datetime) -> Heal
         [now.isoformat(), config.stuck_ingest_minutes],
     )
     if len(df):
-        runs = ", ".join(f"#{r.id} ({r.kind})" for r in df.itertuples(index=False))
+        runs = ", ".join(f"#{i} ({k})" for i, k in zip(df["id"], df["kind"], strict=True))
         return HealthCheck(
             name="stuck_ingest_runs",
             ok=False,
@@ -195,7 +195,7 @@ def _ingest_failures(lake: DuckDBLake, config: HealthConfig, now: datetime) -> H
         [now.isoformat(), config.ingest_failure_lookback_hours * 60],
     )
     if len(df):
-        runs = ", ".join(f"#{r.id} ({r.kind})" for r in df.itertuples(index=False))
+        runs = ", ".join(f"#{i} ({k})" for i, k in zip(df["id"], df["kind"], strict=True))
         return HealthCheck(
             name="ingest_failures",
             ok=False,

@@ -27,6 +27,9 @@ a daily decision). Then:
 - **filings** (roadmap 23.13) by their acceptance time ``known_at``: a
   filing accepted after the decision's close is hidden. An insider trade
   with no acceptance time counts from the day after its filing date;
+- **earnings reports** by the latest moment their timing allows on the
+  report day (:mod:`stonks.calendars.known`): a daily decision sees every
+  report of its day, an intraday one only those out by its close;
 
 - **universe membership** shows spans that started by then, and an exit
   dated later reads as still open (nobody knew it yet);
@@ -51,6 +54,7 @@ from typing import Any
 
 import pandas as pd
 
+from stonks.calendars.known import known_moments
 from stonks.core.interval import Interval, decision_reach, known_through, visible_cutoff
 from stonks.core.timeutil import as_datetime
 from stonks.store.statement_versions import MACRO_KEY, known_versions
@@ -144,6 +148,7 @@ _READERS: Mapping[str, str] = {
     "get_insider_transactions": "get_insider_transactions",
     "get_corporate_filings": "get_corporate_filings",
     "get_institutional_holdings": "get_institutional_holdings",
+    "get_earnings_calendar": "get_earnings_calendar",
     "members_as_of": "members_between",
     "members_between": "members_between",
     "get_universe_membership": "get_universe_membership",
@@ -413,6 +418,16 @@ class PointInTimeLake:
         key = ("holdings", repr(sorted(kwargs.items())))
         full = self._cached(key, lambda: self._lake.get_institutional_holdings(**kwargs))
         return full if full.empty else _rows(full, self._accepted(full))
+
+    # ---- earnings reports -------------------------------------------------------
+
+    def _read_get_earnings_calendar(self, tickers: Any = None) -> pd.DataFrame:
+        key = ("earnings", tuple(tickers) if tickers is not None else None)
+        full = self._cached(key, lambda: self._lake.get_earnings_calendar(tickers))
+        if full.empty:
+            return full
+        known = known_moments(full)
+        return _rows(full, known.notna() & (known <= pd.Timestamp(self._reach)))
 
     def _read_get_corporate_actions(self, tickers: list[str]) -> pd.DataFrame:
         key = ("corporate_actions", tuple(tickers))

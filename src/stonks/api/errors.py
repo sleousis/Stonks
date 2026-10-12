@@ -117,6 +117,7 @@ def install_error_handlers(app: FastAPI) -> None:
         )
         headers = getattr(exc, "headers", None)
         extend = getattr(exc, "problem_extensions", None)
+        extensions = extend() if callable(extend) else None
         return problem(
             request,
             status,
@@ -124,13 +125,14 @@ def install_error_handlers(app: FastAPI) -> None:
             detail=str(exc),
             code=getattr(exc, "code", None),
             headers=headers,
-            extensions=extend() if callable(extend) else None,
+            extensions=extensions if isinstance(extensions, dict) else None,
         )
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         detail = exc.detail if isinstance(exc.detail, str) else None
-        return problem(request, exc.status_code, detail=detail, headers=exc.headers)
+        headers = dict(exc.headers) if exc.headers is not None else None
+        return problem(request, exc.status_code, detail=detail, headers=headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

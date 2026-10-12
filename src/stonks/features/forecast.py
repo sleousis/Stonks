@@ -28,6 +28,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from stonks.features.library import log_prices
 from stonks.features.volatility import ewma_vol
 from stonks.portfolio.signals import FORECAST_CAP
 
@@ -91,7 +92,7 @@ def tsmom_raw(
         raise ValueError(f"lookback must be >= 1, got {lookback}")
     if mode not in ("sign", "scaled"):
         raise ValueError(f"mode must be 'sign' or 'scaled', got {mode!r}")
-    logs = np.log(closes.astype(float))
+    logs = log_prices(closes.astype(float))
     r = logs - logs.shift(lookback)
     if mode == "sign":
         return np.sign(r)

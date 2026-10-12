@@ -30,6 +30,7 @@ import pandas as pd
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Order, Portfolio
 from stonks.ingest.filing_schemas import CURRENT_REPORT_ITEMS
+from stonks.strategies._common import equal_weight_new_picks
 from stonks.strategies.base import BaseStrategy
 
 
@@ -107,35 +108,4 @@ class FilingEvents(BaseStrategy):
         prices: Mapping[str, float],
         as_of: date,
     ) -> list[Order]:
-        picked = {t for _, t in my_picks}
-        orders = [
-            Order(
-                client_id=f"{self.id}:sell:{t}:{as_of.isoformat()}",
-                ticker=t,
-                side="sell",
-                quantity=qty,
-                order_type="market",
-                strategy_id=self.id,
-            )
-            for t, qty in portfolio.positions.items()
-            if qty > 0 and t not in picked
-        ]
-        new = [t for t in sorted(picked) if portfolio.positions.get(t, 0.0) <= 0]
-        if not new or portfolio.cash <= 0:
-            return orders
-        budget = portfolio.cash / len(new)
-        for ticker in new:
-            price = prices.get(ticker)
-            if not price or price <= 0:
-                continue
-            orders.append(
-                Order(
-                    client_id=f"{self.id}:buy:{ticker}:{as_of.isoformat()}",
-                    ticker=ticker,
-                    side="buy",
-                    quantity=budget / price,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            )
-        return orders
+        return equal_weight_new_picks(self.id, my_picks, portfolio, prices, as_of)

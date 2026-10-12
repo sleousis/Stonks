@@ -86,7 +86,6 @@ describe('navigation', () => {
         'Build a strategy',
         'Lab',
         'Trial results',
-        'Strategy review',
         'Leaderboard',
         'Screener',
         'Options',
@@ -102,7 +101,7 @@ describe('navigation', () => {
 
     it('never links a trader to an admin page (F11)', () => {
       const hrefs = [...render(TRADER).querySelectorAll('a')].map((a) => a.getAttribute('href'));
-      for (const path of ['/ops/schedule', '/universes', '/data', '/health']) {
+      for (const path of ['/ops/schedule', '/universes', '/data', '/health', '/go-live']) {
         expect(hrefs).not.toContain(path);
       }
     });
@@ -140,6 +139,11 @@ describe('navigation', () => {
         'Users',
       ]);
       expect(all(el).filter((l) => l === 'Halts')).toHaveLength(1);
+    });
+
+    it('gives admins Strategy review in Research, after Trial results', () => {
+      const research = group(render(ADMIN), 'Research');
+      expect(research.indexOf('Strategy review')).toBe(research.indexOf('Trial results') + 1);
     });
 
     it('shows everything under open reads (dev, nobody signed in)', () => {

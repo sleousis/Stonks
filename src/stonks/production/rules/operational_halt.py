@@ -55,8 +55,9 @@ class OperationalHalt(RiskRule):
         for ticker in ctx.history:
             frame = history(ctx, ticker)
             if frame is not None:
-                last = pd.Timestamp(frame.index[-1])
-                newest = last if newest is None or last > newest else newest
+                last = pd.DatetimeIndex(frame.index)[-1]
+                if isinstance(last, pd.Timestamp):
+                    newest = last if newest is None or last > newest else newest
         if newest is None:
             return list(orders), []
         age = (pd.Timestamp(ctx.as_of) - newest.normalize()).days

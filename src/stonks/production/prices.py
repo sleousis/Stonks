@@ -21,6 +21,7 @@ import pandas as pd
 
 from stonks.core.timeutil import day_start
 from stonks.core.types import Order
+from stonks.frames import columns
 from stonks.fx.units import price_scales, quote_scale
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -136,7 +137,7 @@ def load_history(
     df["volume"] = df["volume"] / adjust
     df["date"] = pd.to_datetime(df["date"])
     return {
-        str(ticker): group.set_index("date")[_HISTORY_COLUMNS].rename_axis("date")
+        str(ticker): columns(group.set_index("date"), _HISTORY_COLUMNS).rename_axis("date")
         for ticker, group in df.groupby("ticker", sort=True)
     }
 

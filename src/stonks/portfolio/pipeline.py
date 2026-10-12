@@ -61,13 +61,13 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Literal, Protocol
 
-import numpy as np
 import pandas as pd
 
 from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.config import RiskPolicy
 from stonks.core.types import Order, Portfolio
 from stonks.execution.orders import SideToken, classify_all, make_client_id, side_token
+from stonks.features.library import log_prices
 from stonks.features.volatility import annualize, ewma_vol
 from stonks.logging import get_logger
 from stonks.portfolio.base import (
@@ -280,7 +280,7 @@ def vols_from_history(
     for ticker, frame in history.items():
         if frame is None or "close" not in frame or len(frame) <= span:
             continue
-        returns = np.log(frame["close"].astype(float)).diff()
+        returns = log_prices(frame["close"].astype(float)).diff()
         sigma = ewma_vol(returns, span=span).iloc[-1]
         if sigma is not None and math.isfinite(sigma) and sigma > 0:
             out[str(ticker)] = float(annualize(sigma, periods_per_year))
