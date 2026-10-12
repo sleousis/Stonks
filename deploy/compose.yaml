@@ -195,7 +195,7 @@ services:
       disable: true
 
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.11-alpine
     restart: unless-stopped
     depends_on:
       api:
@@ -259,7 +259,7 @@ services:
   # on the host. Pull a model once:
   #   docker compose exec model-server ollama pull <model>
   model-server:
-    image: ollama/ollama:0.35.0
+    image: ollama/ollama:0.40.2
     profiles: ["ai"]
     restart: unless-stopped
     expose:
