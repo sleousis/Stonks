@@ -14,6 +14,7 @@ src/stonks/ingest/
 │   ├── eodhd.py         # EODHD: prices, intraday, statements, metadata, macro, exchanges
 │   ├── yahoo.py         # Yahoo Finance (wraps yfinance): prices, intraday, basic profiles
 │   └── defillama.py     # DefiLlama: DeFi TVL per chain (no key)
+├── backfill/            # resumable full backfill: phases, budget, runner (docs/backfill.md)
 ├── pipeline.py          # IngestPipeline: fetch, validate, upsert, record the run
 ├── quality.py           # BarQualityChecker: quarantine bad bars, warn on odd ones
 ├── quality_config.py    # DataQualityConfig and fallback settings
@@ -122,6 +123,8 @@ uv run stonks ingest all-intervals --tickers AAPL.US --since 2025-01-01
 ```
 
 `aggregate` builds a coarser interval from bars already in the lake. `all-intervals` pulls daily and intraday bars and builds the usual aggregates in one go.
+
+`uv run stonks ingest backfill run|status|retry` fills the lake with everything an EODHD All-in-one plan offers, resuming across days inside a call budget. See [backfill.md](../backfill.md).
 
 ## Asset classes
 

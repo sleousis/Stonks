@@ -20,6 +20,8 @@ CATALOGS = {
     "/api/lab/survival-tests",
     "/api/lab/survival-presets",
     "/api/lab/cost-models",
+    "/api/lab/objectives",
+    "/api/lab/tuners",
     "/api/sources",
     "/api/studio/templates",
     "/api/calendars/alert-kinds",

@@ -10,7 +10,7 @@ succeeded, ``"error"`` when all failed, and always ``"ok"`` for an empty batch
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from functools import partial
@@ -22,7 +22,7 @@ import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.adjustment import adj_ratio, adjustment_drift
-from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.metadata_bundle import CompanyPart, MetadataBundle
 from stonks.ingest.minimal_profile import minimal_profile
 from stonks.ingest.quality import (
     BarQualityChecker,
@@ -442,6 +442,30 @@ class IngestPipeline:
 
         return self._run_units(
             kind="metadata",
+            units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
+        )
+
+    def run_company_data(
+        self, tickers: Sequence[str], parts: Collection[CompanyPart]
+    ) -> IngestRunResult:
+        """Pull only ``parts`` of each ticker's data (one
+        :meth:`DataSource.fetch_company_data` call) and upsert them in one
+        transaction per ticker: statements (with their versions), the
+        metadata tables and fund holdings. One ticker is one unit."""
+        chosen = tuple(parts)
+
+        def ingest(ticker: str) -> dict[str, Any]:
+            data = self._source.fetch_company_data(ticker, chosen)
+            with self._lake.transaction():
+                if data.statements is not None:
+                    self._upsert_statements_bundle(data.statements)
+                self._upsert_bundle(data.metadata)
+                if data.fund_holdings:
+                    self._lake.upsert_fund_holdings(_rows_to_df(data.fund_holdings))
+            return {"kinds_found": _non_empty_parts(data.metadata)}
+
+        return self._run_units(
+            kind="company:" + ",".join(sorted(chosen)),
             units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
         )
 

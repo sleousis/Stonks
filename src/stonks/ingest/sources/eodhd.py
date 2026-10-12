@@ -59,7 +59,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from typing import Any, Literal
@@ -70,7 +70,7 @@ from pydantic import ValidationError
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
 from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
-from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.metadata_bundle import CompanyData, CompanyPart, MetadataBundle
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.redact import format_exception, redact_exception, redact_secrets
 from stonks.ingest.schemas import (
@@ -113,7 +113,13 @@ from stonks.ingest.schemas import (
     TickerProfile,
     TickerSnapshotRow,
 )
-from stonks.ingest.sources.base import DataSource, DataSourceError
+from stonks.ingest.sources.base import (
+    ApiUsage,
+    DataSource,
+    DataSourceError,
+    QuotaExceededError,
+    RequestMeter,
+)
 from stonks.ingest.sources.eodhd_options import fetch_option_quotes
 from stonks.logging import get_logger
 
@@ -442,6 +448,34 @@ _SECURITY_TYPE_KEYWORDS = (
 
 class EodhdFreeTierError(DataSourceError):
     """Raised when the API signals an endpoint is blocked on the free tier."""
+
+
+class EodhdQuotaExceededError(QuotaExceededError):
+    """HTTP 402: the account used its daily allowance. Requests fail until
+    the vendor's counter resets at midnight UTC, so retrying is pointless."""
+
+
+#: What each endpoint costs in EODHD API calls, by path prefix, measured on
+#: an All-in-one account (docs/backfill.md). Anything else costs one.
+_REQUEST_COSTS: tuple[tuple[str, int], ...] = (
+    ("/eod-bulk-last-day/", 100),
+    ("/fundamentals/", 10),
+    ("/historical-market-cap/", 10),
+    ("/insider-transactions", 10),
+    ("/macro-indicator/", 10),
+    ("/intraday/", 5),
+    ("/news", 5),
+    ("/sentiments", 5),
+    ("/user", 0),
+)
+
+
+def request_cost(path: str) -> int:
+    """API calls one request to ``path`` (the part after ``/api``) costs."""
+    for prefix, cost in _REQUEST_COSTS:
+        if path.startswith(prefix):
+            return cost
+    return 1
 
 
 class EodhdAllEndpointsFailedError(DataSourceError):
@@ -1924,6 +1958,49 @@ def parse_macro_indicators_response(
 # ---- HTTP client ------------------------------------------------------------
 
 
+def _profile_parts(ticker: str, fundamentals: Any) -> dict[str, Any]:
+    """The :class:`MetadataBundle` fields one ``/fundamentals`` payload
+    fills: profile, snapshot, analysts, holders, ESG, officers, shares
+    outstanding and employees."""
+    bundle_parts: dict[str, Any] = {}
+    profile = parse_profile_from_fundamentals(ticker, fundamentals)
+    if profile is not None:
+        bundle_parts["profile"] = profile
+    snapshot = parse_ticker_snapshot_from_fundamentals(ticker, fundamentals)
+    if snapshot is not None:
+        bundle_parts["ticker_snapshot"] = snapshot
+    bundle_parts["earnings_announcements"] = tuple(
+        parse_earnings_announcements_from_fundamentals(ticker, fundamentals)
+    )
+    bundle_parts["analyst_forecasts"] = tuple(
+        parse_analyst_forecasts_from_fundamentals(ticker, fundamentals)
+    )
+    rating = parse_analyst_ratings_from_fundamentals(ticker, fundamentals)
+    if rating is not None:
+        bundle_parts["analyst_ratings"] = (rating,)
+    bundle_parts["institutional_holders"] = tuple(
+        parse_holders_from_fundamentals(ticker, fundamentals)
+    )
+    esg_snap, esg_activities = parse_esg_from_fundamentals(ticker, fundamentals)
+    if esg_snap is not None:
+        bundle_parts["esg_snapshot"] = esg_snap
+    if esg_activities:
+        bundle_parts["esg_activities"] = tuple(esg_activities)
+    bundle_parts["cross_listings"] = tuple(
+        parse_cross_listings_from_fundamentals(ticker, fundamentals)
+    )
+    bundle_parts["officers"] = tuple(parse_officers_from_fundamentals(ticker, fundamentals))
+    # Full shares-outstanding history from fundamentals.outstandingShares;
+    # falls back to empty tuple if the section is missing.
+    bundle_parts["shares_outstanding"] = tuple(
+        parse_shares_outstanding_history(ticker, fundamentals)
+    )
+    ec = parse_employee_count_snapshot(ticker, fundamentals)
+    if ec is not None:
+        bundle_parts["employee_count"] = (ec,)
+    return bundle_parts
+
+
 # Equity ``fetch_metadata`` fans out to seven endpoints concurrently.
 _METADATA_WORKERS = 7
 
@@ -1939,6 +2016,9 @@ class EodhdDataSource(DataSource):
         max_retries: int = 3,
         retry_backoff_seconds: float = 1.0,
         session: requests.Session | None = None,
+        *,
+        metadata_workers: int = _METADATA_WORKERS,
+        news_limit: int | None = None,
     ):
         if not api_key:
             raise ValueError("EODHD api_key is required")
@@ -1955,6 +2035,27 @@ class EodhdDataSource(DataSource):
         # each other, so concurrent callers only queue — no deadlock risk.
         self._executor: ThreadPoolExecutor | None = None
         self._executor_lock = threading.Lock()
+        self._metadata_workers = max(1, metadata_workers)
+        #: Articles per ``/news`` request (``None``: the vendor default).
+        self._news_limit = news_limit
+        self._meter: RequestMeter | None = None
+
+    def set_request_meter(self, meter: RequestMeter | None) -> None:
+        self._meter = meter
+
+    def fetch_usage(self) -> ApiUsage | None:
+        """The account's calls today from ``/user`` (which costs nothing)."""
+        data = self._get_json("/user")
+        if not isinstance(data, dict):
+            raise DataSourceError(f"unexpected /user payload: {type(data).__name__}")
+        used = _coerce_optional_int(data.get("apiRequests"))
+        if used is None:
+            raise DataSourceError("the /user payload has no apiRequests count")
+        return ApiUsage(
+            used_today=used,
+            daily_limit=_coerce_optional_int(data.get("dailyRateLimit")),
+            day=_parse_date(data.get("apiRequestsDate")),
+        )
 
     def close(self) -> None:
         """Shut down the metadata worker pool (idempotent). Optional: idle
@@ -1975,7 +2076,7 @@ class EodhdDataSource(DataSource):
         with self._executor_lock:
             if self._executor is None:
                 self._executor = ThreadPoolExecutor(
-                    max_workers=_METADATA_WORKERS, thread_name_prefix="eodhd-metadata"
+                    max_workers=self._metadata_workers, thread_name_prefix="eodhd-metadata"
                 )
             return self._executor
 
@@ -2129,6 +2230,9 @@ class EodhdDataSource(DataSource):
         data = self._get(url, params=params)
         return list(parse_intraday_response(ticker, data))
 
+    def list_macro_indicators(self) -> Sequence[str]:
+        return EODHD_MACRO_INDICATORS
+
     def fetch_macro_indicator(
         self,
         country_iso: str,
@@ -2233,7 +2337,7 @@ class EodhdDataSource(DataSource):
                 f"/historical-market-cap/{ticker}",
                 {"fmt": "json"},
             ),
-            "news": lambda: self._get_json("/news", {"fmt": "json", "s": ticker}),
+            "news": lambda: self._get_json("/news", self._news_params(ticker)),
             "insider": lambda: self._get_json(
                 "/insider-transactions",
                 {"fmt": "json", "code": ticker},
@@ -2264,41 +2368,7 @@ class EodhdDataSource(DataSource):
         bundle_parts: dict[str, Any] = {}
         fundamentals = results["fundamentals"]
         if fundamentals is not None:
-            profile = parse_profile_from_fundamentals(ticker, fundamentals)
-            if profile is not None:
-                bundle_parts["profile"] = profile
-            snapshot = parse_ticker_snapshot_from_fundamentals(ticker, fundamentals)
-            if snapshot is not None:
-                bundle_parts["ticker_snapshot"] = snapshot
-            bundle_parts["earnings_announcements"] = tuple(
-                parse_earnings_announcements_from_fundamentals(ticker, fundamentals)
-            )
-            bundle_parts["analyst_forecasts"] = tuple(
-                parse_analyst_forecasts_from_fundamentals(ticker, fundamentals)
-            )
-            rating = parse_analyst_ratings_from_fundamentals(ticker, fundamentals)
-            if rating is not None:
-                bundle_parts["analyst_ratings"] = (rating,)
-            bundle_parts["institutional_holders"] = tuple(
-                parse_holders_from_fundamentals(ticker, fundamentals)
-            )
-            esg_snap, esg_activities = parse_esg_from_fundamentals(ticker, fundamentals)
-            if esg_snap is not None:
-                bundle_parts["esg_snapshot"] = esg_snap
-            if esg_activities:
-                bundle_parts["esg_activities"] = tuple(esg_activities)
-            bundle_parts["cross_listings"] = tuple(
-                parse_cross_listings_from_fundamentals(ticker, fundamentals)
-            )
-            bundle_parts["officers"] = tuple(parse_officers_from_fundamentals(ticker, fundamentals))
-            # Full shares-outstanding history from fundamentals.outstandingShares;
-            # falls back to empty tuple if the section is missing.
-            bundle_parts["shares_outstanding"] = tuple(
-                parse_shares_outstanding_history(ticker, fundamentals)
-            )
-            ec = parse_employee_count_snapshot(ticker, fundamentals)
-            if ec is not None:
-                bundle_parts["employee_count"] = (ec,)
+            bundle_parts.update(_profile_parts(ticker, fundamentals))
 
         if results["dividends"] is not None:
             bundle_parts["dividends"] = tuple(
@@ -2322,6 +2392,72 @@ class EodhdDataSource(DataSource):
             )
 
         return MetadataBundle(**bundle_parts)
+
+    def _news_params(self, ticker: str) -> dict[str, str]:
+        params = {"fmt": "json", "s": ticker}
+        if self._news_limit is not None:
+            params["limit"] = str(self._news_limit)
+        return params
+
+    #: The insider endpoint answers the last year unless told a start.
+    _INSIDERS_SINCE = "1990-01-01"
+    _INSIDERS_LIMIT = 1000
+
+    def fetch_company_data(self, ticker: str, parts: Collection[CompanyPart]) -> CompanyData:
+        """Only the ``parts`` asked for, one request each, in this thread.
+
+        ``profile``, ``statements`` and ``fund_holdings`` share one
+        ``/fundamentals`` response, so asking for all three costs one
+        request (``fetch_metadata`` plus ``fetch_fundamentals`` cost two).
+        Unlike ``fetch_metadata`` a failed part fails the whole call, so a
+        caller that retries gets every part or none. Non-equity tickers
+        only have a profile."""
+        wanted = set(parts)
+        if classify_asset_class(ticker) != "equity":
+            if "profile" not in wanted:
+                return CompanyData()
+            return CompanyData(metadata=self._fetch_metadata_non_equity(ticker))
+        bundle_parts: dict[str, Any] = {}
+        statements: FinancialStatementsBundle | None = None
+        holdings: tuple[FundHoldingRow, ...] = ()
+        if wanted & {"profile", "statements", "fund_holdings"}:
+            payload = self._get_json(f"/fundamentals/{ticker}")
+            _check_free_tier(payload)
+            if "profile" in wanted:
+                bundle_parts.update(_profile_parts(ticker, payload))
+            if "statements" in wanted:
+                statements = parse_financial_statements_response(ticker, payload)
+            if "fund_holdings" in wanted:
+                holdings = tuple(parse_fund_holdings_from_fundamentals(ticker, payload))
+        if "dividends" in wanted:
+            data = self._get_json(f"/div/{ticker}")
+            bundle_parts["dividends"] = tuple(parse_dividends_response(ticker, data))
+        if "splits" in wanted:
+            data = self._get_json(f"/splits/{ticker}")
+            bundle_parts["splits"] = tuple(parse_splits_response(ticker, data))
+        if "market_cap" in wanted:
+            data = self._get_json(f"/historical-market-cap/{ticker}")
+            bundle_parts["market_cap_history"] = tuple(parse_market_cap_response(ticker, data))
+        if "news" in wanted:
+            data = self._get_json("/news", self._news_params(ticker))
+            bundle_parts["news"] = tuple(parse_news_response(ticker, data))
+        if "sentiment" in wanted:
+            data = self._get_json("/sentiments", {"fmt": "json", "s": ticker})
+            bundle_parts["news_sentiment"] = tuple(parse_sentiments_response(ticker, data))
+        if "insiders" in wanted:
+            data = self._get_json(
+                "/insider-transactions",
+                {
+                    "fmt": "json",
+                    "code": ticker,
+                    "from": self._INSIDERS_SINCE,
+                    "limit": str(self._INSIDERS_LIMIT),
+                },
+            )
+            bundle_parts["insider_transactions"] = tuple(parse_insider_response(ticker, data))
+        return CompanyData(
+            metadata=MetadataBundle(**bundle_parts), statements=statements, fund_holdings=holdings
+        )
 
     def _fetch_metadata_non_equity(self, ticker: str) -> MetadataBundle:
         """Narrow metadata fetch for crypto / bond / commodity tickers.
@@ -2447,10 +2583,14 @@ class EodhdDataSource(DataSource):
         """
         params = {**params, "api_token": self._api_key}
         secrets = (self._api_key,)
+        endpoint = url[len(self._base_url) :] if url.startswith(self._base_url) else url
         for attempt in range(1, self._max_retries + 1):
+            if self._meter is not None:
+                # outside the try: a meter that stops the run is not a failed request
+                self._meter.before_request(endpoint, request_cost(endpoint))
             try:
                 return self._get_once(url, params)
-            except EodhdFreeTierError as exc:
+            except (EodhdFreeTierError, EodhdQuotaExceededError) as exc:
                 raise redact_exception(exc, secrets) from None
             except Exception as exc:
                 redact_exception(exc, secrets)
@@ -2465,7 +2605,7 @@ class EodhdDataSource(DataSource):
                 )
                 if not retry:
                     raise
-                time.sleep(self._backoff * (2 ** (attempt - 1)))
+                time.sleep(_retry_after(exc) or self._backoff * (2 ** (attempt - 1)))
         raise AssertionError("unreachable: max_retries must be >= 1")
 
     def _get_once(self, url: str, params: dict[str, str]) -> Any:
@@ -2475,6 +2615,8 @@ class EodhdDataSource(DataSource):
         # pipeline can record it cleanly without retry churn.
         if response.status_code == 403:
             raise EodhdFreeTierError(response.text.strip() or "HTTP 403 Forbidden")
+        if response.status_code == 402:
+            raise EodhdQuotaExceededError(response.text.strip() or "HTTP 402 Payment Required")
         response.raise_for_status()
         text = response.text
         try:
@@ -2501,3 +2643,25 @@ def _is_retryable(exc: BaseException) -> bool:
         status = exc.response.status_code
         return status == 429 or status >= 500
     return False
+
+
+#: Longest wait a ``Retry-After`` header can ask for (a bad header must not
+#: stall a run for hours).
+_MAX_RETRY_AFTER_SECONDS = 120.0
+
+
+def _retry_after(exc: BaseException) -> float | None:
+    """Seconds a 429 answer's ``Retry-After`` header asks to wait."""
+    if not isinstance(exc, requests.HTTPError) or exc.response is None:
+        return None
+    if exc.response.status_code != 429:
+        return None
+    headers = getattr(exc.response, "headers", None) or {}
+    raw = headers.get("Retry-After")
+    try:
+        seconds = float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+    if seconds is None or seconds <= 0:
+        return None
+    return min(seconds, _MAX_RETRY_AFTER_SECONDS)

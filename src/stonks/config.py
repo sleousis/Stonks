@@ -27,6 +27,7 @@ from stonks.core.types import AssetClass
 from stonks.engine.settings import EngineSettings
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 from stonks.factors.settings import FactorSettings
+from stonks.ingest.backfill.settings import BackfillSettings
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
@@ -640,13 +641,16 @@ class AuditConfig(BaseModel):
 
 
 class IngestConfig(BaseModel):
-    """``[ingest]``: bar validation (``[ingest.quality]``) and the fallback
-    source per primary (``[ingest.fallback]``, off by default)."""
+    """``[ingest]``: bar validation (``[ingest.quality]``), the fallback
+    source per primary (``[ingest.fallback]``, off by default) and the
+    backfill (``[ingest.backfill]``)."""
 
     model_config = ConfigDict(extra="forbid")
 
     quality: DataQualityConfig = DataQualityConfig()
     fallback: FallbackConfig = FallbackConfig()
+    #: ``[ingest.backfill]``: the resumable vendor backfill (docs/backfill.md).
+    backfill: BackfillSettings = BackfillSettings()
 
 
 class Settings(BaseSettings):
@@ -797,6 +801,11 @@ def _overlay_env(data: dict) -> None:
     api_key = os.environ.get("EODHD_API_KEY")
     if api_key:
         data.setdefault("sources", {}).setdefault("eodhd", {})["api_key"] = api_key
+
+    eodhd_plan = os.environ.get("STONKS_EODHD_PLAN")
+    if eodhd_plan is not None and eodhd_plan.strip():
+        ensure = data.setdefault("ensure", {})
+        ensure.setdefault("plans", {})["eodhd"] = eodhd_plan.strip().lower()
 
     edgar_agent = os.environ.get("STONKS_EDGAR_USER_AGENT")
     if edgar_agent:

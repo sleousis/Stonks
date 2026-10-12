@@ -502,7 +502,8 @@ yahoo = 2.0
 
 [ensure.plans]
 # Data plan per source. The EODHD free plan keeps one year of daily bars and
-# has no intraday or bulk data, so windows are clipped with a warning.
+# has no intraday or bulk data, so windows are clipped with a warning. With
+# All-in-one set "all_in_one" in your own config or STONKS_EODHD_PLAN.
 eodhd = "free"
 
 [notify]
