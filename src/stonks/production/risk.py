@@ -241,8 +241,10 @@ def _profiles(lake: DuckDBLake, tickers: Sequence[str]) -> dict[str, tuple[str |
         "SELECT id, asset_class, sector FROM instruments WHERE id = ANY(?)", [list(tickers)]
     )
     return {
-        row.id: (_str_or_none(row.asset_class), _str_or_none(row.sector))
-        for row in df.itertuples(index=False)
+        ticker: (_str_or_none(asset_class), _str_or_none(sector))
+        for ticker, asset_class, sector in zip(
+            df["id"], df["asset_class"], df["sector"], strict=True
+        )
     }
 
 

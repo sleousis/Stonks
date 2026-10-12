@@ -47,6 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.backtest.costs import AssetClassCosts, CostModelSettings
 from stonks.core.protocols import Strategy, SurvivalReport
+from stonks.core.types import AssetClass
 from stonks.lab.survival._reruns import Rerun, RerunResult, run_reruns
 from stonks.logging import get_logger
 
@@ -131,7 +132,9 @@ def scale_costs(settings: CostModelSettings, multiplier: float) -> CostModelSett
         )
 
     default = scaled(settings.default)
-    classes = {k: scaled(v) for k, v in settings.asset_classes.items()}
+    classes: dict[AssetClass, AssetClassCosts] = {
+        k: scaled(v) for k, v in settings.asset_classes.items()
+    }
     widest = max(c.half_spread_bps for c in (default, *classes.values()))
     if widest >= _BPS:
         raise ValueError(f"a {m}x half spread reaches 100% of the price")

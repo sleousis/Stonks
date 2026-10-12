@@ -54,7 +54,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.features.library import rsi
+from stonks.features.library import log_prices, rsi
 from stonks.strategies._common import LakeBarCaches, long_only_decide, memo_scope
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.examples._nt888_common import train_bars
@@ -204,7 +204,7 @@ class RSIPCAStrategy(BaseStrategy):
 
         rsis = pd.DataFrame({p: rsi(closes, p) for p in periods})
         lookahead = int(self.params["lookahead"])
-        target = np.log(closes).diff(lookahead).shift(-lookahead)
+        target = log_prices(closes).diff(lookahead).shift(-lookahead)
 
         combined = rsis.copy()
         combined["_target"] = target

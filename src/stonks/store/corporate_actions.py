@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -38,8 +38,9 @@ def actions_from_frame(df: pd.DataFrame | None) -> CorporateActions:
     if df is None or df.empty:
         return CorporateActions()
     events: list[CorporateAction] = []
+    row: Any
     for row in df.itertuples(index=False):
-        ex_date = pd.Timestamp(row.ex_date).date()
+        ex_date = cast(date, pd.Timestamp(row.ex_date).date())
         value = float(row.value)
         if row.kind == "split" and value > 0 and value != 1.0:
             events.append(Split(row.ticker, ex_date, value))

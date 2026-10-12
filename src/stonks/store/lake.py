@@ -22,6 +22,8 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
+from stonks.frames import columns
+from stonks.frames import rows as masked
 from stonks.logging import get_logger
 from stonks.store.bars import (
     BAR_COLUMNS,
@@ -32,6 +34,7 @@ from stonks.store.bars import (
     ParquetBarStore,
     checksums,
 )
+from stonks.store.queries import fetch_scalar
 from stonks.store.statement_versions import MACRO_KEY, known_versions
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
@@ -312,6 +315,11 @@ def _changed_snapshots(
     change (we just learned it), the other way is not.
     """
 
+    def _stamp(value: Any) -> pd.Timestamp:
+        # A missing date is NaT, which compares false like an unordered
+        # Timestamp, so it is typed as one.
+        return cast(pd.Timestamp, pd.Timestamp(value))
+
     def changed(prev: Any, new: Any) -> bool:
         if pd.isna(new):
             return False
@@ -324,16 +332,17 @@ def _changed_snapshots(
     for ident, group in ordered.groupby(identity_cols, sort=False, dropna=False):
         ident = ident if isinstance(ident, tuple) else (ident,)
         prev = stored.get(ident)
-        last_date = None if prev is None else pd.Timestamp(prev[snapshot_col])
+        last_date = None if prev is None else _stamp(prev[snapshot_col])
         for idx, row in group.iterrows():
-            if prev is None or pd.Timestamp(row[snapshot_col]) <= last_date:
+            stamp = _stamp(row[snapshot_col])
+            if prev is None or last_date is None or stamp <= last_date:
                 keep.append(idx)
                 if prev is None:
-                    prev, last_date = row, pd.Timestamp(row[snapshot_col])
+                    prev, last_date = row, stamp
                 continue
             if any(changed(prev[c], row[c]) for c in value_cols):
                 keep.append(idx)
-                prev, last_date = row, pd.Timestamp(row[snapshot_col])
+                prev, last_date = row, stamp
     return batch.loc[sorted(keep)]
 
 
@@ -496,7 +505,7 @@ class DuckDBLake:
         if backend == "parquet" and target_root.exists():
             raise FileExistsError(target_root)
         target.parent.mkdir(parents=True, exist_ok=True)
-        source = self.con.execute("SELECT current_database()").fetchone()[0]
+        source = fetch_scalar(self.con, "SELECT current_database()")
         alias = "_stonks_export"
         path_sql = str(target).replace("'", "''")
         self.con.execute(f"ATTACH '{path_sql}' AS {alias}")
@@ -635,7 +644,7 @@ class DuckDBLake:
         tables = self._base_tables()
         if "bars" not in tables or "lake_settings" not in tables:
             return  # not migrated yet: migrate() calls back
-        held = int(self.con.execute("SELECT COUNT(*) FROM main.bars").fetchone()[0])
+        held = int(fetch_scalar(self.con, "SELECT COUNT(*) FROM main.bars"))
         if held:
             raise RuntimeError(
                 f"this lake holds {held} bars in its DuckDB table but Parquet was requested; "
@@ -737,7 +746,7 @@ class DuckDBLake:
         def check(target: str, what: str, count_sql: str, unit: str) -> None:
             if (name, target) in _DATA_PRESERVING_DROPS:
                 return
-            count = int(self.con.execute(count_sql).fetchone()[0])
+            count = int(fetch_scalar(self.con, count_sql))
             if count == 0:
                 return
             log.warning(
@@ -788,7 +797,7 @@ class DuckDBLake:
         known = set(self.tables())
         if table not in known:
             raise ValueError(f"unknown table {table!r}")
-        return int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+        return int(fetch_scalar(self.con, f"SELECT COUNT(*) FROM {table}"))
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -840,9 +849,9 @@ class DuckDBLake:
         if df.empty:
             return 0
         required = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
-        frame = df[list(required)].copy()
+        frame = columns(df, required).copy()
         frame["interval"] = interval.code
-        return self._bars.upsert(frame[list(_BAR_COLS)])
+        return self._bars.upsert(columns(frame, _BAR_COLS))
 
     def get_bars(
         self,
@@ -887,7 +896,7 @@ class DuckDBLake:
     def upsert_prices(self, df: pd.DataFrame) -> int:
         if df.empty:
             return 0
-        frame = df[list(_PRICE_COLS)].copy()
+        frame = columns(df, _PRICE_COLS).copy()
         # Map the daily ``date`` column onto the ``timestamp`` column in bars.
         frame["timestamp"] = pd.to_datetime(frame["date"])
         frame = frame.drop(columns=["date"])
@@ -903,7 +912,7 @@ class DuckDBLake:
             return pd.DataFrame(columns=list(_PRICE_COLS))
         out = bars.rename(columns={"timestamp": "date"})
         out["date"] = pd.to_datetime(out["date"]).dt.date
-        return out[list(_PRICE_COLS)]
+        return columns(out, _PRICE_COLS)
 
     # ---- financial statements (migration 008) ------------------------------
 
@@ -1036,7 +1045,7 @@ class DuckDBLake:
         update_clause = ", ".join(
             f"{c} = COALESCE(CAST(EXCLUDED.{c} AS {col_types[c]}), {table}.{c})" for c in non_pk
         )
-        with self._registered(_last_per_key(df[list(cols)], pk)):
+        with self._registered(_last_per_key(columns(df, cols), pk)):
             self.con.execute(
                 f"INSERT INTO {table} ({', '.join(cols)}) "
                 f"SELECT {', '.join(cols)} FROM _in "
@@ -1418,7 +1427,7 @@ class DuckDBLake:
         end = pd.to_datetime(df["end_date"])
         bad = end.notna() & (end <= start)
         if bad.any():
-            rows = df[bad][["ticker", "start_date", "end_date"]].to_dict("records")
+            rows = columns(masked(df, bad), ["ticker", "start_date", "end_date"]).to_dict("records")
             raise ValueError(f"universe_membership: end_date must be after start_date: {rows}")
         df = df.assign(
             start_date=[d.date() for d in start],
@@ -1510,12 +1519,14 @@ class DuckDBLake:
     # ---- ingest_runs --------------------------------------------------------
 
     def open_ingest_run(self, source: str, kind: str) -> int:
-        row = self.con.execute(
-            "INSERT INTO ingest_runs (source, kind, started_at, status) "
-            "VALUES (?, ?, ?, 'running') RETURNING id",
-            [source, kind, datetime.now(UTC)],
-        ).fetchone()
-        return int(row[0])
+        return int(
+            fetch_scalar(
+                self.con,
+                "INSERT INTO ingest_runs (source, kind, started_at, status) "
+                "VALUES (?, ?, ?, 'running') RETURNING id",
+                [source, kind, datetime.now(UTC)],
+            )
+        )
 
     def close_ingest_run(
         self,
@@ -2699,7 +2710,7 @@ class DuckDBLake:
         """
         if df.empty:
             return 0
-        frame = df[list(self._OFFICERS_COLS)]
+        frame = columns(df, self._OFFICERS_COLS)
         tickers = frame["ticker"].unique().tolist()
         if not tickers:
             return 0
@@ -2764,7 +2775,7 @@ class DuckDBLake:
             insert_cols += ", natural_key"
             select_cols += f", {natural_key_sql}"
             conflict = "natural_key"
-        with self._registered(_last_per_key(df[list(cols)], pk)):
+        with self._registered(_last_per_key(columns(df, cols), pk)):
             self.con.execute(
                 f"INSERT INTO {table} ({insert_cols}) "
                 f"SELECT {select_cols} FROM _in "
@@ -2835,7 +2846,7 @@ class DuckDBLake:
 
         cols = list(cols)
         key = (*identity_cols, snapshot_col)
-        batch = _last_per_key(df[cols], key)
+        batch = _last_per_key(columns(df, cols), key)
         update_clause = ", ".join(
             f"{c} = EXCLUDED.{c}" for c in cols if c not in (*identity_cols, snapshot_col)
         )
@@ -2845,14 +2856,14 @@ class DuckDBLake:
         with self.transaction():
             latest = self._latest_snapshots(table, batch, identity_cols, snapshot_col)
             eligible = _changed_snapshots(batch, latest, identity_cols, value_cols, snapshot_col)
-            before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            before = int(fetch_scalar(self.con, f"SELECT COUNT(*) FROM {table}"))
             if not eligible.empty:
                 with self._registered(eligible):
                     self.con.execute(
                         f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM _in "
                         f"ON CONFLICT ({pk_list}) DO UPDATE SET {update_clause}"
                     )
-            after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            after = int(fetch_scalar(self.con, f"SELECT COUNT(*) FROM {table}"))
             return after - before
 
     def _latest_snapshots(
@@ -2863,7 +2874,7 @@ class DuckDBLake:
         snapshot_col: str,
     ) -> pd.DataFrame:
         """The stored latest row of every identity present in ``batch``."""
-        ids = batch[identity_cols].drop_duplicates()
+        ids = columns(batch, identity_cols).drop_duplicates()
         in_batch = " AND ".join(f"_ids.{c} = {table}.{c}" for c in identity_cols)
         partition = ", ".join(identity_cols)
         with self._registered(ids, "_ids"):

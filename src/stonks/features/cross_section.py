@@ -9,7 +9,8 @@ statistics and stay NaN in the output. Standard deviations are population
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from typing import cast
 
 import pandas as pd
 
@@ -18,13 +19,15 @@ type Frame = pd.Series | pd.DataFrame
 _UNGROUPED = "__ungrouped__"
 
 
-def _rowwise(x: Frame, fn) -> Frame:
+def _rowwise[F: (pd.Series, pd.DataFrame)](x: F, fn: Callable[[pd.Series], pd.Series]) -> F:
+    """``fn`` on a Series, or on each row of a DataFrame. The result has
+    the type of ``x``."""
     if isinstance(x, pd.DataFrame):
-        return x.apply(fn, axis=1)
+        return cast(pd.DataFrame, x.apply(fn, axis=1))
     return fn(x)
 
 
-def cs_rank(x: Frame) -> Frame:
+def cs_rank[F: (pd.Series, pd.DataFrame)](x: F) -> F:
     """Percentile rank in ``(0, 1]``; ties share their average rank."""
     return _rowwise(x, lambda s: s.rank(pct=True, method="average"))
 
@@ -36,7 +39,7 @@ def _winsorize(s: pd.Series, n_std: float) -> pd.Series:
     return s.clip(lower=mean - n_std * std, upper=mean + n_std * std)
 
 
-def cs_winsorize(x: Frame, n_std: float = 3.0) -> Frame:
+def cs_winsorize[F: (pd.Series, pd.DataFrame)](x: F, n_std: float = 3.0) -> F:
     """Clip each value to ``mean +/- n_std * std`` of its cross section."""
     if n_std <= 0:
         raise ValueError(f"n_std must be positive, got {n_std}")
@@ -58,7 +61,7 @@ def _zscore(s: pd.Series, winsor: float | None) -> pd.Series:
     return z
 
 
-def cs_zscore(x: Frame, winsor: float | None = 3.0) -> Frame:
+def cs_zscore[F: (pd.Series, pd.DataFrame)](x: F, winsor: float | None = 3.0) -> F:
     """Cross-sectional z-score. With ``winsor`` set, values beyond
     ``+/- winsor`` std are clipped and the cross section re-standardised,
     repeated until no z exceeds ``winsor`` (one pass isn't enough: a big
@@ -69,7 +72,9 @@ def cs_zscore(x: Frame, winsor: float | None = 3.0) -> Frame:
     return _rowwise(x, lambda s: _zscore(s, winsor))
 
 
-def cs_neutralize(x: Frame, groups: Mapping[str, object] | pd.Series | None) -> Frame:
+def cs_neutralize[F: (pd.Series, pd.DataFrame)](
+    x: F, groups: Mapping[str, object] | pd.Series | None
+) -> F:
     """Subtract each group's mean (e.g. sector), so every group averages 0.
     Tickers missing from ``groups`` (or mapped to None/NaN) form one
     "ungrouped" bucket; ``groups=None`` demeans the whole cross section."""
@@ -77,7 +82,8 @@ def cs_neutralize(x: Frame, groups: Mapping[str, object] | pd.Series | None) -> 
     def neutralize(s: pd.Series) -> pd.Series:
         if groups is None:
             return s - s.mean()
-        labels = pd.Series(s.index.map(lambda t: groups.get(t)), index=s.index, dtype=object)
+        mapping = groups
+        labels = pd.Series(s.index.map(lambda t: mapping.get(t)), index=s.index, dtype=object)
         labels = labels.where(labels.notna(), _UNGROUPED)
         return s - s.groupby(labels).transform("mean")
 

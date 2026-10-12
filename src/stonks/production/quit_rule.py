@@ -34,6 +34,7 @@ from typing import Any
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
+from stonks.frames import column, index_dates
 from stonks.logging import get_logger
 from stonks.store.state import SqliteState
 
@@ -131,9 +132,10 @@ def attributed_drawdown(
     books: dict[str, dict[date, list[tuple[str, float]]]] = {}
     for pid, day, ticker, qty, share in rows:
         books.setdefault(pid, {}).setdefault(day, []).append((ticker, qty * share))
-    days = sorted({d for s in closes.values() for d in s.index.date if since <= d <= as_of})
+    days = sorted({d for s in closes.values() for d in index_dates(s) if since <= d <= as_of})
     frames = {
-        t: dict(zip(s.index.date, s.to_numpy(dtype=float), strict=True)) for t, s in closes.items()
+        t: dict(zip(index_dates(s), s.to_numpy(dtype=float), strict=True))
+        for t, s in closes.items()
     }
     cumulative, peak, deepest = 0.0, 0.0, 0.0
     exposures: list[float] = []
@@ -226,7 +228,7 @@ def evaluate_quit_rule(
         tickers = sorted({r[2] for r in rows})
         bars = min(max((as_of - promoted).days + 5, 5), MAX_BARS)
         frames = closes(tickers, as_of, bars)
-        series = {t: f["close"] for t, f in frames.items() if "close" in f}
+        series = {t: column(f, "close") for t, f in frames.items() if "close" in f}
         dd = attributed_drawdown(rows, series, since=promoted, as_of=as_of)
         checks.append(
             QuitCheck(

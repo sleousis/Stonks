@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import math
+import sqlite3
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
@@ -884,7 +885,7 @@ def _notes_by_order(state: SqliteState, client_ids: Sequence[str]) -> dict[str, 
     return out
 
 
-def _note(row: Mapping[str, Any]) -> JournalNote:
+def _note(row: sqlite3.Row) -> JournalNote:
     return JournalNote(
         id=int(row["id"]),
         order_client_id=row["order_client_id"],
@@ -920,6 +921,7 @@ def add_note(
             " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
             [client_id, found[0]["portfolio_id"], author, text, stamp, stamp],
         )
+    assert cur.lastrowid is not None
     return get_note(state, int(cur.lastrowid), portfolio_id)
 
 

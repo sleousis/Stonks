@@ -60,6 +60,7 @@ from stonks.logging import get_logger
 from stonks.ops.config import BackupRetention
 from stonks.store.bars import ParquetBarStore
 from stonks.store.lake import DuckDBLake
+from stonks.store.queries import fetch_scalar
 
 FORMAT_VERSION = 1
 MANIFEST = "manifest.json"
@@ -305,7 +306,7 @@ def _backup_lake(paths: DataPaths, dst: Path, lake: DuckDBLake | None) -> dict[s
         # A cursor is a separate connection to the same database: its own
         # transaction, so the copy never joins one the owner has open.
         con = lake.con.cursor()
-        source = con.execute("SELECT current_database()").fetchone()[0]
+        source = fetch_scalar(con, "SELECT current_database()")
     else:
         con = duckdb.connect()
         source = f"stonks_src_{uuid.uuid4().hex[:12]}"
@@ -372,11 +373,12 @@ def _parses(path: Path) -> bool:
 
 
 def _bar_backend(con: duckdb.DuckDBPyConnection, database: str) -> str:
-    has_settings = con.execute(
+    has_settings = fetch_scalar(
+        con,
         "SELECT COUNT(*) FROM duckdb_tables() WHERE database_name = ? AND table_name = "
         "'lake_settings'",
         [database],
-    ).fetchone()[0]
+    )
     if not has_settings:
         return "duckdb"
     row = con.execute(
@@ -420,10 +422,9 @@ def _lake_facts(path: Path) -> dict[str, Any]:
             ).fetchall()
         ]
         counts = {
-            t: int(lake.con.execute(f'SELECT COUNT(*) FROM main."{t}"').fetchone()[0])
-            for t in tables
+            t: int(fetch_scalar(lake.con, f'SELECT COUNT(*) FROM main."{t}"')) for t in tables
         }
-        counts["bars"] = int(lake.con.execute("SELECT COUNT(*) FROM bars").fetchone()[0])
+        counts["bars"] = int(fetch_scalar(lake.con, "SELECT COUNT(*) FROM bars"))
         versions = lake.applied_migrations() if "schema_migrations" in tables else []
         backend = lake.bar_backend
     return {"bar_backend": backend, "schema_versions": versions, "row_counts": counts}

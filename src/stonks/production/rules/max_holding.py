@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
 from stonks.execution.orders import make_client_id
+from stonks.frames import index_dates
 from stonks.production.rules import EPS, RiskAdjustment, RiskContext, RiskRule, register_rule
 from stonks.production.rules._common import adjustment, history, settings_of
 
@@ -71,7 +72,7 @@ class MaxHolding(RiskRule):
                 continue
             held_bars = int((frame.index > pd.Timestamp(entry)).sum())
             if held_bars >= limit:
-                expired[ticker] = (qty, held_bars, frame.index[-1].date())
+                expired[ticker] = (qty, held_bars, index_dates(frame)[-1])
         if not expired:
             return list(orders), []
 

@@ -16,10 +16,10 @@ from __future__ import annotations
 import math
 from typing import Any
 
-import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
+from stonks.features.library import log_prices
 from stonks.production.rules import OrderRule, Recorder, RiskBook, RiskContext, register_rule
 from stonks.production.rules._common import (
     LIQUIDITY_BARS,
@@ -86,7 +86,7 @@ class Liquidity(OrderRule):
             return None
         if settings.max_amihud is not None:
             assert frame is not None
-            returns = np.log(frame["close"]).diff().iloc[-LIQUIDITY_BARS:]
+            returns = log_prices(frame["close"]).diff().iloc[-LIQUIDITY_BARS:]
             illiq = float((returns.abs() / dollar.where(dollar > 0)).mean())
             if math.isnan(illiq) or illiq > settings.max_amihud:
                 record(

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -63,7 +63,7 @@ def diversification_multiplier(
     keys = [k for k, w in weights.items() if w > 0]
     if history is None or len(keys) < 2 or any(k not in history.columns for k in keys):
         return 1.0
-    overlap = history[keys].dropna()
+    overlap = cast(pd.DataFrame, history[keys]).dropna()
     if len(overlap) < min_observations:
         return 1.0
     corr = overlap.corr().to_numpy()
@@ -111,6 +111,7 @@ class SingleWinner(PortfolioConstructor):
     Settings = SingleWinnerSettings
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
+        assert isinstance(self.settings, SingleWinnerSettings)
         threshold = self.settings.threshold
         ranked = [
             (float(r), sid, t)
@@ -195,6 +196,7 @@ class InverseVol(PortfolioConstructor):
     Settings = InverseVolSettings
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
+        assert isinstance(self.settings, InverseVolSettings)
         combined, attribution = combine_signals(inp)
         eligible = {t: v for t, v in combined.items() if inp.tradable(t) and inp.vol(t) is not None}
         chosen = _top(eligible, self.settings.top_n)
@@ -243,6 +245,7 @@ class VolTarget(PortfolioConstructor):
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
         s = self.settings
+        assert isinstance(s, VolTargetSettings)
         strategy_weights = inp.normalized_strategy_weights()
         fdm = diversification_multiplier(inp.forecast_history, strategy_weights)
         combined, attribution = combine_signals(inp)

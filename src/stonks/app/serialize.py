@@ -52,6 +52,7 @@ def to_jsonable(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, Path):
         return value.as_posix()
-    if hasattr(value, "item"):  # numpy scalars
-        return to_jsonable(value.item())
+    item = getattr(value, "item", None)
+    if callable(item):  # numpy scalars
+        return to_jsonable(item())
     return str(value)
