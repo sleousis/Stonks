@@ -270,6 +270,17 @@ A useful alert: `stonks_lab_queue_oldest_queued_seconds > 1800 and stonks_lab_wo
 - A remote worker takes lab runs and sweeps. Studio lab runs and lab runs of a registered strategy wait for a worker on the server. If one waits too long, `python -m stonks.lab.offload status` shows it queued; start the `lab-worker` service or run the job with `STONKS_LAB_EXECUTOR=in_process`.
 - Revoke a worker's token in Profile. Its running job then fails after `lease_seconds`, like a lost worker.
 
+## Trial ledger
+
+Every lab run is a row in `lab_runs` and every trial a row in `lab_trials` (P2). The deflated Sharpe and PBO read these counts, so the ledger must not miss a trial.
+
+- Trials are written as they finish. A cancel, a crash or a broken pool keeps the trials that already ran.
+- A finished run with no recorded trial counts its whole budget. A run that crashed before its first trial still counts as searched.
+- A live run touches its row every quarter of `[lab.offload] lease_seconds`. A row left without a verdict past the lease belonged to a process that died. The worker's queue reaper and the start of the next lab run close it as `error` ("The run was stopped before it finished.") and its budget counts.
+- When every trial of the search fails, the run ends as `error` with "Every trial of the search failed". Admins see the first trial error in the run's details. Look there for a missing table or a strategy bug.
+- The run stores the tuner's winner (`best_trial_index`, `best_params_json`), never a heatmap cell, and each trial's seed.
+- `[lab.parallel] max_workers` caps every pool in the run: the tuner, the heatmap and every survival test. Set it to 1 to keep a run in one process.
+
 ## Backups and restore
 
 ```bash

@@ -197,7 +197,7 @@ flowchart LR
   G -->|promote| AC[active]
 ```
 
-Every trial is written to `lab_runs` and `lab_trials`, so the deflated Sharpe and PBO know how many things were tried. Every status change writes a `status_changes` row. Promotion needs a passing go-live check or an override with a reason.
+Every trial is written to `lab_runs` and `lab_trials` as it finishes, through a run-scoped trial sink, so the deflated Sharpe and PBO know how many things were tried even after a cancel or a crash. A run with no recorded trial counts its budget, and runs left open by a dead process are reaped. Every status change writes a `status_changes` row. Promotion needs a passing go-live check or an override with a reason.
 
 ## Accounts and data ownership
 

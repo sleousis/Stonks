@@ -98,7 +98,7 @@ from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import bars_to_sessions, embargo_calendar_days, scoring_window
 from stonks.lab.parallel import DatasetSpec, dataset_snapshot, planned_workers, run_tasks
 from stonks.lab.survival.base import TuningSetup
-from stonks.lab.tuning.base import tune_and_fit
+from stonks.lab.tuning.base import has_score, tune_and_fit
 from stonks.logging import get_logger
 from stonks.stats.sharpe import psr, return_moments
 from stonks.strategies.base import strategy_data_tickers
@@ -395,13 +395,15 @@ def _open_job(job: _FoldJob) -> _FoldJob:
 
 
 def _run_fold(job: _FoldJob, fold: WalkForwardFold) -> FoldResult:
+    """Tune, fit and score one fold. A tune where no trial scored gives the
+    fold a NaN in-sample score (never 0.0), which the summary leaves out."""
     fold_ds = job.fold_dataset(fold)
     fitted, tuned = tune_and_fit(job.strategy_cls, fold_ds, job.setup, job.fixed)
     is_report = run_backtest(fitted, fold_ds, (fold.train_start, fold.train_end))
     oos_report = run_backtest(fitted, fold_ds, (fold.test_start, fold.test_end))
     return FoldResult(
         fold=fold,
-        best_score=float(tuned.best_score),
+        best_score=float(tuned.best_score) if has_score(tuned) else math.nan,
         best_params=dict(tuned.best_params),
         is_report=is_report,
         oos_report=oos_report,
