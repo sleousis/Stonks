@@ -67,7 +67,9 @@ __all__ = [
     "as_datetime",
     "close_all",
     "closes_only",
+    "current_decision_interval",
     "decision_interval",
+    "equal_weight_new_picks",
     "get_last_n_bars",
     "iso",
     "long_only_decide",
@@ -103,6 +105,11 @@ def decision_interval(interval: Interval | None) -> Iterator[None]:
         yield
     finally:
         _DECISION_INTERVAL.reset(token)
+
+
+def current_decision_interval() -> Interval | None:
+    """The bar length :func:`decision_interval` declared, or ``None``."""
+    return _DECISION_INTERVAL.get()
 
 
 def visible_cutoff(as_of: Any, interval: Interval) -> datetime:
@@ -452,6 +459,49 @@ def long_only_decide(
             strategy_id=strategy_id,
         )
     ]
+
+
+def equal_weight_new_picks(
+    strategy_id: str,
+    my_picks: Sequence[tuple[float, str]],
+    portfolio: Portfolio,
+    prices: Mapping[str, float],
+    as_of: Any,
+) -> list[Order]:
+    """Sell every long that is no longer a pick, and split the free cash
+    equally across the picks not yet held. Held picks are left alone."""
+    picked = {t for _, t in my_picks}
+    orders = [
+        Order(
+            client_id=f"{strategy_id}:sell:{t}:{iso(as_of)}",
+            ticker=t,
+            side="sell",
+            quantity=qty,
+            order_type="market",
+            strategy_id=strategy_id,
+        )
+        for t, qty in portfolio.positions.items()
+        if qty > 0 and t not in picked
+    ]
+    new = [t for t in sorted(picked) if portfolio.positions.get(t, 0.0) <= 0]
+    if not new or portfolio.cash <= 0:
+        return orders
+    budget = portfolio.cash / len(new)
+    for ticker in new:
+        price = prices.get(ticker)
+        if not price or price <= 0:
+            continue
+        orders.append(
+            Order(
+                client_id=f"{strategy_id}:buy:{ticker}:{iso(as_of)}",
+                ticker=ticker,
+                side="buy",
+                quantity=budget / price,
+                order_type="market",
+                strategy_id=strategy_id,
+            )
+        )
+    return orders
 
 
 def close_all_positions(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:

@@ -27,6 +27,8 @@ Lake migration 020 adds three tables. Every source fills the same columns with t
 
 The report date of an earnings row can move. The fiscal period is the key, so a moved date updates the row in place.
 
+Strategies read `earnings_calendar` point in time (`stonks.calendars.known`). A report counts from the latest moment its timing allows: 14:30 UTC for `before`, 21:00 UTC for `during`, and the end of the day for `after` or empty. The `earnings_drift` strategy trades on it.
+
 ## Refresh
 
 The `calendars_refresh` job pulls the calendars and then sends the event alerts. It runs every day at 06:00 UTC by default, from a week back to five weeks ahead. It needs a paid EODHD plan: the free tier has no calendars.

@@ -1909,6 +1909,38 @@ class DuckDBLake:
             frame, table="corporate_filings", cols=self._FILING_COLS, pk=("accession_number",)
         )
 
+    _EARNINGS_READ_COLS = (
+        "ticker",
+        "period_end",
+        "report_date",
+        "before_after_market",
+        "currency",
+        "eps_estimate",
+        "eps_actual",
+        "eps_difference",
+        "surprise_percent",
+    )
+
+    def get_earnings_calendar(self, tickers: Sequence[str] | None = None) -> pd.DataFrame:
+        """Stored earnings reports (migration 020), oldest report first.
+        ``None`` reads every ticker, an empty list none. Read it through a
+        :class:`~stonks.store.pit.PointInTimeLake` to see only the reports
+        out by a decision (:mod:`stonks.calendars.known`)."""
+        cols = ", ".join(self._EARNINGS_READ_COLS)
+        if tickers is not None and not list(tickers):
+            df = self.con.execute(f"SELECT {cols} FROM earnings_calendar LIMIT 0").fetchdf()
+        elif tickers is None:
+            df = self.con.execute(
+                f"SELECT {cols} FROM earnings_calendar ORDER BY report_date, ticker"
+            ).fetchdf()
+        else:
+            df = self.con.execute(
+                f"SELECT {cols} FROM earnings_calendar WHERE ticker = ANY(?)"
+                " ORDER BY report_date, ticker",
+                [list(tickers)],
+            ).fetchdf()
+        return _dates_to_python(df, ("period_end", "report_date"))
+
     def get_corporate_filings(
         self,
         tickers: Sequence[str] | None = None,
