@@ -145,9 +145,9 @@ class AssetClassCosts(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    fee_flat: float = Field(0.0, ge=0.0)
-    fee_bps: float = Field(0.0, ge=0.0)
-    half_spread_bps: float = Field(0.0, ge=0.0)
+    fee_flat: float = Field(default=0.0, ge=0.0)
+    fee_bps: float = Field(default=0.0, ge=0.0)
+    half_spread_bps: float = Field(default=0.0, ge=0.0)
     #: Broker commission schedule (``stonks.backtest.commissions.COMMISSIONS``).
     commission: str = "none"
     #: Pay the US regulatory fees (SEC and FINRA TAF on sales, CAT on both).
@@ -169,16 +169,16 @@ class IStarSettings(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    a1: float = Field(708.0, ge=0.0)
-    a2: float = Field(0.55, gt=0.0)
-    a3: float = Field(0.71, ge=0.0)
-    a4: float = Field(0.5, ge=0.0)
-    b1: float = Field(0.98, ge=0.0, le=1.0)
+    a1: float = Field(default=708.0, ge=0.0)
+    a2: float = Field(default=0.55, gt=0.0)
+    a3: float = Field(default=0.71, ge=0.0)
+    a4: float = Field(default=0.5, ge=0.0)
+    b1: float = Field(default=0.98, ge=0.0, le=1.0)
     #: Assumed participation rate of the execution (percent of volume).
-    pov: float = Field(0.10, gt=0.0, le=1.0)
+    pov: float = Field(default=0.10, gt=0.0, le=1.0)
     #: Bars per year, to annualise ``sigma_daily`` when the trade does not
     #: carry its own (RS-19: the broker fills it per interval and class).
-    periods_per_year: float = Field(252.0, gt=0.0)
+    periods_per_year: float = Field(default=252.0, gt=0.0)
 
 
 class ExecAlgoAssumption(BaseModel):
@@ -206,22 +206,22 @@ class CostModelSettings(BaseModel):
     default: AssetClassCosts = AssetClassCosts()
     asset_classes: dict[AssetClass, AssetClassCosts] = Field(default_factory=dict)
     #: Square-root-law impact, in bps, of an order the size of the whole bar.
-    impact_bps: float = Field(0.0, ge=0.0)
+    impact_bps: float = Field(default=0.0, ge=0.0)
     #: Cap on the impact term, in bps.
-    max_impact_bps: float = Field(500.0, ge=0.0)
+    max_impact_bps: float = Field(default=500.0, ge=0.0)
     impact_model: ImpactModel = "sqrt"
     #: ``sqrt_vol``: impact of trading one ADV, in daily sigmas.
-    impact_gamma: float = Field(1.0, ge=0.0)
+    impact_gamma: float = Field(default=1.0, ge=0.0)
     istar: IStarSettings = IStarSettings()
     #: Rates of the commission schedules and regulatory fees (23.2).
     commissions: CommissionSettings = CommissionSettings()
     half_spread_model: HalfSpreadModel = "class"
     #: Cap on a per-ticker half-spread estimate, in bps.
-    max_half_spread_bps: float = Field(200.0, ge=0.0)
+    max_half_spread_bps: float = Field(default=200.0, ge=0.0)
     #: Lagged-statistics windows, in bars (see ``MarketStatsSpec``).
-    adv_window: int = Field(20, ge=1)
-    vol_window: int = Field(20, ge=2)
-    spread_window: int = Field(20, ge=1)
+    adv_window: int = Field(default=20, ge=1)
+    vol_window: int = Field(default=20, ge=2)
+    spread_window: int = Field(default=20, ge=1)
     #: The execution algo the fills assume (``None``: plain orders).
     exec_algo: ExecAlgoAssumption | None = None
 

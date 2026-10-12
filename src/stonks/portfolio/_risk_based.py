@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 from pydantic import Field, field_validator, model_validator
 
+from stonks.frames import columns
 from stonks.portfolio.base import (
     ConstructionInput,
     ConstructorSettings,
@@ -122,7 +123,7 @@ def covariance_for(
             and np.isfinite(recent[t].dropna().astype(float)).all()
         ]
         if hist_cols:
-            block = recent[hist_cols].astype(float).dropna()
+            block = columns(recent, hist_cols).astype(float).dropna()
             if len(block) < settings.min_observations:
                 hist_cols, block = [], None
     kept_vol = [t for t in ordered if t not in hist_cols and inp.vol(t) is not None]

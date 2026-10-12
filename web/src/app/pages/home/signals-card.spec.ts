@@ -230,7 +230,8 @@ describe('SignalsCard', () => {
         next_as_of: null,
         trigger: 'interval',
       },
-      { action: 'tick', name: 'tick', next_run_at: soon(90), next_as_of: null, trigger: 'daily' },
+      // Half a minute short of 90, so a render in the same millisecond still reads 1h 29m.
+      { action: 'tick', name: 'tick', next_run_at: soon(89.5), next_as_of: null, trigger: 'daily' },
     ]);
     const fixture = TestBed.createComponent(SignalsCard);
     fixture.detectChanges();
@@ -245,7 +246,7 @@ describe('SignalsCard', () => {
     fixture.detectChanges();
     const next = (fixture.nativeElement as HTMLElement).querySelector('.row.next')!;
     expect(next.querySelector('.title')?.textContent?.trim()).toBe('Next: Trading run');
-    expect(next.textContent).toContain('1h 2');
+    expect(next.textContent).toContain('1h 29m');
     expect(next.textContent).not.toMatch(/sync|Health|Tick/);
   });
 

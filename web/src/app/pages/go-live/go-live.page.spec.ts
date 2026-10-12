@@ -1,6 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { provideRouter } from '@angular/router';
 
 import type { BrokerInfo, LeaderboardRow, LeaderboardView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
@@ -109,17 +109,6 @@ describe('GoLivePage (Strategy review)', () => {
     fixture.detectChanges();
     await flushAll();
     expect(el.textContent).not.toMatch(/shadow|promot|regist|(?<!go-)\blive\b/i);
-  });
-
-  it('opens the Review tab for an old ?strategy= link', async () => {
-    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-    fixture.componentRef.setInput('strategy', 'value_1a2b3c4d');
-    fixture.detectChanges();
-    await flushAll();
-    expect(navigate).toHaveBeenCalledWith(['/strategies', 'value_1a2b3c4d'], {
-      queryParams: { tab: 'review' },
-      replaceUrl: true,
-    });
   });
 
   it('points to the Lab when nothing is on trial', async () => {

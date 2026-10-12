@@ -4,6 +4,8 @@
   news reads.
 - :mod:`stonks.calendars.timing`: does an earnings report fall before the
   next market open (the order ticket warning).
+- :mod:`stonks.calendars.known`: from when a report counts as known, for
+  point-in-time reads.
 - :mod:`stonks.calendars.alerts`: the upcoming-event alert kinds and the
   check the calendar refresh runs.
 """

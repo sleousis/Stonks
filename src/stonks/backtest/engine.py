@@ -155,7 +155,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 
@@ -461,6 +461,7 @@ class Backtester:
             )
         out: dict[datetime, dict[str, _Bar]] = {}
         asset_classes: dict[str, AssetClass] = {}
+        row: Any
         for row in df.itertuples(index=False):
             row_stats = next(stats) if stats is not None else None
             if not row.in_window:
@@ -525,10 +526,10 @@ class Backtester:
         happens inside this bar, and no strategy decision ever reads them.
         The ``MarketStats`` it sees come from earlier bars only."""
         opens = {t: b.open for t, b in bars.items() if b.open is not None and b.open > 0}
-        volumes = {t: bars[t].volume for t in opens if bars[t].volume is not None}
-        highs = {t: bars[t].high for t in opens if bars[t].high is not None}
-        lows = {t: bars[t].low for t in opens if bars[t].low is not None}
-        stats = {t: bars[t].stats for t in opens if bars[t].stats is not None}
+        volumes = {t: v for t in opens if (v := bars[t].volume) is not None}
+        highs = {t: h for t in opens if (h := bars[t].high) is not None}
+        lows = {t: lo for t in opens if (lo := bars[t].low) is not None}
+        stats = {t: s for t in opens if (s := bars[t].stats) is not None}
         self._broker.set_prices(
             opens, as_of=as_of, volumes=volumes, highs=highs, lows=lows, stats=stats
         )
@@ -668,7 +669,8 @@ class Backtester:
         if not callable(reader):
             _log.warning("universe_membership_unavailable", universe_id=universe_id)
             return spans
-        frame = reader(universe_id, list(self._config.universe))
+        frame = cast(pd.DataFrame, reader(universe_id, list(self._config.universe)))
+        row: Any
         for row in frame.itertuples(index=False):
             end = None if pd.isna(row.end_date) else _as_date(row.end_date)
             spans.setdefault(str(row.ticker), []).append((_as_date(row.start_date), end))
@@ -926,6 +928,7 @@ class Backtester:
             [list(self._config.universe), day_start(end + timedelta(days=1))],
         )
         out: dict[str, dict[date, float]] = {}
+        row: Any
         for row in frame.itertuples(index=False):
             if row.close is not None and not pd.isna(row.close) and row.close > 0:
                 out.setdefault(str(row.ticker), {})[_as_date(row.timestamp)] = float(row.close)
@@ -987,7 +990,7 @@ def _as_date(value) -> date:
         return value.date()
     if isinstance(value, date):
         return value
-    return pd.Timestamp(value).date()
+    return cast(date, pd.Timestamp(value).date())
 
 
 def _exposure(

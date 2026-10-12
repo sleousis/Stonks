@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
+from stonks.store.queries import fetch_scalar
 from stonks.universes.base import (
     EARLIEST,
     IndexChange,
@@ -244,9 +245,9 @@ class UniverseStore:
         """The latest snapshot plus every change of ``index_id``; ``None``
         when nothing is stored."""
         con = self._lake.con
-        latest = con.execute(
-            "SELECT MAX(as_of) FROM index_constituent_snapshots WHERE index_id = ?", [index_id]
-        ).fetchone()[0]
+        latest = fetch_scalar(
+            con, "SELECT MAX(as_of) FROM index_constituent_snapshots WHERE index_id = ?", [index_id]
+        )
         constituents: tuple[str, ...] = ()
         source = None
         if latest is not None:

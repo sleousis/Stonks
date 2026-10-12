@@ -115,6 +115,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Strategy review',
     key: 'g',
     workspace: 'Research',
+    // The approval queue: approving is for admins (route guarded too).
+    adminOnly: true,
     keywords: ['checks', 'approve', 'go-live check'],
   },
   {

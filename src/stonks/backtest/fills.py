@@ -108,10 +108,10 @@ class MarketStatsSpec(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    adv_window: int = Field(20, ge=1)
-    vol_window: int = Field(20, ge=2)
+    adv_window: int = Field(default=20, ge=1)
+    vol_window: int = Field(default=20, ge=2)
     #: Pairs of bars in the spread estimate (``spread_window + 1`` bars).
-    spread_window: int = Field(20, ge=1)
+    spread_window: int = Field(default=20, ge=1)
     #: ``None`` skips the spread estimate.
     spread_estimator: SpreadEstimator | None = None
 
@@ -254,7 +254,7 @@ class FillModelSettings(BaseModel):
 
     #: Largest fraction of the basis volume one order may take per bar;
     #: ``None`` disables the cap.
-    max_participation: float | None = Field(0.10, gt=0.0, le=1.0)
+    max_participation: float | None = Field(default=0.10, gt=0.0, le=1.0)
     participation_basis: Literal["bar_volume", "adv"] = "bar_volume"
     carry_unfilled: bool = True
     allow_zero_volume: bool = False
@@ -262,8 +262,8 @@ class FillModelSettings(BaseModel):
     #: Longest decision-to-fill gap, in calendar days; ``None`` disables.
     #: Never shorter than two bars of the backtest interval (RS-14), so
     #: weekly, monthly and yearly bars still fill.
-    max_gap_days: float | None = Field(7.0, gt=0.0)
-    adv_window: int = Field(20, ge=1)
+    max_gap_days: float | None = Field(default=7.0, gt=0.0)
+    adv_window: int = Field(default=20, ge=1)
 
     def build(self) -> BarFillModel:
         return BarFillModel(self)
@@ -347,17 +347,17 @@ class MinuteFillSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     #: Largest fraction of the minute's volume one order takes per bar.
-    max_participation: float | None = Field(0.10, gt=0.0, le=1.0)
+    max_participation: float | None = Field(default=0.10, gt=0.0, le=1.0)
     carry_unfilled: bool = True
     allow_zero_volume: bool = False
     honour_limits: bool = True
     #: Most bars between the decision and the fill bar (``None`` disables).
-    max_gap_bars: int | None = Field(5, ge=0)
+    max_gap_bars: int | None = Field(default=5, ge=0)
     #: Day orders expire when the fill bar is in a later session.
     expire_at_session_end: bool = True
     #: Add the half spread of a recorded quote to the reference price.
     use_quote_spread: bool = True
-    adv_window: int = Field(20, ge=1)
+    adv_window: int = Field(default=20, ge=1)
 
     def build(self) -> MinuteFillModel:
         return MinuteFillModel(self)
@@ -452,7 +452,7 @@ class ExecutionSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     fill: FillModelSettings | None = None
-    settlement_days: int = Field(0, ge=0, le=5)
+    settlement_days: int = Field(default=0, ge=0, le=5)
 
     def fill_model(self) -> FillModel:
         return self.fill.build() if self.fill is not None else ImmediateFillModel()

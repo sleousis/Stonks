@@ -10,9 +10,12 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  # The Python suite runs in parallel shards. tools/ci_shards.py splits the
+  # test modules by file, deterministically, and every module lands in
+  # exactly one shard. Keep the shard lists below and CI_SHARDS in step.
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -29,12 +32,75 @@ jobs:
       # [tool.pyright] (core, execution) may have no errors at all (BL-49).
       - name: Type check (new pyright errors only)
         run: uv run python -m tools.pyright_gate
+
+  test-shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      CI_SHARDS: 4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      # Each shard writes raw coverage data only. The per-shard total is
+      # partial, so fail_under waits for the combined report in "test".
+      - name: Test shard ${{ matrix.shard }} with coverage
+        run: |
+          mapfile -t files < <(uv run python -m tools.ci_shards "${{ matrix.shard }}" "$CI_SHARDS")
+          [ "${#files[@]}" -gt 0 ]
+          echo "shard ${{ matrix.shard }} of $CI_SHARDS: ${#files[@]} test modules"
+          uv run pytest -q -n auto --cov --cov-report= --cov-fail-under=0 "${files[@]}"
+          mv .coverage "coverage-${{ matrix.shard }}.data"
+      - name: Upload the shard's coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage-${{ matrix.shard }}.data
+          if-no-files-found: error
+          retention-days: 1
+
+  # The required check. It fails when lint or any shard fails, then merges
+  # the shards' coverage and runs the gates on the whole suite.
+  test:
+    if: always()
+    needs: [lint, test-shard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Lint and every shard passed
+        env:
+          LINT: ${{ needs.lint.result }}
+          SHARDS: ${{ needs.test-shard.result }}
+        run: |
+          echo "lint: $LINT, shards: $SHARDS"
+          [ "$LINT" = success ] && [ "$SHARDS" = success ]
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-shard-*
+          path: shards
+          merge-multiple: true
       # TT-01: coverage.py's combined line-and-branch number. fail_under
       # (pyproject.toml) holds the overall gate of 90; tools/coverage_gate.py
       # holds the per-package floors for core, production, execution, auth
       # and portfolio (target 95, floors at today's value where lower).
-      - name: Test with coverage
-        run: uv run pytest -q -n auto --cov --cov-report=json --cov-report=term
+      - name: Combine the shards' coverage
+        run: |
+          uv run coverage combine shards/*.data
+          uv run coverage json -o coverage.json --fail-under=0
+          uv run coverage report
       - name: Coverage floors per package
         run: uv run python -m tools.coverage_gate coverage.json
       - name: Upload the coverage report
@@ -46,10 +112,17 @@ jobs:
           if-no-files-found: ignore
 
   # TT-12 (BE-48): pyproject says Python 3.12+, so the oldest supported
-  # version runs the whole suite too (no coverage, the job above has it).
-  test-python-3-12:
+  # version runs the whole suite too (no coverage, "test" has it), in the
+  # same shards.
+  test-python-3-12-shard:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      CI_SHARDS: 4
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -58,8 +131,24 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --locked --python 3.12
-      - name: Test
-        run: uv run --python 3.12 pytest -q -n auto
+      - name: Test shard ${{ matrix.shard }}
+        run: |
+          mapfile -t files < <(uv run --python 3.12 python -m tools.ci_shards "${{ matrix.shard }}" "$CI_SHARDS")
+          [ "${#files[@]}" -gt 0 ]
+          uv run --python 3.12 pytest -q -n auto "${files[@]}"
+
+  test-python-3-12:
+    if: always()
+    needs: [test-python-3-12-shard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shard passed
+        env:
+          SHARDS: ${{ needs.test-python-3-12-shard.result }}
+        run: |
+          echo "shards: $SHARDS"
+          [ "$SHARDS" = success ]
 
   ui:
     runs-on: ubuntu-latest

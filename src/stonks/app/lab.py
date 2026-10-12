@@ -1238,6 +1238,9 @@ class _CancellableObjective:
     this process after each trial, so API lab runs tune in parallel and
     stay cancellable."""
 
+    name: str
+    direction: Literal["maximize", "minimize"]
+
     def __init__(self, inner: Objective, ctx: JobContext) -> None:
         self._inner = inner
         self._ctx = ctx

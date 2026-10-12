@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from stonks.features.cross_section import cs_rank, cs_zscore
+from stonks.frames import subset
 
 FORECAST_TARGET = 10.0  # Carver: average absolute forecast
 FORECAST_CAP = 20.0
@@ -140,12 +141,12 @@ def _forecast(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
 
 @register_normalizer("alpha")
 def _alpha(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
-    sigma = pd.Series({t: ctx.vols_annual.get(t) for t in s.index}, dtype=float)
+    sigma = pd.Series({t: ctx.vols_annual.get(str(t)) for t in s.index}, dtype=float)
     usable = sigma.notna() & (sigma > 0) & sigma.map(math.isfinite)
-    s, sigma = s[usable], sigma[usable]
+    s, sigma = subset(s, usable), subset(sigma, usable)
     z = _sign(s) if len(s) < MIN_CROSS_SECTION else cs_zscore(s, winsor=ZSCORE_WINSOR)
     ic = float(ctx.ics.get(strategy_id, DEFAULT_IC))
-    return ic * sigma * z
+    return sigma * ic * z
 
 
 def normalize(
@@ -175,5 +176,5 @@ def normalize(
         normalised = fn(sid, s, ctx)
         if long_only:
             normalised = normalised.clip(lower=0.0)
-        out[sid] = {t: float(v) for t, v in normalised.items() if math.isfinite(v)}
+        out[sid] = {str(t): float(v) for t, v in normalised.items() if math.isfinite(v)}
     return out

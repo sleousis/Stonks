@@ -4,7 +4,7 @@ metrics (scrape token or loopback, see :class:`~stonks.api.deps.MetricsAccessCon
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -27,7 +27,7 @@ probes_router = APIRouter(prefix="/api/health", tags=["health"])
 #: ``GET /metrics``, mounted behind :func:`~stonks.api.deps.authorize_metrics`.
 metrics_router = APIRouter()
 
-_PROBE_RESPONSES = {503: PROBLEM_RESPONSES[503]}
+_PROBE_RESPONSES: dict[int | str, dict[str, Any]] = {503: PROBLEM_RESPONSES[503]}
 
 
 @router.get("", response_model=ScheduleView, operation_id="getSchedule")

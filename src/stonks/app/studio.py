@@ -760,7 +760,7 @@ def _smoke_sample(factory: Callable[[], Any], bars: int = _SAMPLE_EVAL_BARS) -> 
     """Construct the strategy, check its parameter spec, run
     ``estimate_return`` over the last ``bars`` synthetic bars of two sample
     tickers and ``decide`` once."""
-    tickers = list(_SAMPLE_TICKERS)
+    tickers: list[str] = list(_SAMPLE_TICKERS)
     frames = {t: synthetic_bars(_SAMPLE_BARS, seed=i + 1) for i, t in enumerate(tickers)}
     lake = SampleLake(frames)
     try:

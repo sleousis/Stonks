@@ -1,13 +1,5 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  input,
-  resource,
-} from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import type { LeaderboardRow } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
@@ -51,7 +43,8 @@ export function reviewOrder(rows: readonly LeaderboardRow[]): LeaderboardRow[] {
  * trial, each with its verdict and go-live check, and the broker an
  * approval would send followers' orders to. Judging and approving happen on
  * the strategy page's Review tab, so there is one place to judge a strategy
- * (F27). An old `?strategy=<id>` link opens that tab.
+ * (F27). Admins only: `adminGuard` on the route, and `oldReviewLinkGuard`
+ * sends an old `?strategy=<id>` link to that strategy's Review tab first.
  */
 @Component({
   selector: 'app-go-live-page',
@@ -76,22 +69,6 @@ export function reviewOrder(rows: readonly LeaderboardRow[]): LeaderboardRow[] {
 export class GoLivePage {
   private readonly strategiesApi = inject(StrategiesService);
   private readonly systemApi = inject(SystemService);
-  private readonly router = inject(Router);
-
-  /** Query param `?strategy=<id>` from older links: opens that strategy's Review tab. */
-  readonly strategy = input<string | undefined>();
-
-  constructor() {
-    effect(() => {
-      const id = this.strategy();
-      if (id) {
-        void this.router.navigate(['/strategies', id], {
-          queryParams: { tab: 'review' },
-          replaceUrl: true,
-        });
-      }
-    });
-  }
 
   protected readonly board = resource({
     loader: () => this.strategiesApi.leaderboard({ sort: 'return', include_retired: false }),
