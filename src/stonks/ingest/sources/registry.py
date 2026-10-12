@@ -9,6 +9,7 @@ picking one source never pays the import cost of another.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from stonks.config import SourcesConfig, secret_value
 from stonks.ingest.sources.base import DataSource
@@ -19,6 +20,12 @@ class SourceConfigError(ValueError):
 
 
 def _build_eodhd(cfg: SourcesConfig) -> DataSource:
+    return build_eodhd(cfg)
+
+
+def build_eodhd(cfg: SourcesConfig, **options: Any) -> DataSource:
+    """The EODHD source with extra keyword ``options`` (``metadata_workers``,
+    ``news_limit``), for callers that tune it (the backfill)."""
     from stonks.ingest.sources.eodhd import EodhdDataSource
 
     eodhd = cfg.eodhd
@@ -33,6 +40,7 @@ def _build_eodhd(cfg: SourcesConfig) -> DataSource:
         timeout_seconds=eodhd.timeout_seconds,
         max_retries=eodhd.max_retries,
         retry_backoff_seconds=eodhd.retry_backoff_seconds,
+        **options,
     )
 
 

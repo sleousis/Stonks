@@ -14,7 +14,8 @@ populate multiple rows in one bundle without a second code path.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
 
 from stonks.ingest.schemas import (
     AnalystForecastRow,
@@ -29,6 +30,8 @@ from stonks.ingest.schemas import (
     EmployeeCountRow,
     EsgActivityRow,
     EsgSnapshotRow,
+    FinancialStatementsBundle,
+    FundHoldingRow,
     InsiderTransactionRow,
     InstitutionalHolderRow,
     MarketCapRow,
@@ -86,3 +89,46 @@ class MetadataBundle:
                 "MetadataBundle: at most one of "
                 "{crypto_profile, bond_profile, commodity_contract} may be set per bundle"
             )
+
+
+#: The parts of one company's data a caller can ask for at once
+#: (:meth:`~stonks.ingest.sources.base.DataSource.fetch_company_data`).
+#: ``profile`` is the profile and everything that rides with it (snapshot,
+#: analysts, holders, officers, shares outstanding, ESG, earnings history).
+CompanyPart = Literal[
+    "profile",
+    "statements",
+    "fund_holdings",
+    "dividends",
+    "splits",
+    "market_cap",
+    "news",
+    "sentiment",
+    "insiders",
+]
+COMPANY_PARTS: tuple[CompanyPart, ...] = (
+    "profile",
+    "statements",
+    "fund_holdings",
+    "dividends",
+    "splits",
+    "market_cap",
+    "news",
+    "sentiment",
+    "insiders",
+)
+#: The parts :class:`MetadataBundle` carries.
+METADATA_PARTS: frozenset[CompanyPart] = frozenset(
+    {"profile", "dividends", "splits", "market_cap", "news", "sentiment", "insiders"}
+)
+
+
+@dataclass(frozen=True)
+class CompanyData:
+    """The parts of one company's data a caller asked for. ``statements``
+    is ``None`` when they were not asked for, so an upsert leaves the
+    stored statements alone."""
+
+    metadata: MetadataBundle = field(default_factory=MetadataBundle)
+    statements: FinancialStatementsBundle | None = None
+    fund_holdings: tuple[FundHoldingRow, ...] = ()
