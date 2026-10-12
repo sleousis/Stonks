@@ -289,10 +289,9 @@ const CURRENCY = /^[A-Z]{3}$/;
             </p>
           </div>
         </section>
-
       </div>
 
-        @if (settings.hasValue() && settings.value().lot_method === 'specific') {
+      @if (settings.hasValue() && settings.value().lot_method === 'specific') {
         <section class="page-section lots" aria-labelledby="tax-lots-title">
           <div class="section-head">
             <h2 id="tax-lots-title">Specific lots <app-help-tip term="specific_lots" /></h2>

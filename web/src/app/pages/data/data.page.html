@@ -35,7 +35,11 @@
       [detailTone]="l.tickers_failed ? 'loss' : ''"
       [detail]="l.tickers_failed ? 'in the last update' : 'none'"
     />
-    <app-stat-tile label="Problem updates" [value]="'' + troubled()" [detail]="'of the last ' + recent()!.length" />
+    <app-stat-tile
+      label="Problem updates"
+      [value]="'' + troubled()"
+      [detail]="'of the last ' + recent()!.length"
+    />
   </div>
 }
 

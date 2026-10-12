@@ -9,8 +9,7 @@
     >
     @if (q.day !== null) {
       <span class="day-change num" [class.gain]="q.day > 0" [class.loss]="q.day < 0"
-        >{{ q.day | pct: { signed: true } }}
-        <span class="change-label">last session</span></span
+        >{{ q.day | pct: { signed: true } }} <span class="change-label">last session</span></span
       >
     }
     @if (q.range !== null) {
@@ -26,7 +25,13 @@
   <form class="finder" role="search" (submit)="open($event)">
     <label for="chart-ticker" class="visually-hidden">Ticker</label>
     <span class="finder-field">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        aria-hidden="true"
+      >
         <circle cx="7" cy="7" r="4.5" />
         <path d="m10.5 10.5 3 3" />
       </svg>
@@ -149,7 +154,9 @@
       <p class="key">
         <span class="key-item"><app-side-tag aria-hidden="true" side="buy" /> your buy</span>
         <span class="key-item"><app-side-tag aria-hidden="true" side="sell" /> your sell</span>
-        <span class="key-item"><span class="mark dot" aria-hidden="true"></span> a strategy signal</span>
+        <span class="key-item"
+          ><span class="mark dot" aria-hidden="true"></span> a strategy signal</span
+        >
         @if (chart.value().truncated) {
           <span class="muted">Older bars are not shown.</span>
         }
@@ -199,7 +206,13 @@
                   [attr.aria-label]="'Stop comparing ' + t"
                   (click)="removeCompare(t)"
                 >
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    aria-hidden="true"
+                  >
                     <path d="m4.5 4.5 7 7m0-7-7 7" />
                   </svg>
                 </button>

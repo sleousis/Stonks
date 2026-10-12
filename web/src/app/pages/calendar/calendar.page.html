@@ -188,8 +188,7 @@
                       <span class="day-rel">{{ rel }}</span>
                     }
                     <span class="day-count num"
-                      >{{ d.items.length }}
-                      <span class="visually-hidden">events</span></span
+                      >{{ d.items.length }} <span class="visually-hidden">events</span></span
                     >
                   </h3>
                   <ul class="events">
@@ -211,9 +210,8 @@
                             }
                             @if (e.importance) {
                               <span class="importance" [attr.data-level]="e.importance"
-                                >{{ e.importance }}<span class="visually-hidden">
-                                  importance</span
-                                ></span
+                                >{{ e.importance
+                                }}<span class="visually-hidden"> importance</span></span
                               >
                             }
                           </p>

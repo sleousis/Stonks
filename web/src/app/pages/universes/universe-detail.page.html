@@ -76,8 +76,8 @@
     </p>
   }
   <p class="muted lab-hint">
-    Refresh turns the definition into dated membership rows. Rule universes read our price data,
-    so fetch the data first. Test in the lab opens the lab with it picked under Tickers to test.
+    Refresh turns the definition into dated membership rows. Rule universes read our price data, so
+    fetch the data first. Test in the lab opens the lab with it picked under Tickers to test.
   </p>
 }
 
@@ -131,132 +131,131 @@
   }
 
   <div class="cols">
-  <!-- Membership history ------------------------------------------------->
-  <section class="page-section section-flush history" aria-labelledby="history-title">
-    <div class="section-head">
-      <h2 id="history-title">Membership history</h2>
-      @if (history.hasValue()) {
-        <span class="muted num">{{ history.value().total | num: { digits: 0 } }} spans</span>
-      }
-    </div>
-    <div class="section-body date-row">
-      <div class="field">
-        <label for="h-find">Find a ticker</label>
-        <input
-          id="h-find"
-          class="input"
-          type="search"
-          placeholder="e.g. AAPL"
-          autocapitalize="characters"
-          spellcheck="false"
-          aria-describedby="h-find-hint"
-          [value]="historyFind()"
-          (change)="findInHistory($any($event.target).value)"
-        />
-        <span id="h-find-hint" class="hint">Press Enter to search.</span>
+    <!-- Membership history ------------------------------------------------->
+    <section class="page-section section-flush history" aria-labelledby="history-title">
+      <div class="section-head">
+        <h2 id="history-title">Membership history</h2>
+        @if (history.hasValue()) {
+          <span class="muted num">{{ history.value().total | num: { digits: 0 } }} spans</span>
+        }
       </div>
-    </div>
-    @if (history.error(); as err) {
-      <app-error-state
-        title="Could not load the history"
-        [error]="err"
-        (retry)="history.reload()"
-      />
-    } @else if (!history.hasValue()) {
-      <app-loading-state label="Loading the history" [rows]="3" />
-    } @else if (history.value().items.length === 0) {
-      <app-empty-state
-        title="No history yet"
-        [message]="
-          historyFind() ? 'No ticker matches.' : 'Refresh the universe to build its membership.'
-        "
-      />
-    } @else {
-      @let h = history.value();
-      <p class="muted intro history-intro">
-        Latest change first. Each row is a stretch of membership: joined on the first day, gone from
-        the day it left.
-      </p>
-      <app-data-table
-        caption="Membership history"
-        [rows]="h.items"
-        [columns]="historyColumns"
-        [rowKey]="historyKey"
-      />
-      @if (h.items.length < h.total) {
-        <div class="section-body more">
-          <button
-            type="button"
-            class="btn"
-            [disabled]="history.isLoading()"
-            [attr.aria-busy]="history.isLoading()"
-            (click)="moreHistory()"
-          >
-            Show more ({{ h.items.length | num: { digits: 0 } }} of
-            {{ h.total | num: { digits: 0 } }})
-          </button>
+      <div class="section-body date-row">
+        <div class="field">
+          <label for="h-find">Find a ticker</label>
+          <input
+            id="h-find"
+            class="input"
+            type="search"
+            placeholder="e.g. AAPL"
+            autocapitalize="characters"
+            spellcheck="false"
+            aria-describedby="h-find-hint"
+            [value]="historyFind()"
+            (change)="findInHistory($any($event.target).value)"
+          />
+          <span id="h-find-hint" class="hint">Press Enter to search.</span>
         </div>
-      }
-    }
-  </section>
-
-  <!-- Members on a date --------------------------------------------------->
-  <section class="page-section section-flush members" aria-labelledby="members-title">
-    <div class="section-head">
-      <h2 id="members-title">Members on a date</h2>
-      @if (members.hasValue()) {
-        <span class="muted num"
-          >{{ members.value().count | num: { digits: 0 } }} on
-          {{ day(members.value().as_of) }}</span
-        >
-      }
-    </div>
-    <div class="section-body date-row">
-      <div class="field">
-        <label for="m-date">Date</label>
-        <input
-          id="m-date"
-          class="input"
-          type="date"
-          [value]="asOf()"
-          (change)="asOf.set($any($event.target).value)"
-        />
       </div>
-      <div class="field">
-        <label for="m-find">Find a ticker</label>
-        <input
-          id="m-find"
-          class="input"
-          type="search"
-          placeholder="e.g. AAPL"
-          autocapitalize="characters"
-          spellcheck="false"
-          [value]="find()"
-          (input)="find.set($any($event.target).value)"
+      @if (history.error(); as err) {
+        <app-error-state
+          title="Could not load the history"
+          [error]="err"
+          (retry)="history.reload()"
         />
-      </div>
-    </div>
-    @if (members.error(); as err) {
-      <app-error-state title="Could not load members" [error]="err" (retry)="members.reload()" />
-    } @else if (!members.hasValue()) {
-      <app-loading-state label="Loading members" [rows]="3" />
-    } @else if (members.value().tickers.length === 0) {
-      <app-empty-state
-        title="No members on this date"
-        message="Refresh the universe to build its membership, or pick a date inside its window."
-      />
-    } @else {
-      <app-data-table
-        caption="Members on this date"
-        [rows]="memberRows()"
-        [columns]="memberColumns"
-        [rowKey]="memberKey"
-        [pageSize]="membersPageSize"
-        emptyMessage="No member matches."
-      />
-    }
-  </section>
+      } @else if (!history.hasValue()) {
+        <app-loading-state label="Loading the history" [rows]="3" />
+      } @else if (history.value().items.length === 0) {
+        <app-empty-state
+          title="No history yet"
+          [message]="
+            historyFind() ? 'No ticker matches.' : 'Refresh the universe to build its membership.'
+          "
+        />
+      } @else {
+        @let h = history.value();
+        <p class="muted intro history-intro">
+          Latest change first. Each row is a stretch of membership: joined on the first day, gone
+          from the day it left.
+        </p>
+        <app-data-table
+          caption="Membership history"
+          [rows]="h.items"
+          [columns]="historyColumns"
+          [rowKey]="historyKey"
+        />
+        @if (h.items.length < h.total) {
+          <div class="section-body more">
+            <button
+              type="button"
+              class="btn"
+              [disabled]="history.isLoading()"
+              [attr.aria-busy]="history.isLoading()"
+              (click)="moreHistory()"
+            >
+              Show more ({{ h.items.length | num: { digits: 0 } }} of
+              {{ h.total | num: { digits: 0 } }})
+            </button>
+          </div>
+        }
+      }
+    </section>
 
+    <!-- Members on a date --------------------------------------------------->
+    <section class="page-section section-flush members" aria-labelledby="members-title">
+      <div class="section-head">
+        <h2 id="members-title">Members on a date</h2>
+        @if (members.hasValue()) {
+          <span class="muted num"
+            >{{ members.value().count | num: { digits: 0 } }} on
+            {{ day(members.value().as_of) }}</span
+          >
+        }
+      </div>
+      <div class="section-body date-row">
+        <div class="field">
+          <label for="m-date">Date</label>
+          <input
+            id="m-date"
+            class="input"
+            type="date"
+            [value]="asOf()"
+            (change)="asOf.set($any($event.target).value)"
+          />
+        </div>
+        <div class="field">
+          <label for="m-find">Find a ticker</label>
+          <input
+            id="m-find"
+            class="input"
+            type="search"
+            placeholder="e.g. AAPL"
+            autocapitalize="characters"
+            spellcheck="false"
+            [value]="find()"
+            (input)="find.set($any($event.target).value)"
+          />
+        </div>
+      </div>
+      @if (members.error(); as err) {
+        <app-error-state title="Could not load members" [error]="err" (retry)="members.reload()" />
+      } @else if (!members.hasValue()) {
+        <app-loading-state label="Loading members" [rows]="3" />
+      } @else if (members.value().tickers.length === 0) {
+        <app-empty-state
+          title="No members on this date"
+          message="Refresh the universe to build its membership, or pick a date inside its window."
+        />
+      } @else {
+        <app-data-table
+          caption="Members on this date"
+          [rows]="memberRows()"
+          [columns]="memberColumns"
+          [rowKey]="memberKey"
+          [pageSize]="membersPageSize"
+          emptyMessage="No member matches."
+        />
+      }
+    </section>
   </div>
 
   <!-- Ensure data ---------------------------------------------------------->

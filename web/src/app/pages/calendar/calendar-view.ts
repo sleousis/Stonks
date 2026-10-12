@@ -380,9 +380,7 @@ export function groupByDay(items: readonly AgendaItem[], newestFirst = false): A
     .sort(([a], [b]) => dir * a.localeCompare(b))
     .map(([day, list]) => ({
       day,
-      items: [...list].sort(
-        (a, b) => dir * a.at.localeCompare(b.at) || a.key.localeCompare(b.key),
-      ),
+      items: [...list].sort((a, b) => dir * a.at.localeCompare(b.at) || a.key.localeCompare(b.key)),
     }));
 }
 

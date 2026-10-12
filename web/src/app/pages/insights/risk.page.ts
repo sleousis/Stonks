@@ -164,7 +164,9 @@ export class RiskPage {
       ? `${n} of ${total} limits ${n === 1 ? 'is' : 'are'} near or over.`
       : `All ${total} limits are clear.`;
     const b = this.live.hasValue() ? this.live.value().portfolio : null;
-    return b?.var_95 != null ? `${head} A bad day could cost ${this.loss(b.var_95)} of the value.` : head;
+    return b?.var_95 != null
+      ? `${head} A bad day could cost ${this.loss(b.var_95)} of the value.`
+      : head;
   });
 
   protected readonly statusText = STATUS_TEXT;

@@ -11,7 +11,6 @@ import {
 import { RouterLink } from '@angular/router';
 
 import { CalendarsService, type NewsQuery } from '../../api/calendars.service';
-import type { DividendEvent, EarningsEvent, EconomicEvent, FilingEvent } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { formatDate, isoDay } from '../../core/format/format';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
@@ -232,7 +231,8 @@ export class CalendarPage implements OnInit {
 
   /** "3 earnings reports, 1 ex-dividend date and 4 releases from 2026-10-12 to 2026-11-11." */
   protected readonly standfirst = computed(() => {
-    const base = 'Earnings, ex-dividend dates, economic releases and SEC filings for what you hold or watch.';
+    const base =
+      'Earnings, ex-dividend dates, economic releases and SEC filings for what you hold or watch.';
     if (!this.calendar.hasValue()) return base;
     const v = this.calendar.value();
     const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

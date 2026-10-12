@@ -48,14 +48,32 @@ describe('WatchlistsPage', () => {
   /** Answer every pending bars read: closes 100 then 102 (+2%). */
   function flushBars(): void {
     for (const r of http.match((x) => x.url.split('?')[0] === '/api/market/bars')) {
-      const ticker = r.request.params.get('ticker') ?? new URL(r.request.urlWithParams, 'http://x').searchParams.get('ticker');
+      const ticker =
+        r.request.params.get('ticker') ??
+        new URL(r.request.urlWithParams, 'http://x').searchParams.get('ticker');
       r.flush({
         ticker,
         interval: '1d',
         truncated: false,
         bars: [
-          { timestamp: '2026-10-08', open: 99, high: 101, low: 98, close: 100, adj_close: 100, volume: 1 },
-          { timestamp: '2026-10-09', open: 100, high: 103, low: 99, close: 102, adj_close: 102, volume: 1 },
+          {
+            timestamp: '2026-10-08',
+            open: 99,
+            high: 101,
+            low: 98,
+            close: 100,
+            adj_close: 100,
+            volume: 1,
+          },
+          {
+            timestamp: '2026-10-09',
+            open: 100,
+            high: 103,
+            low: 99,
+            close: 102,
+            adj_close: 102,
+            volume: 1,
+          },
         ],
       });
     }

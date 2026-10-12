@@ -131,7 +131,8 @@ export class WatchlistsPage {
   protected readonly standfirst = computed(() => {
     if (!this.lists.hasValue()) return 'Your own ticker lists, to chart, test and filter Today.';
     const lists = this.lists.value();
-    if (!lists.length) return 'Save the tickers you follow, then chart them or test them in the lab.';
+    if (!lists.length)
+      return 'Save the tickers you follow, then chart them or test them in the lab.';
     const tickers = new Set(lists.flatMap((l) => l.tickers)).size;
     const head = `${lists.length} ${lists.length === 1 ? 'list' : 'lists'}, ${tickers} ${tickers === 1 ? 'ticker' : 'tickers'}.`;
     const list = this.selected();

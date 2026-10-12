@@ -77,7 +77,8 @@ export class UniversesPage {
   protected readonly kindFilter = signal<KindFilter>('all');
   protected readonly kinds = computed(() => {
     const rows = this.universes.hasValue() ? this.universes.value() : [];
-    const count = (k: KindFilter) => (k === 'all' ? rows.length : rows.filter((u) => u.kind === k).length);
+    const count = (k: KindFilter) =>
+      k === 'all' ? rows.length : rows.filter((u) => u.kind === k).length;
     return (['all', 'list', 'exchange', 'rule', 'index'] as const).map((k) => ({
       value: k,
       label: k === 'all' ? 'All' : KIND_LABEL[k],
@@ -109,7 +110,8 @@ export class UniversesPage {
       return 'Ticker lists a strategy may trade or be tested on, with every past member kept.';
     }
     const s = this.summary();
-    if (!s.count) return 'Save the tickers a strategy may trade or be tested on. Past members stay in.';
+    if (!s.count)
+      return 'Save the tickers a strategy may trade or be tested on. Past members stay in.';
     const head = `${s.count} ${s.count === 1 ? 'universe' : 'universes'} with ${formatNumber(s.members)} members.`;
     if (!s.behind) return `${head} All are up to date.`;
     return `${head} ${s.behind} ${s.behind === 1 ? 'needs' : 'need'} a refresh.`;

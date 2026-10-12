@@ -58,10 +58,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
     ErrorState,
   ],
   template: `
-    <app-page-header
-      title="Cash flows"
-      [description]="standfirst()"
-    />
+    <app-page-header title="Cash flows" [description]="standfirst()" />
     <app-insights-nav />
 
     @if (book() === 'none') {
@@ -205,7 +202,6 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
             }
           </div>
         </section>
-
       </div>
     }
   `,
@@ -279,7 +275,8 @@ export class CashFlowsPage {
 
   /** "4 deposits and withdrawals, 9,000 in net. Returns leave them out." */
   protected readonly standfirst = computed(() => {
-    const fallback = 'Money you put in or took out. Returns leave it out, so a deposit is never profit.';
+    const fallback =
+      'Money you put in or took out. Returns leave it out, so a deposit is never profit.';
     if (!this.flows.hasValue() || !this.insights.hasValue() || !this.flows.value().length) {
       return fallback;
     }

@@ -118,7 +118,7 @@
                           >
                         </th>
                         <td class="num">
-                          @if (q?.last != null) {
+                          @if ((q?.last ?? null) !== null) {
                             {{ q!.last | num: { digits: 2 } }}
                           } @else if (quotes.isLoading()) {
                             <span class="skeleton-line" aria-hidden="true"></span>
@@ -131,7 +131,7 @@
                           [class.gain]="(q?.change ?? 0) > 0"
                           [class.loss]="(q?.change ?? 0) < 0"
                         >
-                          @if (q?.change != null) {
+                          @if ((q?.change ?? null) !== null) {
                             {{ q!.change | pct: { signed: true } }}
                           }
                         </td>
@@ -141,7 +141,12 @@
                           }
                         </td>
                         <td class="chev-cell" aria-hidden="true">
-                          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+                          <svg
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                          >
                             <path d="m6 3.5 4.5 4.5L6 12.5" />
                           </svg>
                         </td>

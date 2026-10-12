@@ -46,7 +46,8 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
           Data updates
           @if (page(); as p) {
             <span class="count"
-              >{{ p.total }} <span class="visually-hidden">{{ p.total === 1 ? 'update' : 'updates' }}</span></span
+              >{{ p.total }}
+              <span class="visually-hidden">{{ p.total === 1 ? 'update' : 'updates' }}</span></span
             >
           }
         </h2>
