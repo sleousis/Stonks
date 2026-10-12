@@ -177,6 +177,10 @@ def test_lab_opens_on_a_simple_test_in_plain_words(browse, stack, viewport):
     # Plain names and summaries, never code docstrings or class names.
     expect(simple).not_to_contain_text(":meth:")
     expect(simple).not_to_contain_text("BuyAndHold")
+    # Six strategies show first; Show all opens the rest of the catalog.
+    more = simple.get_by_role("button", name=re.compile(r"^Show all \d+ strategies"))
+    if more.count():
+        more.click()
     expect(simple.get_by_role("radio", name=re.compile(r"^Moving average trend\b"))).to_be_visible()
     # One button; a missing choice is named in plain words.
     simple.get_by_role("button", name="Test it").click()

@@ -123,7 +123,8 @@
   >
     <a routerLink="/watchlists" class="btn">Your watchlists</a>
   </app-empty-state>
-  @if (quickTickers().length) {
+  <!-- With a watchlist picked its tickers are the row above already. -->
+  @if (quickTickers().length && !listTickers().length) {
     <section class="page-section quick" aria-labelledby="quick-title">
       <header class="section-head">
         <h2 id="quick-title">From your watchlists</h2>
