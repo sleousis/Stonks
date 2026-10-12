@@ -1,40 +1,39 @@
 @use 'breakpoints' as bp;
 
 :host {
-  display: grid;
-  gap: var(--space-4);
+  display: block;
   min-width: 0;
 }
 
-// Research only: an info callout, the same padding as the data plan note.
 .research-note {
-  margin: 0;
+  margin: 0 0 var(--section-gap);
 }
 
-// A flag on the chain panel: square, like every tag.
+// A flag on the chain: generated, not market quotes.
 .tag {
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-xs);
-  background: var(--color-warn-soft);
-  color: var(--color-ink);
+  padding: 3px var(--space-2);
+  border-radius: var(--r-tag);
+  background: var(--warn-soft);
+  color: var(--ink);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
 }
 
 .hint {
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .stack {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-width: 0;
 }
 
 .pickers {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
   min-width: 0;
 
   @include bp.from-tablet {
@@ -46,25 +45,27 @@
   }
 }
 
+.cols .pickers {
+  @include bp.from-desktop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .side {
   display: grid;
-  gap: var(--space-1);
+  gap: 6px;
   align-content: start;
 }
 
-.field .hint {
-  margin: 0;
-}
-
 .label {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  font-weight: var(--weight-label);
 }
 
 .summary {
-  margin: 0;
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
+  color: var(--ink-2);
+  font-size: var(--text-md);
 }
 
 .actions {
@@ -73,43 +74,223 @@
   gap: var(--space-3);
 }
 
+// The chain: a dense table, calls and puts mirrored around the strike.
+.chain-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  border-top: 1px solid var(--rule);
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+}
+
+.chain {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+
+  th,
+  td {
+    height: 32px;
+    padding: 0 var(--space-2);
+    border-bottom: 1px solid var(--rule);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  thead th {
+    height: 32px;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+
+  // Calls and Puts over their halves.
+  .group th {
+    color: var(--ink);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+
+  .group .calls {
+    text-align: right;
+    padding-right: var(--space-4);
+  }
+
+  .group .puts {
+    text-align: left;
+    padding-left: var(--space-4);
+  }
+
+  .group td {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  // Headers in sentence case: "bid" under Calls reads "Bid".
+  .short {
+    display: inline-block;
+
+    &::first-letter {
+      text-transform: uppercase;
+    }
+  }
+
+  // The strike: the spine of the table, ink on a sunk column.
+  .strike {
+    padding: 0 var(--space-3);
+    background: var(--sunk);
+    color: var(--ink);
+    font-weight: var(--weight-bold);
+    text-align: center;
+  }
+
+  thead .strike {
+    color: var(--ink);
+  }
+
+  td.q {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+
+  // In the money: a soft accent tint.
+  td.itm {
+    background: var(--accent-soft);
+  }
+
+  tbody tr:hover td.q {
+    background: var(--sunk);
+  }
+
+  tbody tr:hover td.itm {
+    background: color-mix(in srgb, var(--accent-soft) 70%, var(--rule));
+  }
+
+  // One puts-or-calls side: columns read left to right after the strike.
+  &:not([data-side='both']) {
+    .strike {
+      text-align: left;
+    }
+  }
+
+  // The underlying's price, marked between two strikes: a 2px accent line
+  // with the price on a tag over the strike column.
+  .spot-row td {
+    height: 0;
+    padding: 0;
+    border-bottom: 2px solid var(--accent);
+    line-height: 0;
+  }
+
+  .spot-cell {
+    position: relative;
+    overflow: visible;
+  }
+
+  .spot-tag {
+    position: absolute;
+    top: 1px;
+    left: 50%;
+    z-index: 1;
+    padding: 2px var(--space-2);
+    border-radius: var(--r-pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    line-height: 1.4;
+    transform: translate(-50%, -50%);
+  }
+
+  .phone-only {
+    display: none;
+  }
+}
+
+// Phones: bid, ask and delta each side of the strike.
+@include bp.phone {
+  .chain {
+    .hide-phone {
+      display: none;
+    }
+
+    .phone-only {
+      display: table-cell;
+    }
+
+    font-size: var(--text-xs);
+
+    th,
+    td {
+      padding: 0 4px;
+    }
+
+    .th-inner app-help-tip {
+      display: none;
+    }
+
+    .strike {
+      padding: 0 var(--space-2);
+    }
+  }
+}
+
 .strategies {
-  display: grid;
-  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
 
   li {
-    display: grid;
-    gap: var(--space-1);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
-  li:last-child {
-    padding-bottom: 0;
-    border-bottom: 0;
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: var(--row-h-2);
+    padding: var(--space-2) 0;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:hover h3 {
+      text-decoration: underline;
+    }
+  }
+
+  .name-line {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
   }
 
   h3 {
-    margin: 0;
-    font-size: var(--text-md);
+    font-size: var(--text-body);
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
 
-  p {
-    margin: 0;
-  }
-
   .structures {
-    color: var(--color-ink-2);
+    color: var(--muted);
     font-size: var(--text-sm);
   }
 
   .hypothesis {
-    max-width: 70ch;
+    max-width: 68ch;
+    padding: 0 0 var(--space-4);
+    color: var(--ink-2);
     font-size: var(--text-sm);
   }
 }

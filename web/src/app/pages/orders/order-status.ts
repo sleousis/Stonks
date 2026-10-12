@@ -173,10 +173,10 @@ export function orderReason(order: OrderView): string | null {
       white-space: normal;
     }
     .reason {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .note {
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

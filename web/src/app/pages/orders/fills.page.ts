@@ -39,57 +39,61 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, DataTable, TableCell, LoadingState, EmptyState, ErrorState, SideTag],
   template: `
-    <section class="panel panel-flush" aria-labelledby="fills-title">
-      <div class="panel-head">
-        <h2 id="fills-title">Fills</h2>
-        @if (page(); as p) {
-          <span class="count num">{{ p.total }} matching</span>
-        }
+    <section class="page-section section-flush" aria-labelledby="fills-title">
+      <div class="toolbar">
+        <form
+          class="filters always"
+          role="search"
+          aria-label="Filter fills"
+          (submit)="$event.preventDefault()"
+        >
+          <div class="field">
+            <label for="ff-ticker">Ticker</label>
+            <input
+              id="ff-ticker"
+              class="input"
+              placeholder="AAPL.US"
+              autocapitalize="characters"
+              [value]="ticker() ?? ''"
+              (change)="setFilter('ticker', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="ff-tick">Trading run</label>
+            <input
+              id="ff-tick"
+              class="input"
+              placeholder="Any run"
+              [value]="tick() ?? ''"
+              (change)="setFilter('tick', $any($event.target).value)"
+            />
+          </div>
+          <div class="field">
+            <label for="ff-order">Order</label>
+            <input
+              id="ff-order"
+              class="input"
+              placeholder="Any order"
+              [value]="order() ?? ''"
+              (change)="setFilter('order', $any($event.target).value)"
+            />
+          </div>
+          @if (hasFilters()) {
+            <button type="button" class="btn btn-ghost clear" (click)="clearFilters()">
+              Clear filters
+            </button>
+          }
+        </form>
       </div>
 
-      <form
-        class="filters"
-        role="search"
-        aria-label="Filter fills"
-        (submit)="$event.preventDefault()"
-      >
-        <div class="field">
-          <label for="ff-ticker">Ticker</label>
-          <input
-            id="ff-ticker"
-            class="input"
-            placeholder="AAPL.US"
-            autocapitalize="characters"
-            [value]="ticker() ?? ''"
-            (change)="setFilter('ticker', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="ff-tick">Trading run</label>
-          <input
-            id="ff-tick"
-            class="input"
-            placeholder="Any run"
-            [value]="tick() ?? ''"
-            (change)="setFilter('tick', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="ff-order">Order</label>
-          <input
-            id="ff-order"
-            class="input"
-            placeholder="Any order"
-            [value]="order() ?? ''"
-            (change)="setFilter('order', $any($event.target).value)"
-          />
-        </div>
-        <div class="filter-actions">
-          <button type="button" class="btn" [disabled]="!hasFilters()" (click)="clearFilters()">
-            Clear filters
-          </button>
-        </div>
-      </form>
+      <header class="section-head">
+        <h2 id="fills-title">
+          Fills
+          @if (page(); as p) {
+            <span class="count">{{ p.total }} matching</span>
+          }
+        </h2>
+      </header>
 
       @let p = page();
       @if (fills.error(); as err) {

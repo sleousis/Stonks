@@ -7,7 +7,6 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 
 import type { JournalEntryView, JournalNoteView } from '../../api/models';
 import { rowStrategyName } from '../../shared/strategy-names';
@@ -45,7 +44,6 @@ interface CostLine {
   selector: 'app-trade-order-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    RouterLink,
     PageHeader,
     SideTag,
     ModeStamp,

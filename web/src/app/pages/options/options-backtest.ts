@@ -276,7 +276,7 @@ import {
     }
     .hypothesis {
       margin: 0;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .actions {
@@ -313,13 +313,13 @@ import {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       margin: 0;
       padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       @include bp.from-tablet {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
       dt {
-        color: var(--color-ink-3);
+        color: var(--muted);
         font-size: var(--text-xs);
       }
       dd {

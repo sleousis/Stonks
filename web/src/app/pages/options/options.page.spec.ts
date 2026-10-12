@@ -113,7 +113,7 @@ describe('OptionsPage', () => {
   }
 
   function panel(title: string): HTMLElement {
-    const h = [...el.querySelectorAll('h2')].find((x) => x.textContent!.trim() === title);
+    const h = [...el.querySelectorAll('h2')].find((x) => x.textContent!.trim().startsWith(title));
     if (!h) throw new Error(`no panel ${title}`);
     return h.closest('section')!;
   }
@@ -126,8 +126,9 @@ describe('OptionsPage', () => {
 
   it('says it is research only and opens the first stored chain', async () => {
     await open();
-    expect(el.querySelector('app-page-header')!.textContent).toContain(
-      'Look at option prices and test option strategies on past prices. Nothing here trades.',
+    // The standfirst is built from the chain it opened.
+    expect(el.querySelector('app-page-header .standfirst')!.textContent).toMatch(
+      /^AAPL\.US at [\d.]+\. \d+ strikes, expiry in \d+ days\. Nothing here trades\.$/,
     );
     expect(el.querySelector('app-page-header')!.textContent).not.toContain('Greeks');
     expect(el.querySelector('[role="note"]')!.textContent).toContain(

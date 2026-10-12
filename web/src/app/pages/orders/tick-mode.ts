@@ -66,9 +66,9 @@ export function latestRealRunDay(runs: readonly TickRun[]): string | null {
     }
     .dry {
       padding: 0 var(--space-2);
-      border: 1px dashed var(--color-border-strong, var(--color-border));
-      border-radius: var(--radius-xs);
-      color: var(--color-ink-2);
+      border: 1px dashed var(--rule-control, var(--rule));
+      border-radius: var(--r-tag);
+      color: var(--ink-2);
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
       white-space: nowrap;

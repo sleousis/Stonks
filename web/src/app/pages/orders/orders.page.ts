@@ -34,7 +34,7 @@ import { OrdersTabs } from './orders-tabs';
   template: `
     <app-page-header
       title="Orders"
-      description="Orders placed by trading runs and by hand, the fills they received, and the runs themselves."
+      description="Every order from your trading runs and by hand, with the fills it got."
     >
       <app-updated-ago [at]="status.updatedAt()" />
       <ng-container ngProjectAs="[actions]">
@@ -44,8 +44,8 @@ import { OrdersTabs } from './orders-tabs';
           }
           <a class="btn" routerLink="/orders/rebalance">Rebalance</a>
           @if (showExports()) {
-            <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
-            <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
+            <app-export-button class="csv" kind="orders" label="Orders CSV" [ghost]="true" />
+            <app-export-button class="csv" kind="fills" label="Fills CSV" [ghost]="true" />
           }
         }
       </ng-container>
@@ -70,6 +70,10 @@ import { OrdersTabs } from './orders-tabs';
        and the two CSV downloads the second, so nothing sits alone. */
     @include bp.phone {
       .btn.btn-primary.paired {
+        grid-column: auto;
+      }
+      /* Beats the header rule that spans a last even action. */
+      .csv.csv.csv.csv.csv.csv.csv {
         grid-column: auto;
       }
     }

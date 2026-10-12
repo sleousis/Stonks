@@ -9,7 +9,6 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 
 import { JournalService } from '../../api/journal.service';
 import type { JournalTradeDetailView, JournalTradeView } from '../../api/models';
@@ -53,7 +52,6 @@ const STOP_SOURCES: Record<string, string> = {
   selector: 'app-journal-trade-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    RouterLink,
     PageHeader,
     PermissionNote,
     Segmented,
@@ -65,9 +63,12 @@ const STOP_SOURCES: Record<string, string> = {
   ],
   styleUrl: './journal.scss',
   template: `
-    <app-page-header [title]="heading()" description="A trade from entry to exit, and your review.">
-      <a actions class="btn btn-ghost" routerLink="/journal">Back to the journal</a>
-    </app-page-header>
+    <app-page-header
+      [title]="heading()"
+      description="A trade from entry to exit, and your review."
+      backPath="/journal"
+      backLabel="Journal"
+    />
 
     @if (trade.error(); as err) {
       <app-error-state title="Could not load this trade" [error]="err" (retry)="trade.reload()" />

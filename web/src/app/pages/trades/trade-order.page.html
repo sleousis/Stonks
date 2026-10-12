@@ -1,8 +1,8 @@
-<a class="back-link" routerLink="/trades"><span aria-hidden="true">←</span> Trade costs</a>
-
 <app-page-header
   [title]="heading()"
   description="What this order cost, why it was placed and your notes."
+  backPath="/trades"
+  backLabel="Trade costs"
 />
 
 @if (order.error(); as err) {

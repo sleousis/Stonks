@@ -112,14 +112,13 @@ import {
       gap: var(--space-4);
       min-width: 0;
     }
-    /* The four figures: one inset well, label over value. */
+    /* The four figures: a summary strip, 1px rules between cells. */
     .figures {
       display: grid;
-      gap: var(--space-3);
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      overflow: hidden;
       @include bp.from-tablet {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
@@ -128,23 +127,28 @@ import {
       display: grid;
       gap: var(--space-1);
       min-width: 0;
+      margin: -1px 0 0 -1px;
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--rule);
+      border-left: 1px solid var(--rule);
     }
     .label {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .value {
       font-family: var(--font-mono);
-      font-size: var(--text-lg);
+      font-size: var(--text-stat);
+      letter-spacing: -0.03em;
       font-variant-numeric: tabular-nums slashed-zero;
       font-weight: var(--weight-medium);
       overflow-wrap: anywhere;
     }
     .gain {
-      color: var(--color-gain);
+      color: var(--up);
     }
     .loss {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .chart {
       margin: 0;
@@ -158,6 +162,7 @@ import {
     .grid {
       stroke: var(--chart-grid);
       stroke-width: 1;
+      stroke-dasharray: 2 3;
     }
     .tick {
       fill: var(--chart-text);
@@ -165,33 +170,34 @@ import {
       font-family: var(--font-mono);
     }
     .zero {
-      stroke: var(--color-ink-3);
+      stroke: var(--muted);
       stroke-width: 1;
     }
     .spot {
-      stroke: var(--color-ink-2);
+      stroke: var(--ink-2);
       stroke-width: 1;
       stroke-dasharray: 4 4;
     }
     .line {
       fill: none;
       stroke: var(--chart-line);
-      stroke-width: 2;
+      stroke-width: 1.75;
+      stroke-linejoin: round;
     }
     .area-gain {
-      fill: var(--color-gain-soft);
+      fill: var(--up-soft);
     }
     .area-loss {
-      fill: var(--color-loss-soft);
+      fill: var(--down-soft);
     }
     figcaption {
       margin-top: var(--space-2);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     h3 {
       margin: 0 0 var(--space-2);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }
@@ -204,6 +210,8 @@ import {
     }
     li {
       display: flex;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--rule);
       flex-wrap: wrap;
       justify-content: space-between;
       gap: var(--space-2);
@@ -211,7 +219,7 @@ import {
       font-size: var(--mono-scale);
     }
     .price {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
   `,
 })

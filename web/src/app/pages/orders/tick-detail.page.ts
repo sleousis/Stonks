@@ -264,7 +264,7 @@ export const TICK_FILLS_LIMIT = 200;
       display: block;
       margin-top: var(--space-1);
       font-size: var(--text-xs);
-      color: var(--color-loss);
+      color: var(--down);
       overflow-wrap: anywhere;
       white-space: normal;
     }
