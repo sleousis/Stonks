@@ -23,7 +23,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- 2. Python package with uv ---------------------------------------------
-FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.0 AS uv
 
 FROM python:${PYTHON_VERSION}-slim-bookworm AS build
 COPY --from=uv /uv /uvx /bin/
