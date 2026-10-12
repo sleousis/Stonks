@@ -32,7 +32,9 @@ A refresh turns a definition into rows of `universe_membership` (migration 015).
 
 - **exchange**: a span starts at the listing date, else the first bar, else `start_date`. A delisted name ends at its delisting date, else the day after its last bar. A delisted name with no dates and no bars stays a member up to the refresh date, with a warning. Ensure its data and refresh again to tighten it. The listings also fill the `instruments` table.
 - **rule**: the filters run on each rebalance date (weekly, monthly or quarterly). A name joins on the date it passes and leaves on the date it fails. Rules read only the lake, so ensure the candidates' data first.
-- **index**: the history is a snapshot of members plus dated additions and removals. Stonks walks back from the snapshot. Import a history as CSV or JSON, or name an adapter such as `wikipedia_sp500`.
+- **index**: the history is a snapshot of members plus dated additions and removals. Stonks walks back from the snapshot. Import a history as CSV or JSON, or name an adapter such as `wikipedia_sp500` or `eodhd`.
+
+  The `eodhd` adapter reads any index EODHD lists under `INDX` (about 1,700): today's members and every past member with its start and end dates, delisted names too. Index ids are canonical (`sp500` for `GSPC`, `nasdaq100` for `NDX`), else the vendor code in lower case (`ftse`). The backfill's `index_constituents` phase stores the same histories for every index, so `source = "stored"` reads them with no call. EODHD's history thins out going back: on 2026-10-12 the S&P 500 history named 476 members on 2020-06-01 and 304 on 2010-06-01. Some indices (NDX) have members but no history.
 
 CSV for an index history:
 

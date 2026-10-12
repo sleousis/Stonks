@@ -74,3 +74,19 @@ def test_status_and_retry_read_the_state(runner, cli_env):
     retried = runner.invoke(app, ["ingest", "backfill", "retry", "--phases", "daily"])
     assert retried.exit_code == 0
     assert "1 failed units" in retried.output
+
+
+def test_run_asks_for_db_init_when_the_reference_tables_are_missing(runner, cli_env, monkeypatch):
+    import duckdb
+
+    monkeypatch.setenv("STONKS_EODHD_PLAN", "all_in_one")
+    monkeypatch.setenv("EODHD_API_KEY", "test-key")
+    with SqliteState(cli_env / "data" / "state.sqlite") as sqlite:
+        sqlite.migrate()
+    # a lake from before migration 026: instruments but no reference tables
+    con = duckdb.connect(str(cli_env / "data" / "lake.duckdb"))
+    con.execute("CREATE TABLE instruments (id VARCHAR PRIMARY KEY)")
+    con.close()
+    result = runner.invoke(app, ["ingest", "backfill", "run", "--until-budget"])
+    assert result.exit_code == 2, result.output
+    assert "stonks db init" in result.output

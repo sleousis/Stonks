@@ -117,3 +117,43 @@ def test_every_unit_runs_when_the_budget_is_ample(state):
     assert report.stopped == "finished"
     assert bstate.summary()["toy"].done == units
     assert budget.run_spent == 2 * units
+
+
+class _RefusedOnce(_ToyPhase):
+    """A free source that refuses the first request for going too fast."""
+
+    metered = False
+    refused = False
+
+    def estimate(self, unit: Unit) -> int:
+        return 0
+
+    def fetch(self, ctx: BackfillContext, unit: Unit) -> Any:
+        from stonks.ingest.sources.base import RateLimitedError
+
+        if not self.refused:
+            self.refused = True
+            raise RateLimitedError("EDGAR answered 403")
+        return unit.key
+
+
+def test_a_source_rate_limit_pauses_without_counting_an_attempt(state):
+    budget = _budget()
+    phase = _RefusedOnce(budget, 1)
+    bstate = BackfillState(state, clock=lambda: NOW)
+    ctx = BackfillContext(
+        source=None,  # type: ignore[arg-type]
+        lake=None,  # type: ignore[arg-type]
+        state=bstate,
+        settings=BackfillSettings(network_threads=1),
+        make_pipeline=lambda source: None,  # type: ignore[arg-type,return-value]
+        clock=lambda: NOW,
+    )
+    slept: list[float] = []
+    runner = BackfillRunner(
+        ctx, [phase], budget, until_budget=True, clock=lambda: NOW, sleep=slept.append
+    )
+    assert runner.run().stopped == "finished"
+    assert slept == [60.0]
+    row = state.sql("SELECT status, attempts FROM backfill_units")[0]
+    assert (row["status"], row["attempts"]) == ("done", 0)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -78,3 +79,29 @@ class BackfillSettings(BaseModel):
     intraday_delisted: bool = False
     intraday_start: dict[str, date] = Field(default_factory=_intraday_start)
     intraday_window_days: dict[str, int] = Field(default_factory=_intraday_window_days)
+
+    #: Indices whose members and history are fetched (the source's codes,
+    #: e.g. ``GSPC``), ``None``: every index the source lists.
+    index_codes: list[str] | None = None
+    #: First day of the holidays the exchange details ask for, and how many
+    #: years past today they reach.
+    exchange_holidays_start: date = date(2000, 1, 1)
+    exchange_holidays_years_ahead: int = Field(default=2, ge=0, le=10)
+    #: First year of the US Treasury rates (years with no data cost one call).
+    treasury_start_year: int = Field(default=1990, ge=1900)
+    #: Exchanges whose identifiers are fetched, ``None``: every exchange
+    #: with instruments in the lake.
+    id_exchanges: list[str] | None = None
+
+    # ---- free sources (their own rate limits, not the EODHD budget) ----------
+    #: What SEC EDGAR fetches per active US stock (needs
+    #: ``[sources.edgar] user_agent``; the phase skips until it is set).
+    edgar_kinds: list[Literal["filings", "insiders"]] = Field(
+        default_factory=lambda: ["filings", "insiders"]
+    )
+    #: Managers (CIKs) whose 13F holdings EDGAR fetches.
+    edgar_filers: list[str] = Field(default_factory=list)
+    #: IBKR short stock markets for the daily borrow phase, ``None``: all.
+    borrow_markets: list[str] | None = None
+    #: DefiLlama chains for the daily TVL phase, ``None``: every chain.
+    tvl_chains: list[str] | None = None

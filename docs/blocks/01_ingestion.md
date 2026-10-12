@@ -124,7 +124,7 @@ uv run stonks ingest all-intervals --tickers AAPL.US --since 2025-01-01
 
 `aggregate` builds a coarser interval from bars already in the lake. `all-intervals` pulls daily and intraday bars and builds the usual aggregates in one go.
 
-`uv run stonks ingest backfill run|status|retry` fills the lake with everything an EODHD All-in-one plan offers, resuming across days inside a call budget. See [backfill.md](../backfill.md).
+`uv run stonks ingest backfill run|status|retry` fills the lake with everything an EODHD All-in-one plan offers, plus SEC EDGAR, IBKR borrow rates and DefiLlama TVL outside the budget, resuming across days inside a call budget. See [backfill.md](../backfill.md).
 
 ## Asset classes
 

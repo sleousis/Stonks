@@ -71,6 +71,7 @@ def run(
         BackfillSetupError,
         build_runner,
         check_plan,
+        free_source_factory,
         limit_duckdb,
         make_pipeline_factory,
     )
@@ -90,7 +91,8 @@ def run(
     sqlite, state = _state(settings)
     try:
         with DuckDBLake(settings.lake.path) as lake:
-            if "instruments" not in lake.tables():
+            # instruments (007) and the reference tables (026) the phases write
+            if not {"instruments", "treasury_rates"} <= set(lake.tables()):
                 console.print("[red]the lake is not migrated:[/red] run `stonks db init`")
                 raise typer.Exit(code=2)
             limit_duckdb(lake, cfg)
@@ -107,6 +109,7 @@ def run(
                 max_calls=max_calls,
                 until_budget=until_budget,
                 daily_budget=budget,
+                sources=free_source_factory(settings.sources),
             )
             report = runner.run()
     except ValueError as exc:
@@ -174,7 +177,12 @@ def status(
         return
     table = Table(title="backfill")
     for column in ("phase", "done", "failed", "retry", "left", "calls", "calls left"):
-        table.add_column(column, justify="left" if column == "phase" else "right")
+        # phase ids and "not listed yet" stay on one line on a narrow terminal
+        table.add_column(
+            column,
+            justify="left" if column == "phase" else "right",
+            no_wrap=column in ("phase", "left"),
+        )
     for p in report.phases:
         if not p.listed:
             table.add_row(p.phase, "", "", "", "not listed yet", "", "")

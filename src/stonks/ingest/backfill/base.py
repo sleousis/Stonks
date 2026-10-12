@@ -8,6 +8,7 @@ writes fetched units (on the runner's thread, through the ingest pipeline).
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -17,7 +18,7 @@ from typing import Any, ClassVar
 from stonks.ingest.backfill.settings import BackfillSettings
 from stonks.ingest.backfill.state import BackfillState, Unit, UnitSpec
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.store.lake import DuckDBLake
 
 
@@ -46,6 +47,21 @@ class BackfillContext:
     #: Only units of these exchanges (``None``: every exchange).
     exchanges: frozenset[str] | None = None
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
+    #: Builds the free sources the unmetered phases read (``edgar``,
+    #: ``ibkr_borrow``, ``defillama``). It raises ``DataSourceError`` when a
+    #: source is not set up (EDGAR without a user agent).
+    sources: Callable[[str], DataSource] | None = None
+    _built: dict[str, DataSource] = field(default_factory=dict, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def source_for(self, source_id: str) -> DataSource:
+        """The free source ``source_id``, built once."""
+        with self._lock:
+            if source_id not in self._built:
+                if self.sources is None:
+                    raise DataSourceError(f"no {source_id} source is set up for the backfill")
+                self._built[source_id] = self.sources(source_id)
+            return self._built[source_id]
 
     @property
     def today(self) -> date:
@@ -63,6 +79,10 @@ class BackfillPhase(ABC):
     #: How long a listing stays good; ``None``: list again on every run
     #: (cheap phases that read the lake).
     relist_after: ClassVar[timedelta | None] = None
+    #: ``False``: the phase reads a free source with its own rate limit, not
+    #: the metered vendor. It spends no budget, so it also runs while the
+    #: day's budget is used up (until the reset).
+    metered: ClassVar[bool] = True
 
     @abstractmethod
     def list_units(self, ctx: BackfillContext) -> Iterable[UnitSpec]:
