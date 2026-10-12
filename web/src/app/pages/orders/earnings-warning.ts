@@ -69,9 +69,9 @@ export function warningText(w: EarningsWarning): string {
       flex: none;
       width: 1.25rem;
       height: 1.25rem;
-      border: 2px solid var(--color-warn);
-      border-radius: var(--radius-pill);
-      color: var(--color-warn);
+      border: 2px solid var(--warn);
+      border-radius: var(--r-pill);
+      color: var(--warn);
       font-weight: var(--weight-bold);
       line-height: 1;
     }

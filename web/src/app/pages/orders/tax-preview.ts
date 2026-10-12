@@ -129,8 +129,8 @@ export function worthShowing(p: TaxPreviewView): boolean {
     :host-context(.ticket) .tax {
       padding: var(--space-3);
       border: 0;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-3);
+      border-radius: var(--r-ctl);
+      background: var(--rule);
     }
     .head {
       display: flex;
@@ -150,10 +150,10 @@ export function worthShowing(p: TaxPreviewView): boolean {
       height: var(--row-h);
       padding: 0 var(--space-2);
       text-align: left;
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--rule);
     }
     .lots th {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-xs);
       font-weight: 600;
     }
@@ -177,17 +177,17 @@ export function worthShowing(p: TaxPreviewView): boolean {
       margin: 0;
     }
     .sums dt {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .sums dd {
       margin: var(--space-1) 0 0;
     }
     .gain {
-      color: var(--color-gain);
+      color: var(--up);
     }
     .loss {
-      color: var(--color-loss);
+      color: var(--down);
     }
     @include bp.phone {
       .lots thead {
@@ -201,7 +201,7 @@ export function worthShowing(p: TaxPreviewView): boolean {
         display: grid;
         grid-template-columns: 1fr 1fr;
         padding: var(--space-1) 0;
-        border-bottom: 1px solid var(--color-border);
+        border-bottom: 1px solid var(--rule);
       }
       .lots td {
         height: auto;
@@ -210,7 +210,7 @@ export function worthShowing(p: TaxPreviewView): boolean {
       }
       .lots td::before {
         content: attr(data-label) ': ';
-        color: var(--color-ink-2);
+        color: var(--ink-2);
       }
       .lots .num {
         text-align: left;

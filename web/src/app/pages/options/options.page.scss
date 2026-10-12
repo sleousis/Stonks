@@ -14,15 +14,15 @@
 // A flag on the chain panel: square, like every tag.
 .tag {
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-xs);
-  background: var(--color-warn-soft);
-  color: var(--color-ink);
+  border-radius: var(--r-tag);
+  background: var(--warn-soft);
+  color: var(--ink);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
 }
 
 .hint {
-  color: var(--color-ink-3);
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 
@@ -63,7 +63,7 @@
 
 .summary {
   margin: 0;
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   font-size: var(--text-sm);
 }
 
@@ -84,7 +84,7 @@
     display: grid;
     gap: var(--space-1);
     padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
   li:last-child {
@@ -104,7 +104,7 @@
   }
 
   .structures {
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-size: var(--text-sm);
   }
 

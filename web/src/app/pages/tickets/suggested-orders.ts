@@ -178,22 +178,22 @@ export function draftSource(source: OrderDraftView['source']): string {
       flex-wrap: wrap;
       align-items: baseline;
       gap: var(--space-1) var(--space-2);
-      color: var(--color-ink);
+      color: var(--ink);
       font-size: var(--text-md);
       min-width: 0;
       overflow-wrap: anywhere;
     }
     .source {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .source-tag {
       display: inline-block;
       margin-right: var(--space-1);
       padding: 0 var(--space-2);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-xs);
-      color: var(--color-ink);
+      border: 1px solid var(--rule-control);
+      border-radius: var(--r-tag);
+      color: var(--ink);
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
     }
@@ -214,7 +214,7 @@ export function draftSource(source: OrderDraftView['source']): string {
       gap: var(--space-2);
       margin-top: auto;
       padding-top: var(--space-3);
-      border-top: 1px dashed var(--color-border-strong);
+      border-top: 1px dashed var(--rule-control);
     }
     .ticket > .btn-ghost {
       align-self: flex-start;

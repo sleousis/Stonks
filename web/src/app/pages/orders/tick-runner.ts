@@ -202,7 +202,7 @@ import { latestRealRunDay } from './tick-mode';
       align-items: center;
       gap: var(--space-2);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .form-grid {
       max-width: none;
@@ -214,23 +214,23 @@ import { latestRealRunDay } from './tick-mode';
     .hint {
       margin-top: calc(-1 * var(--space-2));
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .field .hint {
       margin-top: 0;
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .field .hint.warn {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .alert {
       overflow-wrap: anywhere;
     }
     /* Brass only where real money moves. */
     .alert.live {
-      --callout-tone: var(--color-live);
-      --callout-soft: var(--color-live-soft);
+      --callout-tone: var(--brass);
+      --callout-soft: var(--brass-soft);
     }
     .actions {
       display: flex;
@@ -246,7 +246,7 @@ import { latestRealRunDay } from './tick-mode';
       display: grid;
       gap: var(--space-3);
       padding: var(--space-4);
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     @include bp.phone {
       .result {
@@ -259,7 +259,7 @@ import { latestRealRunDay } from './tick-mode';
       gap: var(--space-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     dl {
       display: grid;
@@ -272,7 +272,7 @@ import { latestRealRunDay } from './tick-mode';
     }
     dt {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     dd {
       margin: var(--space-1) 0 0;

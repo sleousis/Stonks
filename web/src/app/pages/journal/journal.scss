@@ -13,7 +13,7 @@
 .lead {
   padding: var(--space-4) var(--space-4) var(--space-3);
   max-width: calc(70ch + 2 * var(--space-4));
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   font-size: var(--text-sm);
 
   @include bp.phone {
@@ -23,7 +23,7 @@
 
 // Totals inside a panel: one divided strip (.stat-strip), no boxes.
 .tiles {
-  border-block: 1px solid var(--color-border);
+  border-block: 1px solid var(--rule);
   margin-bottom: var(--space-4);
 
   @include bp.from-desktop {
@@ -82,7 +82,7 @@
 
   th {
     padding: var(--space-1);
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-size: var(--text-xs);
     font-weight: 600;
     text-align: center;
@@ -91,18 +91,18 @@
   td {
     height: 3.5rem;
     padding: var(--space-1);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--rule);
     vertical-align: top;
     overflow: hidden;
   }
 
   td.pad {
-    background: var(--color-surface-2);
+    background: var(--sunk);
   }
 
   .day {
     display: block;
-    color: var(--color-ink-2);
+    color: var(--ink-2);
     font-size: var(--text-xs);
   }
 
@@ -137,7 +137,7 @@
 
 .sub-title {
   padding: 0 var(--space-4);
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
 }
@@ -152,7 +152,7 @@
     align-items: center;
     gap: var(--space-3);
     flex-wrap: wrap;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
   .btn {
@@ -175,11 +175,11 @@
     align-items: flex-start;
     gap: var(--space-3);
     padding: var(--space-3) 0;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--rule);
   }
 
   li.archived .pb-name {
-    color: var(--color-ink-2);
+    color: var(--ink-2);
   }
 }
 
@@ -209,7 +209,7 @@
 }
 
 .hint {
-  color: var(--color-ink-3);
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 
@@ -223,7 +223,7 @@
 
 .leg {
   padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--rule);
 }
 
 .leg-head {
@@ -241,7 +241,7 @@
   padding: 0;
 
   dt {
-    color: var(--color-ink-3);
+    color: var(--muted);
     font-size: var(--text-xs);
   }
 

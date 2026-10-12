@@ -43,6 +43,8 @@ describe('LivePage', () => {
     expect(card.textContent).toContain('Median under 50 ms, 95% under 250 ms');
     expect(card.textContent).toContain('Median under 500 ms, 95% under 1 s');
     expect(el.querySelector('.banner')).toBeNull();
+    // The standfirst is built from the data.
+    expect(el.querySelector('.standfirst')!.textContent).toContain('1 engine reports.');
   });
 
   it('flags a silent engine and lists failed steps', async () => {
@@ -125,6 +127,10 @@ describe('LivePage', () => {
     expect(line.textContent).toContain('+1.25%');
     expect(line.textContent).toContain('-0.25%');
     expect(line.textContent).toContain('1,250');
+    // The P&L chart names each portfolio and its figure for screen readers.
+    const chart = el.querySelector('.pnl-chart')!;
+    expect(chart.getAttribute('role')).toBe('img');
+    expect(chart.getAttribute('aria-label')).toContain('Your portfolio');
     expect(line.querySelector('.problem')!.textContent).toContain('2 held names');
   });
 

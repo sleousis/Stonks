@@ -1,33 +1,28 @@
 @use 'breakpoints' as bp;
 
 :host {
-  display: block;
+  display: grid;
+  gap: var(--section-gap);
   min-width: 0;
 }
 
-// The totals: one divided strip inside the panel (.stat-strip), no boxes.
-.tiles {
-  border-top: 1px solid var(--color-border);
-
-  @include bp.from-desktop {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-
-    // p1: the featured tile gets the room its larger figure needs, so its
-    // figure is never smaller than its neighbours'.
-    app-stat-tile[featured] {
-      grid-column: span 2;
-    }
-  }
+.none {
+  border-top: 2px solid var(--rule-strong);
+  padding-top: var(--space-4);
 }
 
-.lead {
-  padding: var(--space-4);
-  max-width: calc(70ch + 2 * var(--space-4));
-  color: var(--color-ink-2);
+// How to read trade costs: a quiet callout beside the breakdown.
+.reading {
+  display: grid;
+  gap: var(--space-2);
   font-size: var(--text-sm);
 
-  @include bp.phone {
-    padding: var(--space-3);
+  .lead {
+    color: var(--ink-2);
+  }
+
+  @include bp.from-desktop {
+    margin-top: 50px;
   }
 }
 
@@ -41,7 +36,7 @@
     display: inline-flex;
     align-items: center;
     min-height: var(--control-h);
-    font-weight: var(--weight-semibold);
+    font-weight: var(--weight-bold);
     overflow-wrap: anywhere;
 
     @include bp.phone {

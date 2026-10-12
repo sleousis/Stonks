@@ -118,8 +118,8 @@ import {
       gap: var(--space-3);
       grid-template-columns: repeat(2, minmax(0, 1fr));
       padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       @include bp.from-tablet {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
@@ -130,7 +130,7 @@ import {
       min-width: 0;
     }
     .label {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-size: var(--text-xs);
     }
     .value {
@@ -141,10 +141,10 @@ import {
       overflow-wrap: anywhere;
     }
     .gain {
-      color: var(--color-gain);
+      color: var(--up);
     }
     .loss {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .chart {
       margin: 0;
@@ -165,11 +165,11 @@ import {
       font-family: var(--font-mono);
     }
     .zero {
-      stroke: var(--color-ink-3);
+      stroke: var(--muted);
       stroke-width: 1;
     }
     .spot {
-      stroke: var(--color-ink-2);
+      stroke: var(--ink-2);
       stroke-width: 1;
       stroke-dasharray: 4 4;
     }
@@ -179,19 +179,19 @@ import {
       stroke-width: 2;
     }
     .area-gain {
-      fill: var(--color-gain-soft);
+      fill: var(--up-soft);
     }
     .area-loss {
-      fill: var(--color-loss-soft);
+      fill: var(--down-soft);
     }
     figcaption {
       margin-top: var(--space-2);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     h3 {
       margin: 0 0 var(--space-2);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }
@@ -211,7 +211,7 @@ import {
       font-size: var(--mono-scale);
     }
     .price {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
   `,
 })

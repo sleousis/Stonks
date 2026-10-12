@@ -29,15 +29,19 @@ export const JOURNAL_PAGE_SIZE = 25;
   ],
   styleUrl: './trades.scss',
   template: `
-    <section class="panel panel-flush" aria-labelledby="journal-title">
-      <div class="panel-head">
-        <h2 id="journal-title">Trade journal</h2>
-        @if (latest(); as p) {
-          @if (p.total > 0) {
-            <span class="muted num">{{ p.total }} {{ p.total === 1 ? 'order' : 'orders' }}</span>
+    <section class="page-section section-flush" aria-labelledby="journal-title">
+      <header class="section-head">
+        <h2 id="journal-title">
+          Trade journal
+          @if (latest(); as p) {
+            @if (p.total > 0) {
+              <span class="count">{{ p.total }} {{ p.total === 1 ? 'order' : 'orders' }}</span>
+            }
           }
-        }
-      </div>
+        </h2>
+        <a class="text-link" routerLink="/orders">See orders</a>
+      </header>
+      <div class="section-body">
 
       @let page = latest();
       @if (journal.error(); as err) {
@@ -75,6 +79,7 @@ export const JOURNAL_PAGE_SIZE = 25;
           </ng-template>
         </app-data-table>
       }
+      </div>
     </section>
   `,
 })

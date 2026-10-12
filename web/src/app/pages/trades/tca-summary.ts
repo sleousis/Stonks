@@ -43,16 +43,8 @@ const KEY_LABELS: Record<Grouping, string> = {
   imports: [DataTable, Segmented, StatTile, EmptyState, ErrorState, LoadingState],
   styleUrl: './trades.scss',
   template: `
-    <section class="panel panel-flush" aria-labelledby="costs-title">
-      <div class="panel-head">
-        <h2 id="costs-title">What trading cost</h2>
-      </div>
-      <p class="lead">
-        Shortfall is the gap between the price when the order was decided and the price actually
-        paid, fees included. Positive figures are costs. A negative figure means the price moved in
-        your favour.
-      </p>
-
+    <section class="totals" aria-labelledby="costs-title">
+      <h2 id="costs-title" class="visually-hidden">What trading cost</h2>
       @if (totals.error(); as err) {
         <app-error-state
           title="Could not load trade costs"
@@ -62,13 +54,12 @@ const KEY_LABELS: Record<Grouping, string> = {
       } @else if (!totals.hasValue()) {
         <app-loading-state label="Loading trade costs" [rows]="3" />
       } @else if (headline(); as g) {
-        <div class="tiles stat-strip" aria-label="Trade cost totals">
+        <div class="summary-strip" aria-label="Trade cost totals">
           <app-stat-tile
             label="Total cost"
             [value]="totalCost(g)"
             detail="Shortfall plus missed fills"
             [help]="false"
-            featured
           />
           <app-stat-tile
             label="Shortfall"
@@ -96,45 +87,59 @@ const KEY_LABELS: Record<Grouping, string> = {
           />
         </div>
       } @else {
-        <app-empty-state
-          title="No trades yet"
-          message="Costs appear after the first filled order."
-        />
-      }
-    </section>
-
-    <!-- With no trades yet the totals already say so: no second empty panel. -->
-    @if (!noTrades()) {
-      <section class="panel panel-flush breakdown" aria-labelledby="breakdown-title">
-        <div class="panel-head">
-          <h2 id="breakdown-title">Breakdown</h2>
-          <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
-        </div>
-
-        @if (breakdown.error(); as err) {
-          <app-error-state
-            title="Could not load the breakdown"
-            [error]="err"
-            (retry)="breakdown.reload()"
-          />
-        } @else if (!breakdown.hasValue()) {
-          <app-loading-state label="Loading the breakdown" [rows]="4" />
-        } @else if (breakdown.value().groups.length === 0) {
+        <div class="none">
           <app-empty-state
             title="No trades yet"
             message="Costs appear after the first filled order."
           />
-        } @else {
-          @let rows = breakdown.value().groups;
-          <app-data-table
-            [caption]="'Trade costs ' + groupingLabel().toLowerCase()"
-            [rows]="rows"
-            [columns]="columns()"
-            [rowKey]="rowKey"
-            [initialSort]="{ key: 'is_cost', dir: 'desc' }"
-          />
-        }
-      </section>
+        </div>
+      }
+    </section>
+
+    <!-- With no trades yet the totals already say so: no second empty section. -->
+    @if (!noTrades()) {
+      <div class="cols-facts">
+        <section class="page-section section-flush" aria-labelledby="breakdown-title">
+          <header class="section-head">
+            <h2 id="breakdown-title">Breakdown</h2>
+            <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
+          </header>
+          <div class="section-body">
+            @if (breakdown.error(); as err) {
+              <app-error-state
+                title="Could not load the breakdown"
+                [error]="err"
+                (retry)="breakdown.reload()"
+              />
+            } @else if (!breakdown.hasValue()) {
+              <app-loading-state label="Loading the breakdown" [rows]="4" />
+            } @else if (breakdown.value().groups.length === 0) {
+              <app-empty-state
+                title="No trades yet"
+                message="Costs appear after the first filled order."
+              />
+            } @else {
+              @let rows = breakdown.value().groups;
+              <app-data-table
+                [caption]="'Trade costs ' + groupingLabel().toLowerCase()"
+                [rows]="rows"
+                [columns]="columns()"
+                [rowKey]="rowKey"
+                [initialSort]="{ key: 'is_cost', dir: 'desc' }"
+              />
+            }
+          </div>
+        </section>
+        <aside class="callout reading" aria-label="How to read trade costs">
+          <p class="callout-title">How to read this</p>
+          <p class="lead">
+            Shortfall is the gap between the price when the order was decided and the price
+            actually paid, fees included. Positive figures are costs. A negative figure means the
+            price moved in your favour.
+          </p>
+          <p>A basis point (bps) is one hundredth of a percent.</p>
+        </aside>
+      </div>
     }
   `,
   styles: `
