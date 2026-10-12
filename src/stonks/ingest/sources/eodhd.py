@@ -73,6 +73,15 @@ from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, E
 from stonks.ingest.metadata_bundle import CompanyData, CompanyPart, MetadataBundle
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.redact import format_exception, redact_exception, redact_secrets
+from stonks.ingest.reference_schemas import (
+    ExchangeDetailsRow,
+    IdentifierPage,
+    IndexComponentsRow,
+    IpoEventRow,
+    SplitEventRow,
+    TreasuryCurve,
+    TreasuryRateRow,
+)
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
@@ -456,7 +465,10 @@ class EodhdQuotaExceededError(QuotaExceededError):
 
 
 #: What each endpoint costs in EODHD API calls, by path prefix, measured on
-#: an All-in-one account (docs/backfill.md). Anything else costs one.
+#: an All-in-one account (docs/backfill.md). Anything else costs one. On
+#: 2026-10-12 index members (``/fundamentals/{CODE}.INDX``) cost 10 like any
+#: ``/fundamentals`` call, while ``/exchange-details``, ``/ust/*``, the IPO
+#: and split calendars and each ``/id-mapping`` page cost one.
 _REQUEST_COSTS: tuple[tuple[str, int], ...] = (
     ("/eod-bulk-last-day/", 100),
     ("/fundamentals/", 10),
@@ -2302,6 +2314,40 @@ class EodhdDataSource(DataSource):
         from stonks.ingest.sources import eodhd_calendar
 
         return eodhd_calendar.fetch_economic(self._get_json, start, end, countries)
+
+    # ---- reference data (parsers in eodhd_reference.py) ----------------------
+
+    def fetch_index_components(self, index_code: str, as_of: date) -> IndexComponentsRow:
+        from stonks.ingest.sources import eodhd_reference
+
+        return eodhd_reference.fetch_index_components(self._get_json, index_code, as_of)
+
+    def fetch_exchange_details(self, exchange: str, start: date, end: date) -> ExchangeDetailsRow:
+        from stonks.ingest.sources import eodhd_reference
+
+        return eodhd_reference.fetch_exchange_details(self._get_json, exchange, start, end)
+
+    def fetch_treasury_rates(self, curve: TreasuryCurve, year: int) -> list[TreasuryRateRow]:
+        from stonks.ingest.sources import eodhd_reference
+
+        return eodhd_reference.fetch_treasury(self._get_json, curve, year)
+
+    def fetch_ipo_calendar(self, start: date, end: date) -> list[IpoEventRow]:
+        from stonks.ingest.sources import eodhd_reference
+
+        return eodhd_reference.fetch_ipos(self._get_json, start, end)
+
+    def fetch_split_calendar(self, start: date, end: date) -> list[SplitEventRow]:
+        from stonks.ingest.sources import eodhd_reference
+
+        return eodhd_reference.fetch_splits(self._get_json, start, end)
+
+    def fetch_identifiers(self, exchange: str, offset: int, limit: int) -> IdentifierPage:
+        from stonks.ingest.sources import eodhd_reference
+
+        return eodhd_reference.fetch_identifiers(
+            self._get_json, exchange, offset=offset, limit=limit
+        )
 
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
         """Assemble the full metadata bundle by hitting seven EODHD endpoints

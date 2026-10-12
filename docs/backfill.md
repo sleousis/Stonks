@@ -1,6 +1,6 @@
 # Full backfill from EODHD
 
-`stonks ingest backfill` fills the lake with everything an EODHD All-in-one plan offers that Stonks has tables for. It covers every exchange and every symbol, delisted ones too. That is far more than one day of API calls, so the backfill runs for days. It keeps its place in the state database, stays inside the daily call budget and starts again where it stopped.
+`stonks ingest backfill` fills the lake with everything an EODHD All-in-one plan offers that Stonks has tables for. It covers every exchange and every symbol, delisted ones too. Free sources (SEC EDGAR, IBKR's short stock files, DefiLlama) run as phases too, outside the EODHD budget. That is far more than one day of API calls, so the backfill runs for days. It keeps its place in the state database, stays inside the daily call budget and starts again where it stopped.
 
 ```mermaid
 flowchart LR
@@ -16,7 +16,7 @@ flowchart LR
 ## Before the first run
 
 1. Back up `data/lake.duckdb` and `data/state.sqlite` (`stonks backup backup`).
-2. Run `uv run stonks db init`. The backfill needs the lake's `instruments` table and state migration 061.
+2. Run `uv run stonks db init`. The backfill needs the lake's `instruments` table, lake migration 026 and state migration 061. An install that ran an earlier backfill must run it again before the new phases.
 3. For a big lake, move bars to Parquet first: `uv run python -m stonks.store.bars_migrate --to parquet`.
 4. Tell Stonks the plan. The shipped default is the free plan, which the backfill refuses. Set it in your own config or the environment, never in the shipped `config/default.toml`:
 
@@ -47,7 +47,7 @@ Start-Process -WindowStyle Hidden -FilePath uv -ArgumentList "run","stonks","ing
   ForEach-Object { $_.PriorityClass = "BelowNormal" }
 ```
 
-`--exchanges` limits ticker phases to those exchange codes. Market-wide phases (calendars, macro) still run.
+`--exchanges` limits ticker phases to those exchange codes. Market-wide phases (calendars, macro, indices, Treasury, borrow, TVL) still run.
 
 ## Phases
 
@@ -60,13 +60,27 @@ Phases run in this order. Each is one module in `src/stonks/ingest/backfill/phas
 | `daily_topup` | each exchange and weekday | recent days by one bulk call, for tickers fetched before that day | 100 |
 | `actions` | each equity | `dividends`, `stock_splits` | 2 |
 | `fundamentals` | each common stock, ETF and fund | profile, analysts, holders, officers, shares outstanding, ESG, statements with versions (stocks), fund holdings (ETFs, funds), market cap (active stocks), insider trades (only on `insider_exchanges`) | 10 to 30 |
+| `index_constituents` | each index on `INDX` (about 1,700) | `index_constituent_snapshots` and `index_constituent_changes`: members today and every past member with its dates, delisted names too | 10 |
+| `exchange_details` | each exchange | `exchange_details` (hours, time zone, MICs, with versions) and `exchange_holidays` (from `exchange_holidays_start` to a few years ahead, early closes too) | 1 |
+| `treasury` | each Treasury curve and year from `treasury_start_year`, the current year once a month | `treasury_rates` with versions: bill rates, nominal and real par yield curves, long-term rates | 1 |
+| `calendar_extra` | IPOs, splits | `ipo_calendar` and `split_calendar` with versions, from `calendar_start`, a month a step | 1 a month |
+| `id_mapping` | each exchange with instruments | ISIN, CUSIP, CIK, FIGI and LEI on `instruments`, a page of 1,000 a step (a NULL never clears a value) | 1 a page |
 | `calendars` | earnings, dividends, economic | the three calendars from `calendar_start`, a month a step | about 1 to 6 a month |
 | `macro` | each country and indicator | `macro_indicators` | 10 |
 | `fx` | each six-letter pair on FOREX | `fx_rates` | 1 |
 | `news` | each active stock and ETF | `news`, `news_sentiment` | 10 |
 | `intraday_1h`, `intraday_5m`, `intraday_1m` | each common stock and ETF on `intraday_exchanges` | `bars` at that interval, a request window a step | 5 a step |
+| `edgar` | each active US stock, each manager in `edgar_filers` | `corporate_filings` (every form), insider trades from Form 4, `institutional_holdings` from 13F, each with its acceptance time | free |
+| `borrow` | each IBKR short stock market, each day | `borrow_rates` (the files hold today only) | free |
+| `tvl` | each DefiLlama chain, each day | `defi_tvl`, the whole series each time | free |
 
-Within a phase, stocks run first, then ETFs, then funds, and active names before delisted ones. Forex pairs and money market rates are not instruments (`skip_exchanges`). One `/fundamentals` call fills the profile, the statements and the holdings together, so a stock never pays for it twice.
+Within a phase, stocks run first, then ETFs, then funds, and active names before delisted ones. Large indices (S&P 500, Nasdaq 100, FTSE, DAX and others) and the US exchange come first in their phases. Forex pairs and money market rates are not instruments (`skip_exchanges`). One `/fundamentals` call fills the profile, the statements and the holdings together, so a stock never pays for it twice.
+
+## Free sources
+
+`edgar`, `borrow` and `tvl` read free sources with their own rate limits (EDGAR at most 8 requests a second). They spend no EODHD calls. They run in order after the intraday phases, and also whenever the day's budget is used up: then they keep going until the reset and give way to the EODHD phases again.
+
+`edgar` skips with a message until `[sources.edgar] user_agent` (or `STONKS_EDGAR_USER_AGENT`) holds a name and a contact address, as the SEC asks. See [edgar.md](edgar.md). A ticker EDGAR does not list is done with nothing stored. `borrow` and `tvl` list one unit per market or chain each day. A unit from a day that passed is done without a fetch, since today's unit reads the same file or series.
 
 ## Budget
 
@@ -74,11 +88,14 @@ Costs are EODHD's, measured on an All-in-one account:
 
 | Endpoint | Calls |
 |---|---|
-| `/eod`, `/div`, `/splits`, symbol lists, calendars, economic events | 1 |
+| `/eod`, `/div`, `/splits`, symbol lists, calendars (IPOs and splits too), economic events | 1 |
+| `/exchange-details`, `/ust/*` (each Treasury year), each `/id-mapping` page | 1 |
 | `/intraday`, `/news`, `/sentiments` | 5 |
-| `/fundamentals`, `/historical-market-cap`, `/insider-transactions`, `/macro-indicator` | 10 |
+| `/fundamentals` (index members too), `/historical-market-cap`, `/insider-transactions`, `/macro-indicator` | 10 |
 | `/eod-bulk-last-day` | 100 |
 | `/user` | 0 |
+
+The new reference endpoints were measured on 2026-10-12 against the account's own count while another run shared the key. Index members cost 10 each time, and the others came out at about one call a request. EODHD's own docs also say one for the Treasury endpoints.
 
 Before each request the budget:
 
@@ -125,7 +142,19 @@ Under `[ingest.backfill]`, all optional:
 | `intraday_delisted` | false | intraday bars for delisted names too |
 | `intraday_start` | 1h and 5m 2020-10-01, 1m 2004-01-01 | first day per interval |
 | `intraday_window_days` | 1h 7200, 5m 600, 1m 120 | days per intraday request |
+| `index_codes` | all | index codes to fetch, e.g. `GSPC` |
+| `exchange_holidays_start`, `exchange_holidays_years_ahead` | 2000-01-01, 2 | the holiday window |
+| `treasury_start_year` | 1990 | first Treasury year (a year before a curve starts costs one call and stores nothing) |
+| `id_exchanges` | all with instruments | exchanges for identifiers |
+| `edgar_kinds` | `filings`, `insiders` | what EDGAR fetches per stock |
+| `edgar_filers` | none | 13F managers by CIK |
+| `borrow_markets` | all | IBKR short stock markets, e.g. `usa` |
+| `tvl_chains` | all | DefiLlama chains |
 
 ## Tables
+
+Lake migration 026 adds `exchange_details`, `exchange_holidays`, `treasury_rates`, `ipo_calendar` and `split_calendar`. All but the holidays keep a `_versions` twin with `known_at`, so a revised value never shows at a decision made before Stonks saw it (P12). Index members use the tables of migration 016 and identifiers the `instruments` columns.
+
+The Treasury phase reads each past year once and the current year once a month, so its newest days arrive monthly. The IPO and split calendars, like the other calendars, stop at the day they reach.
 
 State migration 061 adds `backfill_units` (one row per unit with status, attempts, calls, rows, cursor and last error), `backfill_phases` (when each phase last listed its units) and `backfill_calls` (calls per UTC day and the vendor's own count).

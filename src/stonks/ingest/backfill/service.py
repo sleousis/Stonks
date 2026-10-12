@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from stonks.ingest.backfill.base import BackfillContext, BackfillPhase
 from stonks.ingest.backfill.budget import CallBudget
@@ -18,7 +19,7 @@ from stonks.ingest.backfill.state import BackfillState, DayCalls
 from stonks.ingest.pipeline import IngestPipeline
 from stonks.ingest.quality import BarQualityChecker
 from stonks.ingest.quality_config import DataQualityConfig
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.store.lake import DuckDBLake
 
 #: Plans that serve what the backfill asks for, per source id.
@@ -83,6 +84,30 @@ def make_pipeline_factory(
     return make
 
 
+def free_source_factory(cfg: Any) -> Callable[[str], DataSource]:
+    """Builds the free sources the unmetered phases read from
+    ``[sources.*]`` (``SourcesConfig``): ``edgar`` (raises until
+    ``[sources.edgar] user_agent`` is set), ``ibkr_borrow`` and
+    ``defillama``. None of them is metered against the EODHD budget."""
+
+    def build(source_id: str) -> DataSource:
+        if source_id == "edgar":
+            from stonks.ingest.sources.edgar import EdgarDataSource
+
+            return EdgarDataSource.from_config(cfg.edgar)
+        if source_id == "ibkr_borrow":
+            from stonks.ingest.sources.ibkr_borrow import IbkrBorrowDataSource
+
+            return IbkrBorrowDataSource.from_config(cfg.ibkr_borrow)
+        if source_id == "defillama":
+            from stonks.ingest.sources.registry import build_source
+
+            return build_source("defillama", cfg)
+        raise DataSourceError(f"no free source {source_id!r} for the backfill")
+
+    return build
+
+
 def build_runner(
     *,
     source: DataSource,
@@ -97,6 +122,7 @@ def build_runner(
     daily_budget: int | None = None,
     clock: Callable[[], datetime] | None = None,
     sleep: Callable[[float], None] | None = None,
+    sources: Callable[[str], DataSource] | None = None,
 ) -> tuple[BackfillRunner, CallBudget]:
     """A runner and its budget, with the budget metering ``source``."""
     clock = clock or (lambda: datetime.now(UTC))
@@ -121,6 +147,7 @@ def build_runner(
         make_pipeline=make_pipeline,
         exchanges=frozenset(e.upper() for e in exchanges) if exchanges else None,
         clock=clock,
+        sources=sources,
     )
     runner = BackfillRunner(
         ctx, select_phases(phases), budget, until_budget=until_budget, clock=clock, sleep=sleep
@@ -219,6 +246,7 @@ __all__ = [
     "backfill_status",
     "build_runner",
     "check_plan",
+    "free_source_factory",
     "limit_duckdb",
     "make_pipeline_factory",
 ]

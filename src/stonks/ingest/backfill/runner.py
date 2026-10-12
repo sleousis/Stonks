@@ -18,6 +18,10 @@ Each unit ends its turn in one of four ways:
   left as it was, no attempt counted, and the run pauses a minute (twice
   that after each refusal in a row, up to 15 minutes) before going on.
 
+Phases that read free sources (``metered = False``) spend no budget. When
+the day's budget runs out they keep running until the reset, then give
+way to the metered phases again.
+
 A phase whose listing fails is skipped for this pass and listed again on
 the next run. A write that raises is split per unit, so only the unit
 that cannot be stored fails. The calls spent are stored however the run
@@ -41,7 +45,7 @@ from stonks.ingest.backfill.budget import BudgetExhausted, CallBudget
 from stonks.ingest.backfill.state import Unit
 from stonks.ingest.pipeline import _SOFT_FAIL_EXCEPTIONS
 from stonks.ingest.redact import format_exception
-from stonks.ingest.sources.base import QuotaExceededError
+from stonks.ingest.sources.base import QuotaExceededError, UnknownSymbolError
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.ingest.backfill.runner")
@@ -99,6 +103,8 @@ class BackfillRunner:
         #: Phases whose listing failed in the current pass.
         self._unlisted: list[str] = []
         self._exchanges = sorted(ctx.exchanges) if ctx.exchanges is not None else None
+        #: While the budget is used up, free phases run until this moment.
+        self._deadline: datetime | None = None
 
     # ---- the loop -----------------------------------------------------------------
 
@@ -119,6 +125,8 @@ class BackfillRunner:
                 self._flush_calls()
                 if exc.resets_at is None:
                     return self._stop("cap", exc.reason)
+                # free sources spend no budget: use the wait until the reset
+                self._run_unmetered(exc.resets_at)
                 if self._until_budget:
                     return self._stop("budget", exc.reason)
                 _log.info("backfill.sleeping", reason=exc.reason, until=exc.resets_at.isoformat())
@@ -138,6 +146,28 @@ class BackfillRunner:
                 return self._stop("waiting", f"retries wait until {retry_at.isoformat()}")
             _log.info("backfill.waiting_for_retries", until=retry_at.isoformat())
             self._sleep_until(retry_at)
+
+    def _run_unmetered(self, until: datetime) -> None:
+        """Run the phases that read free sources until ``until`` (the
+        budget's reset) or until they run out of work."""
+        free = [p for p in self._phases if not p.metered]
+        if not free:
+            return
+        self._deadline = until
+        try:
+            for phase in free:
+                if self._past_deadline():
+                    return
+                try:
+                    self._run_phase(phase)
+                except BudgetExhausted:  # pragma: no cover - free phases spend nothing
+                    return
+        finally:
+            self._deadline = None
+            self._flush_calls()
+
+    def _past_deadline(self) -> bool:
+        return self._deadline is not None and self._clock() >= self._deadline
 
     def _stop(self, reason: StopReason, detail: str) -> RunReport:
         self._report.stopped = reason
@@ -194,6 +224,11 @@ class BackfillRunner:
                     raise
                 if stop is not None:
                     raise stop
+                if self._past_deadline():
+                    # the budget reset: store what is in flight and give way
+                    if following:
+                        self._finish(phase, self._gather(following))
+                    return
                 # units that ran a step are runnable again once stored
                 current = following or self._submit(pool, phase, exclude=())
 
@@ -404,6 +439,8 @@ def _rate_limited(exc: BaseException) -> bool:
 
 
 def _not_found(exc: BaseException) -> bool:
+    if isinstance(exc, UnknownSymbolError):
+        return True
     return (
         isinstance(exc, requests.HTTPError)
         and exc.response is not None

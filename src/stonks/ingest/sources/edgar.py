@@ -47,6 +47,7 @@ from stonks.ingest.schemas import FinancialStatementsBundle, InsiderTransactionR
 from stonks.ingest.sources.base import (
     DataSource,
     DataSourceError,
+    UnknownSymbolError,
     UnsupportedCapabilityError,
 )
 from stonks.logging import get_logger
@@ -75,6 +76,10 @@ Relation = Literal["officer", "director", "officer_and_director", "ten_percent_o
 
 class EdgarError(DataSourceError):
     """EDGAR refused a request or sent something we cannot read."""
+
+
+class EdgarUnknownTickerError(EdgarError, UnknownSymbolError):
+    """EDGAR's ticker list has no company with this ticker."""
 
 
 # ---- parsing ------------------------------------------------------------------------
@@ -426,7 +431,7 @@ class EdgarDataSource(DataSource):
         symbol = symbol_of(ticker)
         cik = self._ciks.get(symbol) or self._ciks.get(symbol.replace("-", "."))
         if cik is None:
-            raise EdgarError(f"EDGAR lists no company with ticker {symbol!r}")
+            raise EdgarUnknownTickerError(f"EDGAR lists no company with ticker {symbol!r}")
         return cik
 
     def _submissions(

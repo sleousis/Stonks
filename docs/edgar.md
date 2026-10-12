@@ -40,6 +40,10 @@ uv run stonks ingest edgar --kinds holdings --filers 1067983 --since 2025-01-01
 - Holdings name managers by CIK. A holding gets a ticker when the lake knows its CUSIP.
 - Each ticker or filer is one unit of the `ingest_runs` row. One bad document is skipped with a warning. The rest of the ticker still lands.
 
+## In the backfill
+
+The `edgar` phase of the [backfill](backfill.md) pulls the full history of every active US stock in the lake: filings of every form and the Form 4 insider trades, plus the 13F holdings of the managers in `[ingest.backfill] edgar_filers`. It spends no EODHD calls and skips with a message until `user_agent` is set. A ticker EDGAR does not list is done with nothing stored.
+
 ## Fair access
 
 - Every request carries your User-Agent.

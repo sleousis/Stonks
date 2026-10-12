@@ -163,6 +163,26 @@ class DefiLlamaDataSource(DataSource):
         rows = parse_chain_tvl_response(canonical, payload, source=self.source_id)
         return [r for r in rows if since is None or r.observation_date >= since]
 
+    def list_tvl_chains(self) -> list[str]:
+        """Every chain DefiLlama tracks (``GET /v2/chains``: a list of
+        ``{"name", "tvl", ...}``), canonical names, largest TVL first."""
+        payload = self._get(f"{self._base_url}/v2/chains", chain="*")
+        if not isinstance(payload, list):
+            raise DefiLlamaResponseError(f"unexpected chain list payload: {type(payload).__name__}")
+        ranked: list[tuple[float, str]] = []
+        for row in payload:
+            if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+                continue
+            try:
+                chain = normalize_chain(row["name"])
+            except ValueError:
+                continue
+            tvl = row.get("tvl")
+            size = float(tvl) if isinstance(tvl, int | float) and not isinstance(tvl, bool) else 0.0
+            ranked.append((size, chain))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return list(dict.fromkeys(chain for _, chain in ranked))
+
     # ---- unsupported capabilities -------------------------------------------
 
     def list_tickers(self, exchange: str) -> list[str]:

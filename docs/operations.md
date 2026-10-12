@@ -288,7 +288,7 @@ The lake must not be held by another writer: stop `stonks serve` or back up from
 
 ## Full backfill
 
-On an EODHD All-in-one plan, `uv run stonks ingest backfill run` fills the lake with every exchange, every symbol (delisted too), daily history, splits and dividends, fundamentals, calendars, macro, FX, news and intraday bars. It runs for days inside a daily call budget and resumes where it stopped. `stonks ingest backfill status` shows the progress. Set `STONKS_EODHD_PLAN=all_in_one` first and stop `stonks serve` while it runs. Details: [backfill.md](backfill.md).
+On an EODHD All-in-one plan, `uv run stonks ingest backfill run` fills the lake with every exchange, every symbol (delisted too), daily history, splits and dividends, fundamentals, index members, exchange hours and holidays, Treasury rates, IPO and split calendars, identifiers, calendars, macro, FX, news and intraday bars. Free sources (SEC EDGAR, IBKR borrow rates, DefiLlama TVL) run outside the EODHD budget. It runs for days inside a daily call budget and resumes where it stopped. `stonks ingest backfill status` shows the progress. Set `STONKS_EODHD_PLAN=all_in_one` first and stop `stonks serve` while it runs. Details: [backfill.md](backfill.md).
 
 ## Data quality
 
