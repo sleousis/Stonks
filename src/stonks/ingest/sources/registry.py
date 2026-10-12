@@ -65,6 +65,7 @@ def _build_defillama(cfg: SourcesConfig) -> DataSource:
         timeout_seconds=llama.timeout_seconds,
         max_retries=llama.max_retries,
         retry_backoff_seconds=llama.retry_backoff_seconds,
+        min_request_interval_seconds=llama.min_request_interval_seconds,
     )
 
 

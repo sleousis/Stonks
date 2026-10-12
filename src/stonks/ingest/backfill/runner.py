@@ -14,7 +14,8 @@ Each unit ends its turn in one of four ways:
 - stopped by the budget or the vendor's quota: left as it was, so the next
   run picks it up. The run then sleeps until the budget refills, or
   returns when ``until_budget`` is set so a scheduler can rerun it;
-- refused for going too fast (HTTP 429 after the source's own retries):
+- refused for going too fast (HTTP 429 after the source's own retries, or
+  a source's ``RateLimitedError``):
   left as it was, no attempt counted, and the run pauses a minute (twice
   that after each refusal in a row, up to 15 minutes) before going on.
 
@@ -45,7 +46,7 @@ from stonks.ingest.backfill.budget import BudgetExhausted, CallBudget
 from stonks.ingest.backfill.state import Unit
 from stonks.ingest.pipeline import _SOFT_FAIL_EXCEPTIONS
 from stonks.ingest.redact import format_exception
-from stonks.ingest.sources.base import QuotaExceededError, UnknownSymbolError
+from stonks.ingest.sources.base import QuotaExceededError, RateLimitedError, UnknownSymbolError
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.ingest.backfill.runner")
@@ -431,6 +432,8 @@ class BackfillRunner:
 
 
 def _rate_limited(exc: BaseException) -> bool:
+    if isinstance(exc, RateLimitedError):
+        return True
     return (
         isinstance(exc, requests.HTTPError)
         and exc.response is not None

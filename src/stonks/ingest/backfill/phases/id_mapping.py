@@ -12,7 +12,6 @@ from stonks.ingest.backfill.base import (
     BackfillContext,
     BackfillPhase,
     Outcome,
-    exchange_of,
 )
 from stonks.ingest.backfill.replay import ReplaySource
 from stonks.ingest.backfill.settings import BackfillSettings
@@ -32,9 +31,13 @@ class IdMappingPhase(BackfillPhase):
     def list_units(self, ctx: BackfillContext) -> Iterable[UnitSpec]:
         codes = ctx.settings.id_exchanges
         if codes is None:
-            # every exchange with instruments (lists again each run, no network)
-            ids = ctx.lake.con.execute("SELECT id FROM instruments").fetchall()
-            codes = sorted({e for (t,) in ids if (e := exchange_of(str(t))) is not None})
+            # every exchange with instruments (lists again each run, no
+            # network); the lake finds the codes, so no id list is loaded
+            rows = ctx.lake.con.execute(
+                r"SELECT DISTINCT upper(regexp_extract(id, '^.+\.([^.]+)$', 1)) AS ex "
+                "FROM instruments"
+            ).fetchall()
+            codes = sorted(str(e) for (e,) in rows if e)
         skip = {e.upper() for e in ctx.settings.skip_exchanges}
         for code in dict.fromkeys(c.upper() for c in codes):
             if code not in skip:

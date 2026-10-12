@@ -144,19 +144,38 @@ class ReferenceStore:
         return count
 
     def _versions_as_of(
-        self, table: str, pk: tuple[str, ...], where: str, params: list[Any], known_at: datetime
+        self,
+        table: str,
+        pk: tuple[str, ...],
+        where: str,
+        params: list[Any],
+        known_at: datetime,
+        *,
+        first_from: str | None = None,
     ) -> pd.DataFrame:
-        """The newest version of each key matching ``where`` seen by ``known_at``."""
+        """The newest version of each key matching ``where`` seen by
+        ``known_at``. ``first_from`` is a SQL time from which the first
+        version of a key counts even when Stonks saw it later, so history
+        loaded late stays usable (P12, like statements and macro prints).
+        ``where`` must select whole keys, so the first version is the
+        key's own."""
         partition = ", ".join(pk)
+        first = f"OR (first_rn = 1 AND {first_from} <= CAST(? AS TIMESTAMP))" if first_from else ""
+        args: list[Any] = [*params, known_at] + ([known_at] if first_from else [])
         return self._lake.con.execute(
             f"""
-            SELECT * EXCLUDE (rn) FROM (
+            SELECT * EXCLUDE (rn, first_rn) FROM (
                 SELECT *, row_number() OVER (PARTITION BY {partition} ORDER BY known_at DESC) AS rn
-                  FROM {table}_versions
-                 WHERE known_at <= CAST(? AS TIMESTAMP) AND {where}
+                  FROM (
+                      SELECT *, row_number() OVER (
+                                 PARTITION BY {partition} ORDER BY known_at) AS first_rn
+                        FROM {table}_versions
+                       WHERE {where}
+                  )
+                 WHERE known_at <= CAST(? AS TIMESTAMP) {first}
             ) WHERE rn = 1
             """,
-            [known_at, *params],
+            args,
         ).df()
 
     # ---- exchanges -----------------------------------------------------------------
@@ -267,7 +286,9 @@ class ReferenceStore:
         known_at: datetime | None = None,
     ) -> dict[str, float | None]:
         """``tenor -> rate`` of ``curve`` on ``day``. With ``known_at``,
-        the versions seen by then (P12); without, the latest view."""
+        the versions seen by then (P12): a rate's first version counts
+        from the day after its observation (published that evening), a
+        revision only from when Stonks saw it. Without, the latest view."""
         where = "observation_date = ? AND curve = ? AND measure = ?"
         params: list[Any] = [day, curve, measure]
         if known_at is None:
@@ -275,7 +296,14 @@ class ReferenceStore:
                 f"SELECT tenor, rate FROM treasury_rates WHERE {where}", params
             ).fetchall()
         else:
-            frame = self._versions_as_of("treasury_rates", _TREASURY_PK, where, params, known_at)
+            frame = self._versions_as_of(
+                "treasury_rates",
+                _TREASURY_PK,
+                where,
+                params,
+                known_at,
+                first_from="CAST(observation_date + INTERVAL 1 DAY AS TIMESTAMP)",
+            )
             rows = list(zip(frame["tenor"], frame["rate"], strict=True))
         return {str(t): (None if r is None or pd.isna(r) else float(r)) for t, r in rows}
 

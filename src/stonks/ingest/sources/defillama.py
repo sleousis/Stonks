@@ -22,6 +22,7 @@ An unknown chain answers 404 and maps to :class:`DefiLlamaUnknownChainError`.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Iterable, Iterator
 from datetime import UTC, date, datetime
@@ -32,7 +33,12 @@ import requests
 
 from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import DefiTvlRow, FinancialStatementsBundle, RawPriceBar
-from stonks.ingest.sources.base import DataSource, DataSourceError, UnsupportedCapabilityError
+from stonks.ingest.sources.base import (
+    DataSource,
+    DataSourceError,
+    UnknownSymbolError,
+    UnsupportedCapabilityError,
+)
 from stonks.logging import get_logger
 
 DEFAULT_BASE_URL = "https://api.llama.fi"
@@ -44,7 +50,7 @@ class DefiLlamaResponseError(DataSourceError):
     """The vendor answered with something that is not a TVL series."""
 
 
-class DefiLlamaUnknownChainError(DataSourceError):
+class DefiLlamaUnknownChainError(UnknownSymbolError):
     """DefiLlama does not track the requested chain (HTTP 404)."""
 
 
@@ -139,6 +145,7 @@ class DefiLlamaDataSource(DataSource):
         max_retries: int = 3,
         retry_backoff_seconds: float = 1.0,
         session: requests.Session | None = None,
+        min_request_interval_seconds: float = 0.0,
     ):
         if max_retries < 1:
             raise ValueError(f"max_retries must be >= 1, got {max_retries}")
@@ -148,6 +155,11 @@ class DefiLlamaDataSource(DataSource):
         self._backoff = retry_backoff_seconds
         self._session = session or requests.Session()
         self._log = _log
+        #: Least time between two requests, across every thread sharing
+        #: this source (the free host asks clients to go easy).
+        self._interval = max(0.0, min_request_interval_seconds)
+        self._pace = threading.Lock()
+        self._last: float | None = None
 
     # ---- the one capability --------------------------------------------------
 
@@ -219,7 +231,18 @@ class DefiLlamaDataSource(DataSource):
                 time.sleep(self._backoff * (2 ** (attempt - 1)))
         raise AssertionError("unreachable: max_retries must be >= 1")
 
+    def _wait(self) -> None:
+        if self._interval <= 0:
+            return
+        with self._pace:  # held while sleeping, so threads take turns
+            if self._last is not None:
+                gap = self._interval - (time.monotonic() - self._last)
+                if gap > 0:
+                    time.sleep(gap)
+            self._last = time.monotonic()
+
     def _get_once(self, url: str, *, chain: str) -> Any:
+        self._wait()
         response = self._session.get(url, timeout=self._timeout)
         if response.status_code == 404:
             raise DefiLlamaUnknownChainError(f"DefiLlama does not track chain {chain!r}")

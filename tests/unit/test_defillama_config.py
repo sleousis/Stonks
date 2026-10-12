@@ -37,3 +37,10 @@ def test_build_defillama_needs_no_key():
     assert isinstance(source, DefiLlamaDataSource)
     assert source.source_id == "defillama"
     assert source._timeout == 5
+
+
+def test_request_spacing_reaches_the_source():
+    assert DefiLlamaSourceConfig().min_request_interval_seconds > 0
+    cfg = SourcesConfig.model_validate({"defillama": {"min_request_interval_seconds": 2.0}})
+    source = build_source("defillama", cfg)
+    assert source._interval == 2.0

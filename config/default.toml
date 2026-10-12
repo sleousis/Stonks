@@ -549,6 +549,7 @@ base_url = "https://api.llama.fi"
 timeout_seconds = 30
 max_retries = 3
 retry_backoff_seconds = 1.0
+min_request_interval_seconds = 0.5   # at most two requests a second
 
 [sources.ibkr_borrow]
 # IBKR's public short stock files for `stonks ingest borrow` (roadmap 19.3).

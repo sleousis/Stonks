@@ -233,3 +233,42 @@ def test_network_errors_retry_then_raise():
 
     with pytest.raises(requests.ConnectionError):
         _source(Broken()).fetch_filings("AAPL.US")
+
+
+def test_request_spacing_holds_across_threads():
+    """The backfill fetches on two threads through one source, so the
+    spacing must hold for every request, not per thread (SEC fair access)."""
+    import threading
+    import time
+
+    stamps: list[float] = []
+
+    class _Timed:
+        def get(self, url: str, headers: dict[str, str], timeout: float) -> _Response:
+            stamps.append(time.monotonic())
+            return _Response(200, b"{}")
+
+    source = EdgarDataSource(user_agent=AGENT, session=_Timed(), min_request_interval_seconds=0.1)
+    threads = [
+        threading.Thread(target=lambda: [source._json(f"https://x.test/{i}") for i in range(2)])
+        for _ in range(4)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    gaps = [b - a for a, b in zip(sorted(stamps), sorted(stamps)[1:], strict=False)]
+    assert len(stamps) == 8
+    assert min(gaps) >= 0.09
+
+
+@pytest.mark.parametrize("status", [429, 403])
+def test_a_rate_refusal_is_a_rate_limit_not_a_failure(status):
+    """SEC answers 403 (or 429) when a client goes too fast. The runner
+    must pause on it instead of failing unit after unit."""
+    from stonks.ingest.sources.base import RateLimitedError
+
+    clock = _Clock()
+    source = _source(_Session(fail=[status] * 10), clock)
+    with pytest.raises(RateLimitedError):
+        source.fetch_filings("AAPL.US")

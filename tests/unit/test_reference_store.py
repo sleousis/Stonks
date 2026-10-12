@@ -41,7 +41,8 @@ def test_a_revised_rate_is_a_new_version_and_the_old_one_stays_readable(lake):
     assert store.treasury_curve(DAY, "par_nominal") == {"10Y": 4.1, "2Y": 4.5}
     seen_before = store.treasury_curve(DAY, "par_nominal", known_at=datetime(2026, 10, 3))
     assert seen_before == {"10Y": 4.0, "2Y": 4.5}
-    assert store.treasury_curve(DAY, "par_nominal", known_at=datetime(2026, 9, 1)) == {}
+    # before the rate existed nothing is known
+    assert store.treasury_curve(DAY, "par_nominal", known_at=datetime(2024, 1, 1)) == {}
 
 
 def test_exchange_details_and_holidays(lake):
@@ -124,3 +125,18 @@ def test_identifiers_fill_known_instruments_and_never_clear_a_value(lake):
     ).fetchone()
     assert row == ("OLD", "037833100", "0000320193")
     assert _count(lake, "SELECT COUNT(*) FROM instruments") == 1
+
+
+def test_history_loaded_late_counts_from_the_day_after_each_rate(lake):
+    """P12 like statements and macro: the first version of a rate counts
+    from the day after its observation (published that evening), so a
+    curve backfilled years later is usable in a backtest. A revision still
+    counts only from when Stonks saw it."""
+    store = ReferenceStore(lake)
+    store.upsert_treasury_rates([_rate(4.0)], source="eodhd", known_at=T1)
+    store.upsert_treasury_rates([_rate(4.2)], source="eodhd", known_at=T2)
+    next_day = datetime(2024, 1, 3)
+    assert store.treasury_curve(DAY, "par_nominal", known_at=next_day) == {"10Y": 4.0}
+    # never on the day itself
+    assert store.treasury_curve(DAY, "par_nominal", known_at=datetime(2024, 1, 2, 23)) == {}
+    assert store.treasury_curve(DAY, "par_nominal", known_at=T2) == {"10Y": 4.2}

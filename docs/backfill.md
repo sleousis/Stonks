@@ -78,7 +78,7 @@ Within a phase, stocks run first, then ETFs, then funds, and active names before
 
 ## Free sources
 
-`edgar`, `borrow` and `tvl` read free sources with their own rate limits (EDGAR at most 8 requests a second). They spend no EODHD calls. They run in order after the intraday phases, and also whenever the day's budget is used up: then they keep going until the reset and give way to the EODHD phases again.
+`edgar`, `borrow` and `tvl` read free sources with their own rate limits. EDGAR waits at least 0.125 seconds between requests and DefiLlama 0.5 seconds (`[sources.defillama] min_request_interval_seconds`), across both fetch threads. When EDGAR answers 403 or 429 for going too fast, the run pauses a minute (longer after each refusal in a row) with no attempt counted. A chain DefiLlama does not track is done with nothing stored. They spend no EODHD calls. They run in order after the intraday phases, and also whenever the day's budget is used up: then they keep going until the reset and give way to the EODHD phases again.
 
 `edgar` skips with a message until `[sources.edgar] user_agent` (or `STONKS_EDGAR_USER_AGENT`) holds a name and a contact address, as the SEC asks. See [edgar.md](edgar.md). A ticker EDGAR does not list is done with nothing stored. `borrow` and `tvl` list one unit per market or chain each day. A unit from a day that passed is done without a fetch, since today's unit reads the same file or series.
 
@@ -153,7 +153,7 @@ Under `[ingest.backfill]`, all optional:
 
 ## Tables
 
-Lake migration 026 adds `exchange_details`, `exchange_holidays`, `treasury_rates`, `ipo_calendar` and `split_calendar`. All but the holidays keep a `_versions` twin with `known_at`, so a revised value never shows at a decision made before Stonks saw it (P12). Index members use the tables of migration 016 and identifiers the `instruments` columns.
+Lake migration 026 adds `exchange_details`, `exchange_holidays`, `treasury_rates`, `ipo_calendar` and `split_calendar`. All but the holidays keep a `_versions` twin with `known_at`, so a revised value never shows at a decision made before Stonks saw it (P12). A Treasury rate's first version counts from the day after its date, so a curve loaded years later still serves backtests. A revision counts only from when Stonks saw it. Index members use the tables of migration 016 and identifiers the `instruments` columns.
 
 The Treasury phase reads each past year once and the current year once a month, so its newest days arrive monthly. The IPO and split calendars, like the other calendars, stop at the day they reach.
 

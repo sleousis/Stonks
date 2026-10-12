@@ -70,6 +70,12 @@ class UnknownSymbolError(DataSourceError):
     stored, like an HTTP 404."""
 
 
+class RateLimitedError(DataSourceError):
+    """The source refused requests for going too fast (after its own
+    retries). Not the unit's fault: a backfill pauses and asks again later,
+    with no attempt counted."""
+
+
 class UnsupportedCapabilityError(DataSourceError):
     """The source does not offer this kind of data at all (e.g. prices from
     a DeFi-TVL vendor). A :class:`DataSourceError`, so the pipeline counts

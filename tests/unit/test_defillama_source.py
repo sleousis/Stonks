@@ -250,3 +250,38 @@ def test_list_tvl_chains_refuses_a_payload_that_is_not_a_list():
     session = _StubSession(_StubResponse(json_body={"error": "x"}))
     with pytest.raises(DataSourceError):
         _source(session).list_tvl_chains()
+
+
+def test_an_unknown_chain_is_an_unknown_symbol():
+    """A chain DefiLlama does not track is done with nothing stored in a
+    backfill, never retried day after day."""
+    from stonks.ingest.sources.base import UnknownSymbolError
+
+    assert issubclass(DefiLlamaUnknownChainError, UnknownSymbolError)
+
+
+def test_requests_are_spaced_across_threads():
+    """The daily TVL backfill asks for hundreds of chains on two threads:
+    requests keep a minimum gap so the free host is not hammered."""
+    import threading
+    import time
+
+    stamps: list[float] = []
+
+    class _Timed:
+        def get(self, url: str, params: Any = None, timeout: float | None = None) -> Any:
+            stamps.append(time.monotonic())
+            return _StubResponse(json_body=_payload())
+
+    src = DefiLlamaDataSource(session=_Timed(), min_request_interval_seconds=0.1)  # type: ignore[arg-type]
+    threads = [
+        threading.Thread(target=lambda: [list(src.fetch_chain_tvl("ethereum")) for _ in range(2)])
+        for _ in range(3)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    ordered = sorted(stamps)
+    assert len(ordered) == 6
+    assert min(b - a for a, b in zip(ordered, ordered[1:], strict=False)) >= 0.09

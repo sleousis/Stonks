@@ -34,6 +34,7 @@ expansion attacks and never fetches external entities.
 
 from __future__ import annotations
 
+import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterable, Sequence
@@ -47,6 +48,7 @@ from stonks.ingest.schemas import FinancialStatementsBundle, InsiderTransactionR
 from stonks.ingest.sources.base import (
     DataSource,
     DataSourceError,
+    RateLimitedError,
     UnknownSymbolError,
     UnsupportedCapabilityError,
 )
@@ -80,6 +82,14 @@ class EdgarError(DataSourceError):
 
 class EdgarUnknownTickerError(EdgarError, UnknownSymbolError):
     """EDGAR's ticker list has no company with this ticker."""
+
+
+class EdgarRateLimitedError(EdgarError, RateLimitedError):
+    """EDGAR refused requests for going too fast (403 or 429)."""
+
+
+#: Statuses the SEC answers when a client goes past its request rate.
+_RATE_STATUS = frozenset({403, 429})
 
 
 # ---- parsing ------------------------------------------------------------------------
@@ -359,7 +369,10 @@ class EdgarDataSource(DataSource):
         self._sleep = sleep
         self._clock = clock
         self._last: float | None = None
+        #: One spacing for every thread that shares this source.
+        self._pace = threading.Lock()
         self._ciks: dict[str, str] | None = None
+        self._ciks_lock = threading.Lock()
 
     @classmethod
     def from_config(cls, cfg: Any, **kwargs: Any) -> EdgarDataSource:
@@ -377,12 +390,14 @@ class EdgarDataSource(DataSource):
     # ---- HTTP -----------------------------------------------------------------------
 
     def _wait(self) -> None:
-        now = self._clock()
-        if self._last is not None:
-            gap = self._interval - (now - self._last)
-            if gap > 0:
-                self._sleep(gap)
-        self._last = self._clock()
+        # held while sleeping, so threads take turns at the SEC's pace
+        with self._pace:
+            now = self._clock()
+            if self._last is not None:
+                gap = self._interval - (now - self._last)
+                if gap > 0:
+                    self._sleep(gap)
+            self._last = self._clock()
 
     def _get(self, url: str) -> Any:
         headers = {"User-Agent": self._agent, "Accept-Encoding": "gzip, deflate"}
@@ -402,6 +417,8 @@ class EdgarDataSource(DataSource):
                 continue
             if status == 404:
                 raise EdgarError(f"EDGAR has no {url}")
+            if status in _RATE_STATUS:
+                raise EdgarRateLimitedError(f"EDGAR answered {status} (too fast) for {url}")
             if status >= 400:
                 raise EdgarError(f"EDGAR answered {status} for {url}")
             return response
@@ -420,14 +437,15 @@ class EdgarDataSource(DataSource):
 
     def cik_for(self, ticker: str) -> str:
         """The 10-digit CIK of a US ticker."""
-        if self._ciks is None:
-            payload = self._json(f"{self._base}/files/company_tickers.json")
-            entries = payload.values() if isinstance(payload, dict) else payload
-            self._ciks = {
-                str(e["ticker"]).upper(): str(e["cik_str"]).zfill(10)
-                for e in entries
-                if isinstance(e, dict) and "ticker" in e and "cik_str" in e
-            }
+        with self._ciks_lock:  # fetched once, also when threads share the source
+            if self._ciks is None:
+                payload = self._json(f"{self._base}/files/company_tickers.json")
+                entries = payload.values() if isinstance(payload, dict) else payload
+                self._ciks = {
+                    str(e["ticker"]).upper(): str(e["cik_str"]).zfill(10)
+                    for e in entries
+                    if isinstance(e, dict) and "ticker" in e and "cik_str" in e
+                }
         symbol = symbol_of(ticker)
         cik = self._ciks.get(symbol) or self._ciks.get(symbol.replace("-", "."))
         if cik is None:
