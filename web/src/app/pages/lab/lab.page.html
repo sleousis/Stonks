@@ -1,6 +1,6 @@
 <app-page-header
   title="Lab"
-  description="Test whether a strategy would have made money in the past, and whether that result holds up or is luck. Nothing here trades."
+  description="Test a strategy on past prices and check the result is not luck. Nothing here trades."
 />
 <app-lab-nav />
 
@@ -160,7 +160,7 @@
       <div class="panel-head">
         <h2 id="lab-result-title">Result</h2>
         @if (followed(); as f) {
-          <span class="muted head-meta">{{ kindLabel(f.kind) }} · {{ f.label }}</span>
+          <span class="muted head-meta">{{ kindLabel(f.kind) }}, {{ f.label }}</span>
         }
       </div>
       <div class="panel-body">
@@ -301,15 +301,22 @@
     <section class="panel" aria-labelledby="lab-history-title">
       <div class="panel-head">
         <h2 id="lab-history-title">Recent lab jobs</h2>
-        <button
-          type="button"
-          class="btn"
-          [disabled]="history.isLoading()"
-          [attr.aria-busy]="history.isLoading()"
-          (click)="history.reload()"
-        >
-          {{ history.isLoading() ? 'Refreshing…' : 'Refresh' }}
-        </button>
+        <span class="head-tools">
+          <app-columns-picker
+            [columns]="shownHistoryColumns()"
+            storageKey="stonks.lab.jobs.columns"
+            (hiddenChange)="hiddenColumns.set($event)"
+          />
+          <button
+            type="button"
+            class="btn btn-compact"
+            [disabled]="history.isLoading()"
+            [attr.aria-busy]="history.isLoading()"
+            (click)="history.reload()"
+          >
+            {{ history.isLoading() ? 'Refreshing…' : 'Refresh' }}
+          </button>
+        </span>
       </div>
       @if (history.error(); as err) {
         <app-error-state title="Could not load lab jobs" [error]="err" (retry)="history.reload()" />
@@ -324,7 +331,7 @@
         <app-data-table
           caption="Recent lab jobs, newest first"
           [rows]="history.value()"
-          [columns]="historyColumns"
+          [columns]="shownHistoryColumns()"
           [rowKey]="jobKey"
           [initialSort]="{ key: 'created_at', dir: 'desc' }"
           [pageSize]="10"
@@ -336,7 +343,7 @@
             <span class="row-actions">
               <button
                 type="button"
-                class="btn"
+                class="btn btn-compact"
                 [attr.aria-label]="'Open ' + kindLabel(job.kind).toLowerCase() + ' of ' + job.id"
                 [attr.aria-pressed]="followed()?.jobId === job.id"
                 (click)="open(job)"
@@ -346,7 +353,7 @@
               @if (canRun() && canCancel(job.kind, job.status)) {
                 <button
                   type="button"
-                  class="btn btn-tertiary cancel"
+                  class="btn btn-ghost btn-compact cancel"
                   [disabled]="cancelling() === job.id"
                   [attr.aria-label]="'Cancel job ' + job.id"
                   (click)="cancel(job.id, job.kind, jobStrategy(job))"

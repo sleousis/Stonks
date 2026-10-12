@@ -101,14 +101,14 @@ export function issueRows(p: PreflightView | null | undefined): IssueRow[] {
       display: grid;
       gap: var(--space-1);
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-left: 3px solid var(--color-warn);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface);
+      border: 1px solid var(--rule);
+      border-left: 3px solid var(--warn);
+      border-radius: var(--r-ctl);
+      background: var(--raise);
       min-width: 0;
     }
     .issue.error {
-      border-left-color: var(--color-loss);
+      border-left-color: var(--down);
     }
     .issue-head {
       display: flex;

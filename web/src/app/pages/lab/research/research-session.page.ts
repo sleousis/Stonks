@@ -228,12 +228,12 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       display: grid;
       gap: var(--space-1);
       padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
     }
     .b-label {
       font-size: var(--text-xs);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .b-value {
       font-weight: var(--weight-semibold);
@@ -257,8 +257,8 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       display: grid;
       gap: var(--space-2);
       padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       min-width: 0;
     }
     .p-head {
@@ -276,7 +276,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
     .reason {
       margin: 0;
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       overflow-wrap: anywhere;
     }
     .proposal .facts {
@@ -299,7 +299,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
     details summary {
       cursor: pointer;
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       min-height: var(--control-h);
       display: flex;
       align-items: center;
@@ -316,7 +316,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
       gap: var(--space-2);
       dt {
         font-size: var(--text-xs);
-        color: var(--color-ink-2);
+        color: var(--ink-2);
       }
       dd {
         margin: 0;

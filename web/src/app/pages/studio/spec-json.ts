@@ -77,10 +77,10 @@ import {
       min-height: 22rem;
       max-height: 70vh;
       padding: var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
-      color: var(--color-ink);
+      border: 1px solid var(--rule);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
+      color: var(--ink);
       font-family: var(--font-mono);
       font-size: var(--text-xs);
       line-height: 1.55;
@@ -90,20 +90,20 @@ import {
       tab-size: 2;
     }
     .json.editing {
-      background: var(--color-surface);
-      border-color: var(--color-border-strong);
+      background: var(--raise);
+      border-color: var(--rule-control);
     }
     .json[aria-invalid='true'] {
-      border-color: var(--color-loss);
+      border-color: var(--down);
     }
     .error {
       font-size: var(--text-xs);
-      color: var(--color-loss);
+      color: var(--down);
       overflow-wrap: anywhere;
     }
     .hint {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
   `,
 })

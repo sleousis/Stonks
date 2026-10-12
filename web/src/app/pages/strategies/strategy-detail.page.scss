@@ -1,338 +1,20 @@
 @use 'breakpoints' as bp;
 
-.related {
+// One strategy: the status and stamp under the name, a summary strip, the
+// status ladder, an underline tab row, then sections on ink rules. The
+// verdict is the one callout.
+
+.title-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
-}
-
-.related-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 32px;
-  font-size: var(--text-sm);
-
-  @include bp.phone {
-    min-height: var(--touch-min);
-  }
-
-  @include bp.coarse {
-    min-height: var(--touch-min);
-  }
-}
-
-.tabs {
-  display: flex;
-  margin: var(--space-5) 0 var(--space-4);
-  max-width: 100%;
-}
-
-// Label / value lists ------------------------------------------------------
-dl {
-  margin: 0;
-}
-
-dt {
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-}
-
-dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.facts {
-  display: grid;
-  padding: var(--space-1) var(--space-4) var(--space-3);
-
-  > div {
-    display: grid;
-    gap: 2px;
-    padding: var(--space-2) 0;
-    border-top: 1px solid var(--color-border);
-
-    &:first-child {
-      border-top: 0;
-    }
-
-    @include bp.from-tablet {
-      grid-template-columns: 8rem minmax(0, 1fr);
-      gap: var(--space-3);
-      align-items: baseline;
-    }
-  }
-}
-
-.class-name {
-  display: block;
-  font-weight: var(--weight-medium);
-}
-
-.class-path {
-  display: block;
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
-  overflow-wrap: anywhere;
-}
-
-// Real money: the LIVE stamp next to the title, never a pill (docs/ui.md).
-.title-stamp {
-  display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-2);
-  color: var(--color-ink-2);
+  margin-top: var(--space-3);
+}
+
+.meta-note {
+  color: var(--muted);
   font-size: var(--text-sm);
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.chip {
-  padding: 1px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-2);
-  font-size: var(--text-xs);
-  line-height: 18px;
-}
-
-.params {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  padding: var(--space-1) var(--space-4) var(--space-3);
-
-  > div {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: var(--space-3);
-    padding: var(--space-2) 0;
-    border-top: 1px solid var(--color-border);
-
-    &:first-child {
-      border-top: 0;
-    }
-  }
-
-  dt {
-    font-size: var(--text-sm);
-    color: var(--color-ink-2);
-    overflow-wrap: anywhere;
-  }
-
-  dd {
-    text-align: right;
-    font-weight: var(--weight-medium);
-  }
-
-  @include bp.from-tablet {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-5);
-
-    > div:nth-child(2) {
-      border-top: 0;
-    }
-  }
-}
-
-// Survival reports ---------------------------------------------------------
-.reports {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-4);
-  list-style: none;
-
-  @include bp.from-tablet {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.report {
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
-}
-
-.report-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-
-  h3 {
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semibold);
-    overflow-wrap: anywhere;
-  }
-}
-
-.notes {
-  max-width: 70ch;
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
-}
-
-// Figures inside a report well: a plain grid, no box round each.
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-  gap: var(--space-3);
-
-  > div {
-    display: grid;
-    gap: var(--space-1);
-    min-width: 0;
-  }
-
-  dd {
-    font-weight: var(--weight-medium);
-  }
-}
-
-// Research card ------------------------------------------------------------
-.research {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.research-label {
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-}
-
-blockquote {
-  margin: var(--space-1) 0 0;
-  padding: var(--space-3);
-  border-left: 2px solid var(--color-accent);
-  background: var(--color-surface-2);
-  border-radius: var(--radius-sm);
-  max-width: 70ch;
-  overflow-wrap: anywhere;
-}
-
-.facts.compact {
-  padding: 0;
-
-  @include bp.from-tablet {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-5);
-
-    > div:nth-child(2) {
-      border-top: 0;
-    }
-  }
-}
-
-// Status history timeline --------------------------------------------------
-.timeline {
-  display: grid;
-  margin: 0;
-  padding: var(--space-3) var(--space-4) var(--space-4);
-  list-style: none;
-
-  li {
-    position: relative;
-    display: grid;
-    grid-template-columns: 12px minmax(0, 1fr);
-    gap: var(--space-3);
-    padding-bottom: var(--space-4);
-
-    // The rail between dots.
-    &::before {
-      content: '';
-      position: absolute;
-      left: 5px;
-      top: 16px;
-      bottom: 0;
-      width: 2px;
-      background: var(--color-border);
-    }
-
-    &:last-child {
-      padding-bottom: 0;
-
-      &::before {
-        display: none;
-      }
-    }
-  }
-
-  .dot {
-    width: 12px;
-    height: 12px;
-    margin-top: 4px;
-    border: 2px solid var(--color-ink-3);
-    border-radius: 50%;
-    background: var(--color-surface);
-  }
-
-  li:first-child .dot {
-    border-color: var(--color-accent);
-    background: var(--color-accent);
-  }
-
-  li.override .dot {
-    border-color: var(--color-warn);
-  }
-}
-
-.entry {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.entry-head,
-.entry-meta,
-.move {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-}
-
-.entry-head {
-  justify-content: space-between;
-}
-
-.arrow {
-  color: var(--color-ink-3);
-}
-
-.kind {
-  font-weight: var(--weight-medium);
-}
-
-.reason {
-  overflow-wrap: anywhere;
-}
-
-.entry-meta {
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
-}
-
-// Stage bar, performance and orders -----------------------------------------
-app-stage-bar {
-  display: block;
 }
 
 .action-note {
@@ -341,68 +23,61 @@ app-stage-bar {
   justify-content: flex-end;
 }
 
-.tech {
-  margin-top: var(--space-1);
-  font-size: var(--text-xs);
-
-  summary {
-    display: inline-flex;
-    align-items: center;
-    min-height: 24px;
-    color: var(--color-ink-2);
-    cursor: pointer;
-
-    @include bp.phone {
-      min-height: var(--touch-min);
-    }
-
-    @include bp.coarse {
-      min-height: var(--touch-min);
-    }
-  }
+app-stage-bar {
+  display: block;
+  margin-top: var(--space-6);
 }
 
-.perf {
+.tabs {
+  display: flex;
+  max-width: 100%;
+  margin: var(--space-7) 0 var(--space-6);
+}
+
+.quiet {
+  max-width: 68ch;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+// Verdict ------------------------------------------------------------------
+// A callout with a coloured left edge by level, then the go-live checks as
+// rows with a pass or fail glyph.
+.verdict-panel.callout {
+  --edge: var(--accent);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-4) 0;
+  padding: var(--space-5);
+  border-left: 3px solid var(--edge);
 
-  > div {
-    display: grid;
-    gap: var(--space-1);
-    min-width: 0;
-  }
-
-  dd {
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
-  }
-
-  @include bp.phone {
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-3) 0;
-  }
-}
-
-.chart {
-  min-width: 0;
-  padding: var(--space-4);
-
-  @include bp.phone {
-    padding: var(--space-3);
-  }
-}
-
-// Verdict, results and review ------------------------------------------------
-// The verdict sits in a callout toned by its level (warn for promising,
-// never brass). The callout draws the rule, so the verdict's own rule and
-// padding step aside.
-.verdict-panel {
-  overflow: hidden;
-
-  &.callout > * {
+  > * {
     max-width: none;
+  }
+
+  > * + * {
+    margin-top: 0;
+  }
+
+  &[data-level='worth'] {
+    --edge: var(--up);
+  }
+
+  &[data-level='promising'] {
+    --edge: var(--warn);
+  }
+
+  &[data-level='not_yet'] {
+    --edge: var(--down);
+  }
+
+  @include bp.from-desktop {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+    align-items: start;
+    gap: var(--space-7);
+  }
+
+  @include bp.phone {
+    padding: var(--space-4);
   }
 }
 
@@ -415,41 +90,140 @@ app-stage-bar {
   display: grid;
   gap: var(--space-2);
   justify-items: start;
-  color: var(--color-ink-2);
+  color: var(--ink-2);
   font-size: var(--text-sm);
 }
 
-.mini-checks {
-  display: grid;
-  gap: var(--space-1);
+.verdict-checks {
   margin: 0;
   padding: 0;
   list-style: none;
+  border-top: 2px solid var(--rule-strong);
 
   li {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--space-1) var(--space-3);
+    gap: var(--space-3);
+    min-height: 40px;
+    border-bottom: 1px solid var(--rule);
+    font-size: var(--text-md);
+  }
+
+  li:last-child {
+    border-bottom: 0;
+  }
+
+  .check-name {
     min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .check-value {
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+  }
+
+  li.fail .check-value {
+    color: var(--down);
   }
 }
 
+// Pass and fail glyphs: a check in up, a cross in down. Shape carries the
+// meaning, never colour alone.
+.glyph {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--down-soft);
+  color: var(--down);
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 1.75px;
+    border-radius: 1px;
+    background: currentColor;
+  }
+
+  &::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  &::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+
+  &.pass {
+    background: var(--up-soft);
+    color: var(--up);
+
+    &::before {
+      top: 4px;
+      left: 6px;
+      width: 3.5px;
+      height: 7px;
+      border-radius: 0;
+      border-right: 1.75px solid currentColor;
+      border-bottom: 1.75px solid currentColor;
+      background: none;
+      transform: rotate(45deg);
+    }
+
+    &::after {
+      content: none;
+    }
+  }
+}
+
+// Overview -----------------------------------------------------------------
+.chart {
+  min-width: 0;
+}
+
+.side {
+  align-content: start;
+}
+
+.about dd.text,
+.fact-list dd.text {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+
+.class-name {
+  font-weight: var(--weight-label);
+}
+
+.meaning {
+  margin-top: var(--space-3);
+}
+
+// Results ------------------------------------------------------------------
 .results-lead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
-  max-width: 70ch;
-  margin-bottom: var(--space-4);
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+
+  > * {
+    margin: 0;
+  }
+
+  > * + * {
+    margin-top: 0;
+  }
 }
 
-.tiles {
-  margin-bottom: var(--space-4);
-}
-
+// Review -------------------------------------------------------------------
 .back {
   display: grid;
   gap: var(--space-3);
@@ -470,9 +244,258 @@ app-stage-bar {
   }
 }
 
-.status-line {
+// Status history: mono times on the left, a 1px rail with 8px nodes. The
+// newest node is the accent.
+.timeline {
+  margin: 0;
+  padding: var(--space-4) 0 0;
+  list-style: none;
+
+  li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 7.5rem 8px minmax(0, 1fr);
+    gap: 0 var(--space-4);
+    padding-bottom: var(--space-5);
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 14px;
+      bottom: 0;
+      left: calc(7.5rem + var(--space-4) + 3.5px);
+      width: 1px;
+      background: var(--rule);
+    }
+
+    &:last-child {
+      padding-bottom: 0;
+
+      &::before {
+        display: none;
+      }
+    }
+
+    @include bp.phone {
+      grid-template-columns: 8px minmax(0, 1fr);
+
+      &::before {
+        left: 3.5px;
+      }
+    }
+  }
+
+  .when {
+    color: var(--muted);
+    font-size: var(--text-xs);
+    line-height: 22px;
+    white-space: normal;
+
+    @include bp.phone {
+      grid-column: 2;
+      grid-row: 1;
+      line-height: 1.4;
+    }
+  }
+
+  .node {
+    width: 8px;
+    height: 8px;
+    margin-top: 7px;
+    border: 1.5px solid var(--muted);
+    border-radius: 50%;
+    background: var(--bg);
+
+    @include bp.phone {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      margin-top: 4px;
+    }
+  }
+
+  li:first-child .node {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  li.override .node {
+    border-color: var(--warn);
+  }
+
+  .entry {
+    @include bp.phone {
+      grid-column: 2;
+      margin-top: var(--space-1);
+    }
+  }
+}
+
+.entry {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.entry-head,
+.entry-meta,
+.move {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-2);
+}
+
+.arrow {
+  color: var(--muted);
+}
+
+.reason {
+  max-width: 68ch;
+  overflow-wrap: anywhere;
+}
+
+.entry-meta {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+// Details ------------------------------------------------------------------
+.research {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.research-label {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+blockquote {
+  max-width: 68ch;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-4);
+  border-radius: var(--r-sheet);
+  background: var(--sunk);
+  color: var(--ink);
+  font-size: var(--text-lead);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.params {
+  dt {
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+  }
+
+  dd {
+    font-size: var(--text-md);
+  }
+}
+
+.tech {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+
+  summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 32px;
+    color: var(--ink-2);
+    list-style: none;
+    cursor: pointer;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
+  }
+}
+
+.class-path {
+  display: block;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+// Robustness tests: rows with a glyph, the name and a chip; the figures sit
+// under in a quiet grid.
+.reports {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--rule);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.report-head {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+
+  h3 {
+    font-size: var(--text-body);
+    font-weight: var(--weight-semibold);
+    letter-spacing: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.notes {
+  max-width: 68ch;
+  padding-left: calc(16px + var(--space-3));
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding-left: calc(16px + var(--space-3));
+
+  > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  dt {
+    color: var(--muted);
+    font-size: var(--text-xs);
+  }
+
+  dd {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-label);
+  }
+}
+
+.head-note {
+  color: var(--muted);
+  font-size: var(--text-sm);
 }

@@ -338,7 +338,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
     }
     .lead,
     .muted {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .muted {
       font-size: var(--text-sm);
@@ -349,8 +349,8 @@ import { StatusPill } from '../../shared/ui/status-pill';
       gap: var(--space-4);
       margin: 0 var(--space-4) var(--space-4);
       padding: var(--space-4);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-radius: var(--r-ctl);
+      background: var(--sunk);
       min-width: 0;
 
       @include bp.phone {
@@ -367,12 +367,12 @@ import { StatusPill } from '../../shared/ui/status-pill';
       gap: var(--space-2) var(--space-3);
     }
     .candidate-head h3 {
-      font-size: var(--text-panel);
+      font-size: var(--text-section);
       font-weight: var(--weight-semibold);
     }
     .books h4,
     .calibration h4 {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }
@@ -408,14 +408,14 @@ import { StatusPill } from '../../shared/ui/status-pill';
       height: 0.75rem;
       min-width: 2px;
       max-width: calc(100% - 5rem);
-      border-radius: var(--radius-xs);
-      background: var(--color-info);
+      border-radius: var(--r-tag);
+      background: var(--accent);
     }
     .bar.live {
-      background: var(--color-ink-2);
+      background: var(--ink-2);
     }
     .bar.neg {
-      background: var(--color-loss);
+      background: var(--down);
     }
     .facts {
       display: flex;
@@ -424,17 +424,17 @@ import { StatusPill } from '../../shared/ui/status-pill';
       margin: 0;
     }
     .facts dt {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .facts dd {
       margin: 0;
     }
     .gain {
-      color: var(--color-gain);
+      color: var(--up);
     }
     .loss {
-      color: var(--color-loss);
+      color: var(--down);
     }
     .swap-check,
     .calibration {
@@ -465,7 +465,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
     }
     .check-detail {
       grid-column: 2 / -1;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
@@ -475,7 +475,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
       justify-content: flex-end;
       gap: var(--space-2);
       padding-top: var(--space-3);
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     .actions .btn {
       @include bp.phone {
@@ -487,7 +487,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
       display: grid;
       gap: var(--space-2);
       padding: var(--space-3) var(--space-4) var(--space-4);
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
 
       @include bp.phone {
         padding: var(--space-3);
@@ -511,11 +511,11 @@ import { StatusPill } from '../../shared/ui/status-pill';
       display: grid;
       gap: var(--space-1);
       padding-left: var(--space-3);
-      border-left: 2px solid var(--color-border);
+      border-left: 2px solid var(--rule);
       overflow-wrap: anywhere;
     }
     .timeline li.override {
-      border-left-color: var(--color-warn);
+      border-left-color: var(--warn);
     }
     .entry-head,
     .entry-meta {
@@ -525,7 +525,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
       gap: var(--space-1) var(--space-3);
     }
     .entry-meta {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
   `,

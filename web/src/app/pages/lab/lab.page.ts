@@ -49,6 +49,7 @@ import { testLabel } from '../../shared/lab-results/survival-tests';
 import { type LabRunForm, SUITES, formFromRequest, strategyTitle } from './lab-requests';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { SweepResult } from '../../shared/lab-results/sweep-result';
+import { ColumnsPicker, visibleColumns } from './columns-picker';
 import { LabNav } from './lab-nav';
 import { type StrategyPreset, presetFromStrategy, presetTickers } from './strategy-preset';
 import { WatchlistsService } from '../../api/watchlists.service';
@@ -144,6 +145,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
   selector: 'app-lab-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ColumnsPicker,
     PctPipe,
     PageHeader,
     StatusPill,
@@ -336,8 +338,14 @@ export class LabPage {
     },
   });
 
-  protected readonly historyColumns: TableColumn<Job>[] = [
-    { key: 'created_at', label: 'Started', format: 'datetime', mobile: 'title' },
+  /** Job columns the viewer hid with the Columns menu. */
+  protected readonly hiddenColumns = signal<string[]>([]);
+  protected readonly shownHistoryColumns = computed(() =>
+    visibleColumns(this.historyColumns, this.hiddenColumns()),
+  );
+
+  protected readonly historyColumns: (TableColumn<Job> & { fixed?: boolean })[] = [
+    { key: 'created_at', label: 'Started', format: 'datetime', mobile: 'title', fixed: true },
     { key: 'kind', label: 'Kind', value: (j) => kindLabel(j.kind) },
     {
       key: 'strategy',
@@ -353,7 +361,7 @@ export class LabPage {
       sortable: false,
       mobile: 'hide',
     },
-    { key: 'actions', label: 'Actions', sortable: false, align: 'end' },
+    { key: 'actions', label: 'Actions', sortable: false, align: 'end', fixed: true },
   ];
   protected readonly jobKey = (j: Job) => j.id;
 

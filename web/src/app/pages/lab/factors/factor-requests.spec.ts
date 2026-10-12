@@ -160,8 +160,8 @@ describe('factor display helpers', () => {
     expect(maxMagnitude([0.02, null, -0.05, Number.NaN])).toBe(0.05);
     expect(divergingColor(null, 1)).toBeNull();
     expect(divergingColor(0.1, 0)).toBeNull();
-    expect(divergingColor(-0.05, 0.05)).toContain('var(--color-loss) 60%');
-    expect(divergingColor(0.025, 0.05)).toContain('var(--color-gain) 30%');
+    expect(divergingColor(-0.05, 0.05)).toContain('var(--down) 60%');
+    expect(divergingColor(0.025, 0.05)).toContain('var(--up) 30%');
   });
 });
 

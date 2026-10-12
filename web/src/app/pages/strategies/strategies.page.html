@@ -1,63 +1,122 @@
-<app-page-header
-  title="Strategies"
-  description="Every strategy, its status and how it does on trial. Open one to judge it and follow it."
->
+<app-page-header title="Strategies" [description]="standfirst()">
   <a actions class="btn btn-primary" routerLink="/studio" [queryParams]="{ step: 'new' }"
     >New strategy</a
   >
-  <a actions class="btn btn-tertiary" routerLink="/lab">Test a strategy</a>
-  <a actions class="btn btn-tertiary" routerLink="/leaderboard">Compare on the Leaderboard</a>
-  <button
-    actions
-    type="button"
-    class="btn btn-tertiary"
-    [disabled]="strategies.isLoading()"
-    [attr.aria-busy]="strategies.isLoading()"
-    (click)="strategies.reload(); paper.reload()"
-  >
-    {{ strategies.isLoading() ? 'Refreshing…' : 'Refresh' }}
-  </button>
+  <a actions class="btn" routerLink="/lab">Test a strategy</a>
+  <a actions class="btn btn-ghost" routerLink="/leaderboard">Leaderboard</a>
 </app-page-header>
 
-<section class="panel" aria-labelledby="list-title">
-  <div class="panel-head">
-    <h2 id="list-title">All strategies</h2>
-    @if (countLabel(); as count) {
-      <span class="muted num" aria-live="polite">{{ count }}</span>
-    }
-  </div>
+<section class="summary-strip" aria-label="Summary">
+  <app-stat-tile
+    label="Approved"
+    [loading]="!strategies.hasValue()"
+    [value]="'' + counts().active"
+    [detail]="approvedDetail()"
+    [help]="false"
+  />
+  <app-stat-tile
+    label="On trial"
+    [loading]="!strategies.hasValue()"
+    [value]="'' + counts().shadow"
+    [detail]="trialDays()"
+    [help]="false"
+  />
+  <app-stat-tile
+    label="Best trial return"
+    [loading]="!strategies.hasValue()"
+    [value]="best() ? pct(best()!.paper_return, true) : '–'"
+    [detail]="best()?.name ?? null"
+    [help]="false"
+    [class.gain]="(best()?.paper_return ?? 0) > 0"
+    [class.loss]="(best()?.paper_return ?? 0) < 0"
+  />
+  <app-stat-tile
+    label="Worst drop"
+    [loading]="!strategies.hasValue()"
+    [value]="worst() ? pct(worst()!.max_drawdown) : '–'"
+    [detail]="worst()?.name ?? null"
+    help="max_drawdown"
+    [class.loss]="(worst()?.max_drawdown ?? 0) < 0"
+  />
+</section>
 
-  <div class="filters">
-    <fieldset class="segmented" data-many>
-      <legend class="visually-hidden">Status</legend>
+<section class="list" aria-labelledby="list-title">
+  <h2 id="list-title" class="visually-hidden">All strategies</h2>
+
+  <div class="toolbar">
+    <div class="filter-pills" role="group" aria-label="Status">
       @for (f of filters; track f.label) {
-        <label class="segment" [class.selected]="statusFilter() === f.value">
-          <input
-            type="radio"
-            name="status-filter"
-            class="visually-hidden"
-            [checked]="statusFilter() === f.value"
-            (change)="setStatus(f.value)"
-          />
+        <button
+          type="button"
+          class="filter-pill"
+          [attr.aria-pressed]="statusFilter() === f.value"
+          (click)="setStatus(f.value)"
+        >
           {{ f.label }}
-        </label>
+          <span class="count" aria-hidden="true">{{ countOf(f.value) }}</span>
+          <span class="visually-hidden">, {{ countOf(f.value) }}</span>
+        </button>
       }
-    </fieldset>
+    </div>
 
-    <div class="search">
-      <label for="strategy-search" class="visually-hidden">Search strategies</label>
-      <input
-        id="strategy-search"
-        type="search"
-        class="input"
-        placeholder="Search name, kind or asset class"
-        autocomplete="off"
-        spellcheck="false"
-        [value]="search()"
-        (input)="onSearchInput($event)"
-      />
+    <div class="tools">
+      <div class="search">
+        <label for="strategy-search" class="visually-hidden">Search strategies</label>
+        <svg
+          class="search-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          aria-hidden="true"
+        >
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="m10.5 10.5 3 3" stroke-linecap="round" />
+        </svg>
+        <input
+          id="strategy-search"
+          type="search"
+          class="input"
+          placeholder="Name, kind or asset class"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="search()"
+          (input)="onSearchInput($event)"
+        />
+      </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon refresh"
+        [disabled]="strategies.isLoading()"
+        [attr.aria-busy]="strategies.isLoading()"
+        [attr.aria-label]="strategies.isLoading() ? 'Refreshing' : 'Refresh'"
+        title="Refresh"
+        (click)="refresh()"
+      >
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M13 8a5 5 0 1 1-1.5-3.6" />
+          <path d="M13 2.5v2.5h-2.5" />
+        </svg>
+      </button>
     </div>
   </div>
+
+  <p class="count-line">
+    @if (countLabel(); as count) {
+      <span class="num" aria-live="polite">{{ count }}</span>
+    }
+    @if (paper.error()) {
+      <span class="paper-note">Trial results could not be loaded, so those columns are empty.</span>
+    }
+  </p>
 
   @if (strategies.error(); as err) {
     <app-error-state
@@ -67,7 +126,7 @@
     />
   } @else if (!strategies.hasValue()) {
     <app-loading-state label="Loading strategies" [rows]="6" />
-  } @else if (strategies.value().items.length === 0) {
+  } @else if (visible().length === 0 && !search().trim()) {
     <app-empty-state
       [title]="statusFilter() ? 'Nothing is ' + filterWord() : 'No strategies yet'"
       message="A strategy appears here once it passes its tests in Lab and goes on trial, or when you put a Studio draft on trial."
@@ -75,7 +134,7 @@
       @if (statusFilter()) {
         <button type="button" class="btn" (click)="setStatus(null)">Show all statuses</button>
       } @else {
-        <a routerLink="/lab" class="btn">Open Lab</a>
+        <a routerLink="/lab" class="btn btn-primary">Open Lab</a>
       }
     </app-empty-state>
   } @else if (visible().length === 0) {
@@ -90,10 +149,8 @@
       <button type="button" class="btn" (click)="setSearch('')">Clear search</button>
     </app-empty-state>
   } @else {
-    @if (paper.error()) {
-      <p class="hint paper-note">Trial results could not be loaded, so those columns are empty.</p>
-    }
     <app-data-table
+      class="strategy-table"
       caption="Strategies"
       [rows]="visible()"
       [columns]="columns"
@@ -102,13 +159,45 @@
       [pageSize]="25"
     >
       <ng-template appCell="id" [appCellOf]="visible()" let-s>
-        <a class="id-link table-link" [routerLink]="['/strategies', s.id]">{{ s.name }}</a>
-        @if (s.summary) {
-          <span class="summary">{{ s.summary }}</span>
-        }
+        <span class="name-cell">
+          <a class="row-link table-link" [routerLink]="['/strategies', s.id]">{{ s.name }}</a>
+          <span class="meta">{{ s.summary || s.kind }}</span>
+        </span>
       </ng-template>
       <ng-template appCell="status" [appCellOf]="visible()" let-s>
         <app-status-pill [status]="s.status" />
+      </ng-template>
+      <ng-template appCell="curve" [appCellOf]="visible()" let-s>
+        <app-sparkline class="spark" [values]="s.curve" />
+      </ng-template>
+      <ng-template appCell="paper_days" [appCellOf]="visible()" let-s>
+        <app-days-ring [days]="s.paper_days" />
+      </ng-template>
+      <ng-template appCell="following" [appCellOf]="visible()" let-s>
+        @if (s.following; as f) {
+          <span class="following" [class.paused]="f.live === null && f.words === 'Paused'">
+            {{ f.words }}
+            @if (f.live !== null) {
+              <app-mode-stamp size="sm" [live]="f.live" />
+            }
+          </span>
+        } @else {
+          <span class="muted">Not followed</span>
+        }
+      </ng-template>
+      <ng-template appCell="open" [appCellOf]="visible()" let-s>
+        <svg
+          class="chev"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m6 3.5 4.5 4.5L6 12.5" />
+        </svg>
       </ng-template>
     </app-data-table>
   }

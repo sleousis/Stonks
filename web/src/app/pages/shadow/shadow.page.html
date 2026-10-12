@@ -1,13 +1,10 @@
-<app-page-header
-  title="Trial results"
-  description="How each strategy does on its own test book, with paper money, next to your portfolio over the same days."
->
+<app-page-header title="Trial results" [description]="standfirst()">
   <p class="yours">Your portfolio <app-mode-stamp [live]="live()" /></p>
   <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
-    class="btn"
+    class="btn btn-ghost"
     [disabled]="refreshing()"
     [attr.aria-busy]="refreshing()"
     (click)="refresh()"
@@ -16,8 +13,8 @@
   </button>
 </app-page-header>
 
-<!-- Tiles ------------------------------------------------------------------>
-<section class="tiles tile-grid" aria-label="Trial results summary">
+<!-- Summary strip ----------------------------------------------------------->
+<section class="tiles summary-strip" aria-label="Trial results summary">
   <app-stat-tile
     label="On trial"
     [loading]="!summaries.hasValue() && !summaries.error()"
@@ -29,7 +26,6 @@
   <app-stat-tile
     class="tile-leader"
     label="Best against your portfolio"
-    featured
     [loading]="!seriesReady() && !series.error() && !summaries.error()"
     [value]="leader()?.name ?? '–'"
     [detail]="leaderDetail()"
@@ -43,9 +39,9 @@
   />
 </section>
 
-<div class="page-grid">
+<div class="section-stack">
   <!-- Chart ---------------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="compare-title">
+  <section class="page-section" aria-labelledby="compare-title">
     <div class="panel-head">
       <h2 id="compare-title">Test books against your portfolio</h2>
       @if ((strategyIds()?.length ?? 0) > 1) {
@@ -95,7 +91,7 @@
           title="Nothing to compare yet"
           message="Put a strategy on trial from its page. Its test book starts with the next trading run."
         >
-          <a class="btn" routerLink="/strategies">Open strategies</a>
+          <a class="btn btn-primary" routerLink="/strategies">Open strategies</a>
         </app-empty-state>
       } @else {
         <app-time-series-chart
@@ -127,7 +123,7 @@
   </section>
 
   <!-- Summary table -------------------------------------------------------->
-  <section class="panel panel-flush span-12" aria-labelledby="summary-title">
+  <section class="page-section section-flush" aria-labelledby="summary-title">
     <div class="panel-head">
       <h2 id="summary-title">Strategies and their test books</h2>
     </div>
@@ -157,25 +153,38 @@
         <ng-template appCell="status" [appCellOf]="rows()" let-r>
           <app-status-pill [status]="r.status ?? 'shadow'" />
         </ng-template>
+        <ng-template appCell="days" [appCellOf]="rows()" let-r>
+          <app-trial-meter [days]="r.days" />
+        </ng-template>
         <ng-template appCell="go_live" [appCellOf]="rows()" let-r>
           <a
-            class="btn btn-tertiary go-live"
+            class="btn btn-ghost btn-compact go-live"
             [routerLink]="['/strategies', r.strategy_id]"
             [queryParams]="{ tab: 'review' }"
             [attr.aria-label]="'Review ' + r.name"
-            >Review <span aria-hidden="true">→</span></a
-          >
+            >Review
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 3.5 4.5 4.5L6 12.5" /></svg
+          ></a>
         </ng-template>
       </app-data-table>
     }
   </section>
 
   <!-- Decisions ------------------------------------------------------------>
-  <section class="panel panel-flush span-12" aria-labelledby="decisions-title">
+  <section class="page-section section-flush" aria-labelledby="decisions-title">
     <div class="panel-head">
       <h2 id="decisions-title">Test book decisions</h2>
       @if (decisionsPageShown(); as dp) {
-        <span class="count num">{{ dp.total }} matching</span>
+        <span class="count">{{ dp.total }} matching</span>
       }
     </div>
     <form

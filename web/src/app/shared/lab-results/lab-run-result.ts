@@ -240,8 +240,8 @@ function paramText(v: unknown): string {
       margin-top: 0;
     }
     .hint {
-      font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      font-size: var(--text-sm);
+      color: var(--muted);
     }
     .registered,
     .bench-name {
@@ -251,15 +251,15 @@ function paramText(v: unknown): string {
     .bench-name {
       margin-bottom: var(--space-2);
     }
-    /* Section titles: 13px semibold, second ink. */
+    /* Section titles: 15px, ink. */
     h3 {
       display: flex;
       align-items: center;
       gap: var(--space-1);
       margin-bottom: var(--space-2);
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-semibold);
+      color: var(--ink);
+      font-size: var(--text-lead);
+      font-weight: var(--weight-bold);
     }
     dl {
       margin: 0;
@@ -270,7 +270,7 @@ function paramText(v: unknown): string {
     dt {
       margin-bottom: var(--space-1);
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     dd {
       margin: 0;
@@ -279,7 +279,7 @@ function paramText(v: unknown): string {
       white-space: normal;
     }
     dd.na {
-      color: var(--color-ink-3);
+      color: var(--muted);
       font-weight: var(--weight-regular);
     }
     .tests {
@@ -287,16 +287,18 @@ function paramText(v: unknown): string {
       margin: 0;
       padding: 0;
       display: grid;
-      gap: var(--space-2);
+      border-top: 2px solid var(--rule-strong);
     }
-    /* One inset well per test; the receipt pill carries pass or fail. */
+    /* One row per test with a hairline between; the chip carries pass or fail. */
     .test {
       display: grid;
       gap: var(--space-2);
-      padding: var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
       min-width: 0;
+    }
+    .test:last-child {
+      border-bottom: 0;
     }
     .test-head {
       display: flex;
@@ -306,6 +308,7 @@ function paramText(v: unknown): string {
       gap: var(--space-2);
     }
     .test-name {
+      font-size: var(--text-body);
       font-weight: var(--weight-semibold);
     }
     .reason {
@@ -319,7 +322,7 @@ function paramText(v: unknown): string {
     details summary {
       cursor: pointer;
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       min-height: var(--control-h);
       display: flex;
       align-items: center;

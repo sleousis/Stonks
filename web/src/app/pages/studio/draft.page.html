@@ -9,12 +9,16 @@
   @let d = draft()!;
   <app-page-header
     [title]="d.name"
+    backPath="/studio"
+    backLabel="Drafts"
     [description]="
-      (isCode() ? 'Python code strategy' : 'Rule strategy') + ', edited ' + (d.updated_at | ago)
+      (isCode() ? 'Python code strategy' : 'Rule strategy') +
+      ', edited ' +
+      (d.updated_at | ago) +
+      '.'
     "
   >
     <div class="meta">
-      <a routerLink="/studio" class="back-link">← Drafts</a>
       @if (d.status === 'registered') {
         <app-status-pill [status]="d.strategy_status ?? 'shadow'" />
       } @else {
@@ -51,7 +55,7 @@
   </app-page-header>
 
   @if (renaming()) {
-    <form class="rename panel" (submit)="$event.preventDefault(); rename()">
+    <form class="rename sheet-box" (submit)="$event.preventDefault(); rename()">
       <div class="field">
         <label for="draft-rename">Draft name</label>
         <input
@@ -121,8 +125,8 @@
           <p>Code strategies are turned off on this server. Ask your admin.</p>
         </div>
       } @else {
-        <section class="panel" aria-labelledby="code-title">
-          <div class="panel-head">
+        <section class="page-section" aria-labelledby="code-title">
+          <div class="section-head">
             <h2 id="code-title">Source</h2>
             <button
               type="button"
@@ -134,7 +138,7 @@
               {{ checking() ? 'Checking…' : 'Check on sample data' }}
             </button>
           </div>
-          <div class="panel-body code-body">
+          <div class="section-body code-body">
             <p class="hint">
               One <code>BaseStrategy</code> subclass per module. It runs in the server process with
               no sandbox.
@@ -170,10 +174,25 @@
       }
     } @else if (spec(); as s) {
       <div class="build-grid">
-        <section class="panel builder" aria-labelledby="rules-title">
-          <div class="panel-head">
+        <section class="page-section builder" aria-labelledby="rules-title">
+          <header class="section-head">
             <h2 id="rules-title">Rules</h2>
-            <div class="head-actions">
+          </header>
+          <div class="section-body">
+            <app-rule-builder
+              [spec]="s"
+              (specChange)="setSpec($event)"
+              [kinds]="kinds()"
+              [assetClasses]="assetClasses()"
+              [issues]="issueMap()"
+            />
+          </div>
+        </section>
+
+        <aside class="preview" aria-labelledby="check-title">
+          <section class="page-section">
+            <header class="section-head">
+              <h2 id="check-title">Check</h2>
               @switch (validationState()) {
                 @case ('valid') {
                   <app-status-pill status="pass" label="Valid" />
@@ -188,75 +207,81 @@
                   <app-status-pill status="running" label="Checking…" />
                 }
               }
+            </header>
+            <div class="section-body check-body">
+              <p class="hint">
+                Runs the rules on sample data and shows how many signals they give. Nothing is saved
+                or traded.
+              </p>
               <button
                 type="button"
-                class="btn"
+                class="btn check-btn"
                 [disabled]="checking() || !canLab()"
                 [attr.aria-busy]="checking()"
                 (click)="check()"
               >
                 {{ checking() ? 'Checking…' : 'Check on sample data' }}
               </button>
-            </div>
-          </div>
-          @if (validationHint(); as h) {
-            <p class="notice callout" data-tone="warn">{{ h }}</p>
-          }
-          @if (issues().length) {
-            <div class="issues callout" data-tone="loss" role="region" aria-label="Problems to fix">
-              <p class="issues-title">Fix these before testing:</p>
-              <ul>
-                @for (issue of issues(); track $index) {
-                  <li>
-                    <button type="button" class="issue-link" (click)="focusIssue(issue.path)">
-                      <span class="issue-path">{{ describePath(issue.path) }}</span>
-                      <span>{{ issue.message }}</span>
-                    </button>
-                  </li>
-                }
-              </ul>
-            </div>
-          }
-          @if (smoke(); as sm) {
-            <div class="smoke" role="status">
-              <app-status-pill
-                [status]="sm.valid && sm.smoke?.ok ? 'pass' : 'fail'"
-                [label]="sm.valid && sm.smoke?.ok ? 'Runs' : 'Fails'"
-              />
-              @if (sm.smoke; as run) {
-                <span>
-                  {{ run.evaluations }} evaluations on
-                  {{ run.data === 'sample' ? 'synthetic sample data' : run.tickers.join(', ') }},
-                  {{ run.signals }} {{ run.signals === 1 ? 'signal' : 'signals' }}.
-                </span>
-                @for (e of run.errors; track $index) {
-                  <p class="error">{{ e }}</p>
-                }
-              } @else {
-                <span>Fix the problems above, then check again.</span>
+              @if (validationHint(); as h) {
+                <p class="notice callout" data-tone="warn">{{ h }}</p>
+              }
+              @if (issues().length) {
+                <div
+                  class="issues callout"
+                  data-tone="loss"
+                  role="region"
+                  aria-label="Problems to fix"
+                >
+                  <p class="issues-title">Fix these before testing:</p>
+                  <ul>
+                    @for (issue of issues(); track $index) {
+                      <li>
+                        <button type="button" class="issue-link" (click)="focusIssue(issue.path)">
+                          <span class="issue-path">{{ describePath(issue.path) }}</span>
+                          <span>{{ issue.message }}</span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+              @if (smoke(); as sm) {
+                <div class="smoke" role="status">
+                  <app-status-pill
+                    [status]="sm.valid && sm.smoke?.ok ? 'pass' : 'fail'"
+                    [label]="sm.valid && sm.smoke?.ok ? 'Runs' : 'Fails'"
+                  />
+                  @if (sm.smoke; as run) {
+                    <span class="smoke-line">
+                      {{ run.evaluations }} evaluations on
+                      {{
+                        run.data === 'sample' ? 'synthetic sample data' : run.tickers.join(', ')
+                      }}, {{ run.signals }} {{ run.signals === 1 ? 'signal' : 'signals' }}.
+                    </span>
+                    @for (e of run.errors; track $index) {
+                      <p class="error">{{ e }}</p>
+                    }
+                  } @else {
+                    <span>Fix the problems above, then check again.</span>
+                  }
+                </div>
               }
             </div>
-          }
-          <app-rule-builder
-            [spec]="s"
-            (specChange)="setSpec($event)"
-            [kinds]="kinds()"
-            [assetClasses]="assetClasses()"
-            [issues]="issueMap()"
-          />
-        </section>
+          </section>
 
-        @if (canSeeJson()) {
-          <details class="panel json">
-            <summary class="panel-head">
-              <h2 id="json-title">Show JSON</h2>
-              <span class="muted">What the API stores</span>
-            </summary>
-            <div class="panel-body">
-              <app-spec-json [spec]="s" (apply)="applyJson($event)" />
-            </div>
-          </details>
-        }
+          @if (canSeeJson()) {
+            <details class="json">
+              <summary class="json-head">
+                <span class="disclosure-chev" aria-hidden="true"></span>
+                <h2 id="json-title">Show JSON</h2>
+                <span class="muted">What the API stores</span>
+              </summary>
+              <div class="json-body">
+                <app-spec-json [spec]="s" (apply)="applyJson($event)" />
+              </div>
+            </details>
+          }
+        </aside>
       </div>
     }
   </div>

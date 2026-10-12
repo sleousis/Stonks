@@ -91,36 +91,36 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     legend {
       padding: 0;
       margin-bottom: var(--space-1);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
+      color: var(--ink-2);
+      font-size: 0.8125rem;
+      font-weight: var(--weight-label);
     }
     .desc {
       max-width: 70ch;
     }
-    /* The list is an inset well: no border, a hairline between rows, the
-       picked row a surface chip with an accent rule. */
+    /* The list scrolls inside a field edge: a hairline between rows, the
+       picked row accent soft with a 3px accent edge. */
     .list {
       max-height: 18rem;
       overflow-y: auto;
       overscroll-behavior: contain;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border: 1px solid var(--rule-control);
+      border-radius: var(--r-ctl);
+      background: var(--raise);
     }
     .group + .group {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
-    /* Group labels (Yardsticks, Trend following): the one overline style. */
+    /* Group labels (Yardsticks, Trend following): small muted headers. */
     .group-label {
       position: sticky;
       top: 0;
       z-index: 1;
       padding: var(--space-2) var(--space-3) var(--space-1);
       font-size: var(--text-xs);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: var(--tracking-overline);
-      color: var(--color-ink-3);
-      background: var(--color-surface-2);
+      font-weight: var(--weight-label);
+      color: var(--muted);
+      background: var(--sunk);
     }
     .option {
       display: grid;
@@ -130,26 +130,26 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
       min-height: var(--touch-min);
       padding: var(--space-2) var(--space-3);
       cursor: pointer;
-      box-shadow: inset 2px 0 0 transparent;
+      box-shadow: inset 3px 0 0 transparent;
       transition:
-        background-color var(--dur-fast) var(--ease),
-        box-shadow var(--dur-fast) var(--ease);
+        background-color var(--dur-fast) var(--ease-out),
+        box-shadow var(--dur-fast) var(--ease-out);
     }
     .option + .option {
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
     .option:hover {
-      background: var(--color-hover);
+      background: var(--sunk);
     }
     .option.selected {
-      background: var(--color-surface);
-      box-shadow: inset 2px 0 0 var(--color-accent);
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
     }
     input[type='radio'] {
       margin: 2px 0 0;
       width: 16px;
       height: 16px;
-      accent-color: var(--color-accent);
+      accent-color: var(--accent);
     }
     @media (pointer: coarse) {
       input[type='radio'] {
@@ -169,11 +169,11 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     }
     .desc {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .tags {
       font-size: var(--text-xs);
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .none {
       padding: var(--space-3);
@@ -181,7 +181,7 @@ import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests'
     }
     .error {
       font-size: var(--text-xs);
-      color: var(--color-loss);
+      color: var(--down);
     }
   `,
 })

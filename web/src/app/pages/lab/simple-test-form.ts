@@ -198,10 +198,10 @@ export function simpleTestErrors(f: SimpleTestForm): Record<string, string> {
       display: grid;
       gap: var(--space-1);
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
     }
     .steps strong {
-      color: var(--color-ink);
+      color: var(--ink);
       font-weight: var(--weight-semibold);
     }
     .what-runs {

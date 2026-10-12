@@ -1,123 +1,176 @@
 @use 'breakpoints' as bp;
 
-.filters {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+// Strategies: the reference table page. Summary strip, then a toolbar of
+// filter pills and a search, then one row per strategy. No boxes.
 
-  @include bp.from-tablet {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  @include bp.phone {
-    padding: var(--space-3);
-  }
+.list {
+  margin-top: var(--section-gap);
 }
 
-// Same look as app-segmented: a surface-2 track, the picked option a
-// surface chip with a strong hairline and semibold ink.
-.segmented {
-  display: inline-flex;
+.toolbar {
+  display: flex;
   flex-wrap: wrap;
-  gap: 2px;
-  margin: 0;
-  padding: 2px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
 
-  // Phones: more than three options form an equal two-column grid.
   @include bp.phone {
-    &[data-many] {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-}
-
-.segment {
-  flex: 1 1 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(var(--control-h) - 4px);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-xs);
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-  transition:
-    background-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
-
-  &:hover {
-    background: var(--color-hover);
-    color: var(--color-ink);
-  }
-
-  &.selected {
-    background: var(--color-surface);
-    color: var(--color-ink);
-    box-shadow: inset 0 0 0 1px var(--color-border-strong);
-    font-weight: var(--weight-semibold);
-  }
-
-  &:has(input:focus-visible) {
-    outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
-  }
-
-  @include bp.phone {
-    min-height: var(--touch-min);
-  }
-
-  @include bp.coarse {
-    min-height: var(--touch-min);
+    width: 100%;
   }
 }
 
 .search {
+  position: relative;
+  flex: 1 1 auto;
   min-width: 0;
+
+  @include bp.from-tablet {
+    width: 320px;
+  }
 
   .input {
     width: 100%;
-  }
-
-  @include bp.from-tablet {
-    flex: 0 1 20rem;
+    padding-left: 36px;
   }
 }
 
-// The strategy name: an ink table link, semibold like a ticker.
-.id-link {
-  font-weight: var(--weight-semibold);
-  overflow-wrap: anywhere;
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 
-  @include bp.phone {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--touch-min);
-  }
+.count-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--rule-strong);
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 
 .paper-note {
-  padding: var(--space-2) var(--space-4);
-  color: var(--color-ink-3);
-  font-size: var(--text-xs);
+  color: var(--warn);
 }
 
-// A starter strategy's one-line summary under its name.
-.summary {
-  display: block;
-  font-size: var(--text-xs);
-  color: var(--color-ink-3);
+// Name and kind: 14px 600 over 12.5px muted.
+.name-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row-link {
+  font-size: var(--text-body);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  white-space: normal;
+}
+
+.following {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: var(--weight-label);
+
+  &.paused {
+    color: var(--muted);
+  }
+}
+
+.chev {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+// The whole row opens the strategy: the name link stretches over its row.
+// Inner controls stay on top of it.
+:host ::ng-deep .strategy-table {
+  tbody tr {
+    position: relative;
+  }
+
+  td {
+    height: var(--row-h-2);
+  }
+
+  .row-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .row-link:focus-visible {
+    outline: none;
+  }
+
+  tbody tr:has(.row-link:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  tbody tr:hover .chev {
+    color: var(--ink);
+  }
+
+  // The last header names the chevron column for screen readers only.
+  th:last-child {
+    position: relative;
+  }
+
+  th:last-child .th-inner {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  // Tablets: the table fits its width without the trend line, the date
+  // added and the chevron (the name still opens the strategy).
+  @media (min-width: 768px) and (max-width: 1099.98px) {
+    th:nth-child(4),
+    td:nth-child(4),
+    th:nth-child(8),
+    td:nth-child(8),
+    th:nth-child(9),
+    td:nth-child(9) {
+      display: none;
+    }
+  }
+
+  @include bp.phone {
+    td {
+      height: auto;
+    }
+
+    // The trend line sits under the return, full width of its column.
+    td.cell-figure app-sparkline {
+      width: 96px;
+      height: 24px;
+    }
+  }
 }

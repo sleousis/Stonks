@@ -190,7 +190,7 @@ export const FOLLOW_MODES = MODES.filter(
     .lead,
     .days {
       max-width: 70ch;
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .follows {
@@ -202,45 +202,37 @@ export const FOLLOW_MODES = MODES.filter(
     }
     .follows li + li {
       padding-top: var(--space-3);
-      border-top: 1px solid var(--color-border);
+      border-top: 1px solid var(--rule);
     }
-    /* The modes: one inset well, a hairline between rows, the picked row a
-       surface chip with an accent rule. No box round each option. */
+    /* The modes: rows on a 2px ink rule with hairlines between. The picked
+       row fills accent soft with a 3px accent edge. */
     .modes {
       display: grid;
       width: 100%;
       margin: 0;
-      padding: var(--space-1);
+      padding: 0;
       border: 0;
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
+      border-top: 2px solid var(--rule-strong);
     }
     .mode {
       display: flex;
       align-items: flex-start;
       gap: var(--space-2);
       min-height: var(--touch-min);
-      padding: var(--space-2) var(--space-3);
-      border-radius: var(--radius-xs);
-      box-shadow: inset 2px 0 0 transparent;
+      padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
+      border-bottom: 1px solid var(--rule);
+      box-shadow: inset 3px 0 0 transparent;
       cursor: pointer;
       transition:
-        background-color var(--dur-fast) var(--ease),
-        box-shadow var(--dur-fast) var(--ease);
-    }
-    .mode + .mode {
-      border-top: 1px solid var(--color-border);
+        background-color var(--dur-fast) var(--ease-out),
+        box-shadow var(--dur-fast) var(--ease-out);
     }
     .mode:hover {
-      background: var(--color-hover);
+      background: var(--sunk);
     }
     .mode.picked {
-      background: var(--color-surface);
-      box-shadow: inset 2px 0 0 var(--color-accent);
-    }
-    .mode.picked,
-    .mode.picked + .mode {
-      border-top-color: transparent;
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
     }
     .mode-pick {
       display: flex;
@@ -255,7 +247,7 @@ export const FOLLOW_MODES = MODES.filter(
       width: 16px;
       height: 16px;
       margin: 2px 0 0;
-      accent-color: var(--color-accent);
+      accent-color: var(--accent);
     }
     .mode-text {
       display: grid;
@@ -266,7 +258,7 @@ export const FOLLOW_MODES = MODES.filter(
       font-weight: var(--weight-semibold);
     }
     .mode-text .muted {
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       font-size: var(--text-sm);
     }
     .field {

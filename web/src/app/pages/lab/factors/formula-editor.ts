@@ -131,11 +131,11 @@ export const FORMULA_FUNCTIONS = [
       font-size: var(--text-sm);
     }
     .good {
-      color: var(--color-gain);
+      color: var(--up);
       font-weight: var(--weight-medium);
     }
     .bad {
-      color: var(--color-loss);
+      color: var(--down);
       overflow-wrap: anywhere;
     }
     .facts {
@@ -145,7 +145,7 @@ export const FORMULA_FUNCTIONS = [
       margin: 0;
       dt {
         font-size: var(--text-xs);
-        color: var(--color-ink-3);
+        color: var(--muted);
       }
       dd {
         margin: 0;
@@ -153,7 +153,7 @@ export const FORMULA_FUNCTIONS = [
     }
     .help {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
+      color: var(--ink-2);
       p {
         margin: var(--space-2) 0 0;
         overflow-wrap: anywhere;

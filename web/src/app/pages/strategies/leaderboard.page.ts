@@ -193,7 +193,7 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
       column-gap: var(--space-2);
       align-items: baseline;
       align-content: center;
-      color: var(--color-ink);
+      color: var(--ink);
       text-decoration: none;
     }
     .name:hover .id,
@@ -203,7 +203,7 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
     }
     .rank {
       grid-row: span 2;
-      color: var(--color-ink-3);
+      color: var(--muted);
     }
     .id {
       font-weight: var(--weight-semibold);

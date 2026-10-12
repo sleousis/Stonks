@@ -119,6 +119,19 @@ export class StudioPage {
     loader: () => this.studio.drafts({ limit: PAGE_SIZE }),
   });
   protected readonly templates = resource({ loader: () => this.studio.templates() });
+  /** The standfirst, from the drafts: "4 drafts, 1 on trial." */
+  protected readonly standfirst = computed(() => {
+    if (!this.drafts.hasValue())
+      return 'Build a strategy from rules, test it, then put it on trial.';
+    const items = this.drafts.value().items;
+    const total = this.drafts.value().total;
+    if (!total) return 'Build a strategy from rules, test it, then put it on trial.';
+    const onTrial = items.filter((d) => d.status === 'registered').length;
+    const head = total === 1 ? '1 draft' : `${total} drafts`;
+    return onTrial
+      ? `${head}, ${onTrial} on trial. Open one to edit and test it.`
+      : `${head}. Open one to edit and test it.`;
+  });
   protected readonly capabilities = resource({ loader: () => this.studio.capabilities() });
 
   // ---- create ----------------------------------------------------------------
