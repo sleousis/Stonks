@@ -81,8 +81,7 @@ def _send(v: Visit, text: str) -> None:
 def test_a_trader_asks_the_assistant_and_approves_nothing_by_accident(browse, stack, viewport):
     v = browse(_trader(stack, viewport, "assistant"))
     page = v.page
-    v.open_nav()
-    page.get_by_role("link", name="Assistant", exact=True).first.click()
+    v.open_nav().get_by_role("link", name="Assistant", exact=True).first.click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Assistant")
     expect(page.get_by_text("The assistant is not set up")).to_have_count(0)
 

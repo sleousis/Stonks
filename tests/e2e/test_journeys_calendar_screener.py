@@ -44,8 +44,7 @@ def test_a_trader_reads_the_calendar_and_news(browse, stack, viewport):
     made = v.api("POST", "/api/watchlists", data={"name": f"Cal {viewport}", "tickers": ["AAA.US"]})
     assert made.status == 201, made.text()
 
-    v.open_nav()
-    page.get_by_role("link", name="Calendar").click()
+    v.open_nav().get_by_role("link", name="Calendar", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Calendar")
     expect(page.get_by_role("heading", name="Earnings reports")).to_be_visible()
     expect(page.get_by_text("No earnings in these days")).to_be_visible()
@@ -117,8 +116,7 @@ def test_the_order_ticket_checks_earnings(browse, stack, viewport):
 def test_a_trader_screens_saves_and_makes_a_universe(browse, stack, viewport):
     v = _trader(browse, stack, "screener", viewport)
     page = v.page
-    v.open_nav()
-    page.get_by_role("link", name="Screener").click()
+    v.open_nav().get_by_role("link", name="Screener", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Screener")
     expect(page.get_by_text("No screens yet")).to_be_visible()
     v.check_page("screener")

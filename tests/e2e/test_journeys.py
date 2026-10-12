@@ -69,9 +69,8 @@ def test_first_sign_in_enrols_totp_then_signs_in_with_a_code(browse, stack, view
 
 
 def sign_out(v: Visit) -> None:
-    """Sign out sits in the account menu by the user's name (UX-10)."""
-    v.open_nav()
-    v.page.locator("app-account-menu summary:visible").click()
+    """Sign out sits in the account menu behind the avatar (UX-10)."""
+    v.page.locator("button[data-account-button]").click()
     v.page.get_by_role("button", name="Sign out").click()
 
 

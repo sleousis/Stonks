@@ -21,6 +21,7 @@ import { errorMessage } from '../../core/http/api-error';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="loading" role="status" [attr.aria-label]="label()">
+      <span class="visually-hidden">{{ label() }}</span>
       @for (row of rowList(); track $index) {
         <div class="row" aria-hidden="true">
           <span class="bar" [style.width.%]="row"></span>

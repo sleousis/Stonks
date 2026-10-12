@@ -439,6 +439,7 @@ function runTime(iso: string, now: number): string {
       overflow-wrap: anywhere;
     }
     .text strong {
+      margin-right: 0.35em;
       font-weight: var(--weight-bold);
     }
     .halt-actions {
